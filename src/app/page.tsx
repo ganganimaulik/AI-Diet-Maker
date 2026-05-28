@@ -1102,10 +1102,12 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                 )}
 
                 {outputTab === 'cook' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
-                    <div className="copy-btn-container">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Each day can be copied individually below</span>
                       <button 
                         className="btn-secondary" 
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
                         onClick={() => handleCopyToClipboard(getCookPlanOnly(outputText))}
                       >
                         {copiedStatus ? (
@@ -1113,25 +1115,45 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="3">
                               <path d="M20 6L9 17l-5-5"/>
                             </svg>
-                            <span style={{ color: 'var(--accent-green)' }}>Copied!</span>
+                            <span style={{ color: 'var(--accent-green)' }}>Copied All!</span>
                           </>
                         ) : (
                           <>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"/>
                             </svg>
-                            Copy Cook Plan
+                            Copy Entire Weekly Plan
                           </>
                         )}
                       </button>
                     </div>
-                    <textarea
-                      className="raw-copy-box"
-                      readOnly
-                      value={getCookPlanOnly(outputText)}
-                      style={{ flex: 1, height: '400px' }}
-                    />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.25rem' }}>
+                      {parseCookPlanDays(getCookPlanOnly(outputText)).map((dayObj, idx) => (
+                        <div key={idx} className="glass-panel" style={{ padding: '1rem', background: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h4 style={{ margin: 0, color: '#c084fc', fontSize: '0.9rem', fontWeight: 700 }}>
+                              {dayObj.heading.replace('###', '').trim()}
+                            </h4>
+                            <DayCopyButton text={`${dayObj.heading}\n${dayObj.content}`} />
+                          </div>
+                          <pre style={{ 
+                            background: 'rgba(0,0,0,0.2)', 
+                            padding: '0.75rem', 
+                            borderRadius: '6px', 
+                            fontSize: '0.8rem', 
+                            fontFamily: 'var(--font-mono)', 
+                            color: 'var(--text-secondary)',
+                            whiteSpace: 'pre-wrap',
+                            lineHeight: '1.5',
+                            margin: 0
+                          }}>
+                            {dayObj.content}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1153,4 +1175,71 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
       </footer>
     </div>
   );
+}
+
+// Sub-components and helpers for copying individual days
+function DayCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  
+  return (
+    <button 
+      className="btn-secondary" 
+      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} 
+      onClick={handleCopy}
+    >
+      {copied ? (
+        <span style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          Copied
+        </span>
+      ) : (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Copy Day
+        </span>
+      )}
+    </button>
+  );
+}
+
+function parseCookPlanDays(cookPlan: string) {
+  if (!cookPlan) return [];
+  
+  const dayRegex = /###\s*(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)[^\n]*/i;
+  const lines = cookPlan.split('\n');
+  const days: { day: string, heading: string, content: string[] }[] = [];
+  let currentDay: typeof days[0] | null = null;
+  
+  for (const line of lines) {
+    const match = line.match(dayRegex);
+    if (match) {
+      const dayName = match[1].toUpperCase();
+      currentDay = {
+        day: dayName,
+        heading: line.trim(),
+        content: []
+      };
+      days.push(currentDay);
+    } else if (currentDay) {
+      currentDay.content.push(line);
+    }
+  }
+  
+  return days.map(d => ({
+    day: d.day,
+    heading: d.heading,
+    content: d.content.join('\n').trim()
+  })).filter(d => d.content.length > 0);
 }
