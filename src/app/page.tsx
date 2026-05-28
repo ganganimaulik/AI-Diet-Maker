@@ -36,6 +36,8 @@ interface Config {
   dailyVariables: {
     [key: string]: Ingredient[];
   };
+  generationRange: 'all' | 'single';
+  selectedGenerationDay: string;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -109,7 +111,9 @@ const DEFAULT_CONFIG: Config = {
       { name: 'Brinjal', weight: '180', isAuto: false },
       { name: 'Tomato', weight: '80', isAuto: false }
     ]
-  }
+  },
+  generationRange: 'all',
+  selectedGenerationDay: 'MONDAY'
 };
 
 const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -170,6 +174,11 @@ export default function Home() {
 
   // Compile active prompt from configuration
   const compilePromptText = (c: Config): string => {
+    const isSingle = c.generationRange === 'single';
+    const activeDays = isSingle ? [c.selectedGenerationDay] : DAYS_OF_WEEK;
+    const daysLabel = isSingle ? `only the day ${c.selectedGenerationDay}` : 'Monday through Sunday';
+    const dayRefLabel = isSingle ? 'the day' : 'each day';
+
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
 
 Your task is to use standard nutritional values for raw/uncooked items to automatically calculate all calories, round them to the nearest whole number, solve for any ingredients marked as \`[AUTO]\`, and generate a dual-purpose diet plan document.
@@ -200,7 +209,7 @@ ${c.chickenMeal.baselines.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `
 
 [DAILY VARIABLE INGREDIENT WEIGHTS (WHOLE DAY - DIVIDE BY ${c.global.chickenMealsPerDay} FOR DAILY TOTALS)]
 * Note: Use [AUTO] for any ingredient you want the calculator to dynamically scale to hit your exact Daily Calorie Target.
-${DAYS_OF_WEEK.map(day => {
+${activeDays.map(day => {
   const ingredients = c.dailyVariables[day] || [];
   const variant = getDayVariantName(ingredients);
   const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join(', ');
@@ -213,7 +222,7 @@ ${DAYS_OF_WEEK.map(day => {
 
 INSTRUCTIONS FOR THE CALCULATOR:
 1. Use standard nutritional values for raw, uncooked foods/supplements to determine calories per gram (e.g., Raw Rice ≈ 3.6 kcal/g, Raw Chicken Breast ≈ 1.2 kcal/g, Olive Oil ≈ 8.75 kcal/g, Raw Oats ≈ 3.89 kcal/g, Whey Protein Isolate ≈ 3.7 kcal/g, Almonds ≈ 5.79 kcal/g, Cashews ≈ 5.53 kcal/g, Walnuts ≈ 6.54 kcal/g, Banana ≈ 0.89 kcal/g, Tomato ≈ 0.18 kcal/g, Potato (Raw) ≈ 0.77 kcal/g, Cluster Beans ≈ 0.16 kcal/g, Bottle Gourd ≈ 0.15 kcal/g, Brinjal ≈ 0.25 kcal/g, etc.).
-2. For each day, sum the calculated calories of all strictly defined weights (Oats meal + Daily Chicken baseline + Daily defined vegetables).
+2. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, sum the calculated calories of all strictly defined weights (Oats meal + Daily Chicken baseline + Daily defined vegetables).
 3. Subtract that total from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
 5. If a day contains multiple \`[AUTO]\` ingredients (e.g. Rice and Potato), split the remaining deficit equally (50-50 in terms of calories) between them, then solve for each weight.
@@ -229,14 +238,14 @@ Generate this exact section first using markdown tables and bullet points based 
 Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (1 Meal), Calories (Per Meal). Sum the total calculated calories at the bottom of the table.
 
 2. Chicken Meal (${c.global.chickenMealsPerDay} Meals Per Day)
-List out Monday through Sunday using bullet points. Under each day, list ALL fixed items (Chicken, Olive oil) and variable items (Rice, Veggies, etc.) together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for each day.
+List out ${daysLabel} using bullet points. Under ${dayRefLabel}, list ALL fixed items (Chicken, Olive oil) and variable items (Rice, Veggies, etc.) together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for each day.
 
 Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total (Oats meal calories + [Chicken meal calories x ${c.global.chickenMealsPerDay}]) to prove it hits your configured target.
 
 ---
 
 PART 2: FOR MY COOK (Weekly Text Plan)
-Separate this from Part 1 using a horizontal rule (---). Output every day from Monday to Sunday using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` amounts multiplied by ${c.global.chickenMealsPerDay} if they are per-meal items) and cooking instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` amounts multiplied by ${c.global.chickenMealsPerDay} if they are per-meal items) and cooking instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
 Exact Output Template to Follow for Each Day:
 
@@ -1021,7 +1030,47 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
             </div>
           )}
 
-          <div style={{ marginTop: '2rem' }}>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '10px', marginTop: '1.5rem' }}>
+            <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.8rem' }}>Generation Scope</label>
+            <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="generationRange"
+                  checked={config.generationRange === 'all'}
+                  onChange={() => setConfig(prev => ({ ...prev, generationRange: 'all' }))}
+                />
+                All Days (Full Week)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="generationRange"
+                  checked={config.generationRange === 'single'}
+                  onChange={() => setConfig(prev => ({ ...prev, generationRange: 'single' }))}
+                />
+                Single Day Only
+              </label>
+            </div>
+
+            {config.generationRange === 'single' && (
+              <div className="form-group" style={{ margin: 0, marginTop: '0.75rem' }}>
+                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Choose Day</label>
+                <select
+                  className="form-input"
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                  value={config.selectedGenerationDay}
+                  onChange={e => setConfig(prev => ({ ...prev, selectedGenerationDay: e.target.value }))}
+                >
+                  {DAYS_OF_WEEK.map(day => (
+                    <option key={day} value={day}>{day}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: '1.5rem' }}>
             <button
               className="btn-primary"
               disabled={isGenerating}
