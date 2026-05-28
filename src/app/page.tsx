@@ -941,23 +941,15 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Select Day of Week</label>
               
               <div className="day-selector-grid">
-                {DAYS_OF_WEEK.map(day => {
-                  const ingredients = config.dailyVariables[day] || [];
-                  const variant = getDayVariantName(ingredients);
-                  return (
-                    <button
-                      key={day}
-                      className={`day-btn ${activeDay === day ? 'active' : ''}`}
-                      onClick={() => setActiveDay(day)}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', padding: '0.5rem 0.25rem' }}
-                    >
-                      <span style={{ fontWeight: 800 }}>{day.substring(0, 3)}</span>
-                      <span style={{ fontSize: '0.65rem', opacity: 0.8, fontWeight: 500, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', width: '100%' }} title={variant}>
-                        {variant}
-                      </span>
-                    </button>
-                  );
-                })}
+                {DAYS_OF_WEEK.map(day => (
+                  <button
+                    key={day}
+                    className={`day-btn ${activeDay === day ? 'active' : ''}`}
+                    onClick={() => setActiveDay(day)}
+                  >
+                    {day.substring(0, 3)}
+                  </button>
+                ))}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -1070,9 +1062,15 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                   value={config.selectedGenerationDay}
                   onChange={e => setConfig(prev => ({ ...prev, selectedGenerationDay: e.target.value }))}
                 >
-                  {DAYS_OF_WEEK.map(day => (
-                    <option key={day} value={day}>{day}</option>
-                  ))}
+                  {DAYS_OF_WEEK.map(day => {
+                    const ingredients = config.dailyVariables[day] || [];
+                    const variant = getDayVariantName(ingredients);
+                    return (
+                      <option key={day} value={day}>
+                        {day} ({variant})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}
