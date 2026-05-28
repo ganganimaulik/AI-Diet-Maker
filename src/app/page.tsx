@@ -1160,28 +1160,6 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', flex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Each day can be copied individually below</span>
-                      <button 
-                        className="btn-secondary" 
-                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
-                        onClick={() => handleCopyToClipboard(getCookPlanOnly(outputText))}
-                      >
-                        {copiedStatus ? (
-                          <>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" strokeWidth="3">
-                              <path d="M20 6L9 17l-5-5"/>
-                            </svg>
-                            <span style={{ color: 'var(--accent-green)' }}>Copied All!</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"/>
-                            </svg>
-                            Copy Entire Weekly Plan
-                          </>
-                        )}
-                      </button>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.25rem' }}>
