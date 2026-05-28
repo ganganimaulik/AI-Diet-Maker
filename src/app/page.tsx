@@ -1169,7 +1169,13 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                             <h4 style={{ margin: 0, color: '#c084fc', fontSize: '0.9rem', fontWeight: 700 }}>
                               {dayObj.heading.replace('###', '').trim()}
                             </h4>
-                            <DayCopyButton text={dayObj.content} />
+                            <DayCopyButton 
+                              text={(() => {
+                                const colonIndex = dayObj.heading.indexOf(':');
+                                const variant = colonIndex !== -1 ? dayObj.heading.substring(colonIndex + 1).trim() : '';
+                                return variant ? `${variant}\n${dayObj.content}` : dayObj.content;
+                              })()} 
+                            />
                           </div>
                           <pre style={{ 
                             background: 'rgba(0,0,0,0.2)', 
