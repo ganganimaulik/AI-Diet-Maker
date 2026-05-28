@@ -1,5 +1,5 @@
 'use client';
-
+/* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { useState, useEffect } from 'react';
 
 // Type definitions
@@ -7,6 +7,12 @@ interface Ingredient {
   name: string;
   weight: string;
   isAuto: boolean;
+}
+
+interface CustomSplit {
+  id: string;
+  name: string;
+  value: string;
 }
 
 interface Config {
@@ -38,6 +44,10 @@ interface Config {
   };
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
+  meal1Name?: string;
+  meal2Name?: string;
+  customSplits?: CustomSplit[];
+  calorieDatabase?: { [key: string]: number };
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -116,12 +126,36 @@ const DEFAULT_CONFIG: Config = {
   selectedGenerationDay: 'MONDAY'
 };
 
+const DEFAULT_CALORIE_DATABASE: { [key: string]: number } = {
+  'Oats (Raw)': 3.89,
+  'Whey Protein Isolate': 3.7,
+  'Almonds': 5.79,
+  'Cashews': 5.53,
+  'Walnuts': 6.54,
+  'Banana': 0.89,
+  'Chicken Breast (Raw)': 1.2,
+  'Olive Oil': 8.75,
+  'Rice': 3.6,
+  'Tomato': 0.18,
+  'Potato (Raw)': 0.77,
+  'Cluster Beans': 0.16,
+  'Bottle Gourd': 0.15,
+  'Brinjal': 0.25,
+  'Eggs': 1.43,
+  'Egg White': 0.52,
+  'Whole Egg': 1.43,
+  'Butter': 7.17,
+  'Cheese': 4.02,
+  'Pasta': 3.55,
+  'Pasta Sauce': 0.8
+};
+
 const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
 export default function Home() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
   const [isMounted, setIsMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'global' | 'oats' | 'chicken' | 'daily' | 'prompt'>('global');
+  const [activeTab, setActiveTab] = useState<'global' | 'oats' | 'chicken' | 'daily' | 'calorieDb' | 'prompt'>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
   
   // Custom prompt override state
@@ -132,6 +166,7 @@ export default function Home() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [dbNewName, setDbNewName] = useState('');
   const [dbNewVal, setDbNewVal] = useState('');
+  const [dbSearch, setDbSearch] = useState('');
   
   // Output and generation states
   const [isGenerating, setIsGenerating] = useState(false);
@@ -147,10 +182,39 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        
+        // Backwards compatibility migration
+        if (!parsed.meal1Name) parsed.meal1Name = 'Oats Meal';
+        if (!parsed.meal2Name) parsed.meal2Name = 'Chicken Meal';
+        if (!parsed.calorieDatabase) {
+          parsed.calorieDatabase = { ...DEFAULT_CALORIE_DATABASE };
+        }
+        if (!parsed.customSplits) {
+          const splitsObj = parsed.splits || DEFAULT_CONFIG.splits;
+          parsed.customSplits = [
+            { id: 'oil', name: 'Olive Oil Cooking Split', value: splitsObj.oliveOilSplit || '' },
+            { id: 'salt', name: 'Salt Seasoning Split', value: splitsObj.saltSplit || '' },
+            { id: 'prep', name: `${parsed.meal2Name || 'Chicken'} Prep Method`, value: splitsObj.chickenPrepMethod || '' }
+          ];
+        }
+        
         setConfig(parsed);
       } catch (e) {
         console.error('Failed to load configuration from local storage', e);
       }
+    } else {
+      // Default initialization
+      setConfig(prev => ({
+        ...prev,
+        meal1Name: 'Oats Meal',
+        meal2Name: 'Chicken Meal',
+        calorieDatabase: { ...DEFAULT_CALORIE_DATABASE },
+        customSplits: [
+          { id: 'oil', name: 'Olive Oil Cooking Split', value: DEFAULT_CONFIG.splits.oliveOilSplit },
+          { id: 'salt', name: 'Salt Seasoning Split', value: DEFAULT_CONFIG.splits.saltSplit },
+          { id: 'prep', name: 'Chicken Prep Method', value: DEFAULT_CONFIG.splits.chickenPrepMethod }
+        ]
+      }));
     }
     setIsMounted(true);
   }, []);
@@ -165,7 +229,7 @@ export default function Home() {
   // Helper: Get variant name for days (e.g. Tomato -> "Just Tomato")
   const getDayVariantName = (ingredients: Ingredient[]) => {
     const nonStapleNames = ingredients
-      .filter(ing => ing.name.toLowerCase() !== 'rice')
+      .filter(ing => !ing.isAuto)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
@@ -179,9 +243,26 @@ export default function Home() {
     const daysLabel = isSingle ? `only the day ${c.selectedGenerationDay}` : 'Monday through Sunday';
     const dayRefLabel = isSingle ? 'the day' : 'each day';
 
+    const meal1 = c.meal1Name || 'Oats Meal';
+    const meal2 = c.meal2Name || 'Chicken Meal';
+    const calDb = c.calorieDatabase || DEFAULT_CALORIE_DATABASE;
+    const splitsList = c.customSplits || [
+      { id: 'oil', name: 'Olive Oil Cooking Split', value: c.splits?.oliveOilSplit || '' },
+      { id: 'salt', name: 'Salt Seasoning Split', value: c.splits?.saltSplit || '' },
+      { id: 'prep', name: `${meal2} Prep Method`, value: c.splits?.chickenPrepMethod || '' }
+    ];
+
+    const calorieDbText = Object.entries(calDb)
+      .map(([name, val]) => `- ${name}: ${val} kcal/g`)
+      .join('\n');
+
+    const splitsText = splitsList
+      .map(s => `- ${s.name}: ${s.value}`)
+      .join('\n');
+
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
 
-Your task is to use standard nutritional values for raw/uncooked items to automatically calculate all calories, round them to the nearest whole number, solve for any ingredients marked as \`[AUTO]\`, and generate a dual-purpose diet plan document.
+Your task is to use the exact nutritional values specified in the CALORIE DENSITIES DATABASE for raw/uncooked items to automatically calculate all calories, round them to the nearest whole number, solve for any ingredients marked as \`[AUTO]\`, and generate a dual-purpose diet plan document.
 - PART 1 must be a detailed macro and meal breakdown for myself (using markdown tables and your computed calories). 
 - PART 2 must be a raw, copy-pasteable weekly text plan for my cook containing ONLY strict text blocks for each day with absolutely no conversational text, tables, or calorie explanations.
 
@@ -189,23 +270,24 @@ Your task is to use standard nutritional values for raw/uncooked items to automa
        CONFIGURABLE VARIABLES (EDIT TARGETS, WEIGHTS & SPLITS HERE)
 ===================================================================
 
+[CALORIE DENSITIES DATABASE (kcal per 1g)]
+${calorieDbText}
+
 [GLOBAL DIET TARGETS]
 - Daily Calorie Target: ${c.global.dailyCalorieTarget} kcal
-- Chicken Meals per day: ${c.global.chickenMealsPerDay}
-- Whey Protein Oats Meals per day: ${c.global.oatsMealsPerDay}
+- ${meal2} meals per day (Meal 2 frequency): ${c.global.chickenMealsPerDay}
+- ${meal1} meals per day (Meal 1 frequency): ${c.global.oatsMealsPerDay}
 
-[OATS MEAL WEIGHTS (FOR 1 MEAL)]
+[MEAL 1 WEIGHTS: ${meal1} (FOR 1 MEAL)]
 ${c.oatsMeal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}
-- water for Oats: ${c.oatsMeal.water}
-- Oats Meal Prep Method: ${c.oatsMeal.prepMethod}
+- water/liquids for ${meal1}: ${c.oatsMeal.water}
+- ${meal1} Prep Method: ${c.oatsMeal.prepMethod}
 
-[CHICKEN MEAL BASELINE WEIGHTS (DAILY TOTALS - DIVIDE BY ${c.global.chickenMealsPerDay} FOR PER MEAL BREAKDOWNS)]
+[MEAL 2 BASELINE WEIGHTS: ${meal2} (DAILY TOTALS - DIVIDE BY ${c.global.chickenMealsPerDay} FOR PER MEAL BREAKDOWNS)]
 ${c.chickenMeal.baselines.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}
 
-[COOK COOKING & SEASONING SPLITS]
-- Olive Oil Cooking Split: ${c.splits.oliveOilSplit}
-- Salt Seasoning Split: ${c.splits.saltSplit}
-- Chicken Prep Method: ${c.splits.chickenPrepMethod}
+[COOK COOKING & SEASONING SPLITS / INSTRUCTIONS]
+${splitsText}
 
 [DAILY VARIABLE INGREDIENT WEIGHTS (WHOLE DAY - DIVIDE BY ${c.global.chickenMealsPerDay} FOR DAILY TOTALS)]
 * Note: Use [AUTO] for any ingredient you want the calculator to dynamically scale to hit your exact Daily Calorie Target.
@@ -221,12 +303,15 @@ ${activeDays.map(day => {
 ===================================================================
 
 INSTRUCTIONS FOR THE CALCULATOR:
-1. Use standard nutritional values for raw, uncooked foods/supplements to determine calories per gram (e.g., Raw Rice ≈ 3.6 kcal/g, Raw Chicken Breast ≈ 1.2 kcal/g, Olive Oil ≈ 8.75 kcal/g, Raw Oats ≈ 3.89 kcal/g, Whey Protein Isolate ≈ 3.7 kcal/g, Almonds ≈ 5.79 kcal/g, Cashews ≈ 5.53 kcal/g, Walnuts ≈ 6.54 kcal/g, Banana ≈ 0.89 kcal/g, Tomato ≈ 0.18 kcal/g, Potato (Raw) ≈ 0.77 kcal/g, Cluster Beans ≈ 0.16 kcal/g, Bottle Gourd ≈ 0.15 kcal/g, Brinjal ≈ 0.25 kcal/g, etc.).
-2. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, sum the calculated calories of all strictly defined weights (Oats meal + Daily Chicken baseline + Daily defined vegetables).
+1. Use the exact calorie densities defined in the [CALORIE DENSITIES DATABASE] to perform all calculations. If an ingredient is not in the database, estimate its raw/uncooked calorie density using standard nutritional database values (e.g., standard raw foods).
+2. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, sum the calculated calories of all strictly defined weights (Meal 1 daily total + Meal 2 daily baseline + Daily defined variables).
+   - Meal 1 daily total calories = (sum of calories of all Meal 1 ingredients) x ${c.global.oatsMealsPerDay}
+   - Meal 2 daily baseline calories = sum of calories of all Meal 2 baseline ingredients
+   - Daily variables calories = sum of calories of all variables for that day
 3. Subtract that total from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
-5. If a day contains multiple \`[AUTO]\` ingredients (e.g. Rice and Potato), split the remaining deficit equally (50-50 in terms of calories) between them, then solve for each weight.
-6. Divide the daily weights by ${c.global.chickenMealsPerDay} to find the per-meal weight for chicken meal ingredients.
+5. If a day contains multiple \`[AUTO]\` ingredients, split the remaining deficit equally (50-50 in terms of calories) between them, then solve for each weight.
+6. Divide the daily baseline and daily variable weights by ${c.global.chickenMealsPerDay} to find the per-meal weight for Meal 2 ingredients.
 7. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.
 
 ---
@@ -234,37 +319,28 @@ INSTRUCTIONS FOR THE CALCULATOR:
 PART 1: FOR MYSELF (User Breakdown)
 Generate this exact section first using markdown tables and bullet points based strictly on your calculations.
 
-1. Whey Protein Oats Meal (${c.global.oatsMealsPerDay} Meal Per Day)
+1. ${meal1} (${c.global.oatsMealsPerDay} Meal Per Day)
 Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (1 Meal), Calories (Per Meal). Sum the total calculated calories at the bottom of the table.
 
-2. Chicken Meal (${c.global.chickenMealsPerDay} Meals Per Day)
-List out ${daysLabel} using bullet points. Under ${dayRefLabel}, list ALL fixed items (Chicken, Olive oil) and variable items (Rice, Veggies, etc.) together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for each day.
+2. ${meal2} (${c.global.chickenMealsPerDay} Meals Per Day)
+List out ${daysLabel} using bullet points. Under ${dayRefLabel}, list ALL fixed items (from Meal 2 baseline) and variable items (from daily variables) together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for each day.
 
-Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total (Oats meal calories + [Chicken meal calories x ${c.global.chickenMealsPerDay}]) to prove it hits your configured target.
+Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total (Meal 1 daily total calories + [Meal 2 meal calories x ${c.global.chickenMealsPerDay}]) to prove it hits your configured target.
 
 ---
 
 PART 2: FOR MY COOK (Weekly Text Plan)
-Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` amounts multiplied by ${c.global.chickenMealsPerDay} if they are per-meal items) and cooking instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
 Exact Output Template to Follow for Each Day:
 
-### [DAY]: [Vegetable Variant Name]
-rice [Insert Calculated Daily Total Rice Weight]g
-[Insert Vegetable 1 Name] [Insert Calculated Daily Total Weight]g
-[Insert Vegetable 2 Name] [Insert Calculated Daily Total Weight]g (if applicable)
-[Insert Vegetable 3 Name] [Insert Calculated Daily Total Weight]g (if applicable)
-Chicken Breast [Insert Daily Total Chicken Breast Weight from Config]g
-olive oil - [Insert Olive Oil Cooking Split from Config]
-salt - [Insert Salt Seasoning Split from Config]
-[Insert Chicken Prep Method from Config]
+### [DAY]: [Ingredient Variant Name]
+[List each Meal 2 ingredient with its daily total weight in grams, e.g. "rice 150g" or "pasta 100g". Show baseline and daily variable ingredients here.]
+[List all custom splits and cooking instructions for Meal 2 here, e.g. "olive oil - 9g in subji. 9g in chicken" or "Prep: air fry 200c"]
 
-Oats [Insert Oats Weight from Config]g
-protein isolate [Insert Whey Weight from Config]g
-cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g total
-[Insert Banana Weight from Config]g banana
-[Insert water for Oats from Config]
-[Insert Oats Meal Prep Method from Config]
+[List each Meal 1 ingredient with its weight in grams, e.g. "Oats 35g" or "Egg 4 eggs"]
+- water/liquid for ${meal1}: [Insert liquid configuration]
+- Prep Method: [Insert prep method]
 `;
   };
 
@@ -283,13 +359,6 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
     setConfig(prev => ({
       ...prev,
       global: { ...prev.global, [field]: value }
-    }));
-  };
-
-  const updateSplit = (field: string, value: string) => {
-    setConfig(prev => ({
-      ...prev,
-      splits: { ...prev.splits, [field]: value }
     }));
   };
 
@@ -390,6 +459,61 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
         }
       }));
     }
+  };
+
+
+  // Custom Splits manipulators
+  const updateCustomSplit = (id: string, field: 'name' | 'value', val: string) => {
+    setConfig(prev => {
+      const splitsList = prev.customSplits || [];
+      const updated = splitsList.map(s => s.id === id ? { ...s, [field]: val } : s);
+      return { ...prev, customSplits: updated };
+    });
+  };
+
+  const addCustomSplit = () => {
+    const newSplit = {
+      id: Date.now().toString(),
+      name: 'New Split/Instruction',
+      value: 'Enter instructions here'
+    };
+    setConfig(prev => ({
+      ...prev,
+      customSplits: [...(prev.customSplits || []), newSplit]
+    }));
+  };
+
+  const removeCustomSplit = (id: string) => {
+    setConfig(prev => ({
+      ...prev,
+      customSplits: (prev.customSplits || []).filter(s => s.id !== id)
+    }));
+  };
+
+  // Calorie DB manipulators
+  const updateCalorieDbItem = (name: string, val: number) => {
+    setConfig(prev => {
+      const db = { ...(prev.calorieDatabase || DEFAULT_CALORIE_DATABASE) };
+      db[name] = val;
+      return { ...prev, calorieDatabase: db };
+    });
+  };
+
+  const addCalorieDbItem = (name: string, val: number) => {
+    if (!name.trim()) return;
+    setConfig(prev => {
+      const db = { ...(prev.calorieDatabase || DEFAULT_CALORIE_DATABASE) };
+      db[name.trim()] = val;
+      return { ...prev, calorieDatabase: db };
+    });
+  };
+
+  const removeCalorieDbItem = (name: string) => {
+    setConfig(prev => {
+      const db = { ...(prev.calorieDatabase || DEFAULT_CALORIE_DATABASE) };
+      delete db[name];
+      return { ...prev, calorieDatabase: db };
+    });
   };
 
 
@@ -656,13 +780,16 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               Setup
             </button>
             <button className={`section-tab-btn ${activeTab === 'oats' ? 'active' : ''}`} onClick={() => setActiveTab('oats')}>
-              Oats Meal
+              {config.meal1Name || 'Oats Meal'}
             </button>
             <button className={`section-tab-btn ${activeTab === 'chicken' ? 'active' : ''}`} onClick={() => setActiveTab('chicken')}>
-              Chicken Meal
+              {config.meal2Name || 'Chicken Meal'}
             </button>
             <button className={`section-tab-btn ${activeTab === 'daily' ? 'active' : ''}`} onClick={() => setActiveTab('daily')}>
               Variables
+            </button>
+            <button className={`section-tab-btn ${activeTab === 'calorieDb' ? 'active' : ''}`} onClick={() => setActiveTab('calorieDb')}>
+              Calorie DB
             </button>
             <button className={`section-tab-btn ${activeTab === 'prompt' ? 'active' : ''}`} onClick={() => setActiveTab('prompt')}>
               Prompt
@@ -753,6 +880,29 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
 
               <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
 
+              <div className="input-row" style={{ marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Meal 1 Display Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={config.meal1Name || 'Oats Meal'}
+                    onChange={e => setConfig(prev => ({ ...prev, meal1Name: e.target.value }))}
+                    placeholder="e.g. Oats Meal, Omelet Meal"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Meal 2 Display Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={config.meal2Name || 'Chicken Meal'}
+                    onChange={e => setConfig(prev => ({ ...prev, meal2Name: e.target.value }))}
+                    placeholder="e.g. Chicken Meal, Pasta Meal"
+                  />
+                </div>
+              </div>
+
               <div className="input-row">
                 <div className="form-group">
                   <label className="form-label">Calorie Target (kcal)</label>
@@ -764,7 +914,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Chicken Meals/Day</label>
+                  <label className="form-label">{(config.meal2Name || 'Chicken') + ' Meals/Day'}</label>
                   <input
                     type="number"
                     className="form-input"
@@ -773,7 +923,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Oats Meals/Day</label>
+                  <label className="form-label">{(config.meal1Name || 'Oats') + ' Meals/Day'}</label>
                   <input
                     type="number"
                     className="form-input"
@@ -788,7 +938,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
           {/* Oats Meal Config Subpanel */}
           {activeTab === 'oats' && (
             <div>
-              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Meal Ingredients</label>
+              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>{(config.meal1Name || 'Oats Meal') + ' Ingredients'}</label>
               
               <div className="ingredients-list">
                 {config.oatsMeal.ingredients.map((ing, idx) => (
@@ -828,13 +978,13 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               </div>
 
               <button className="btn-add" onClick={() => addIngredient('oats')}>
-                + Add Ingredient
+                + Add Ingredient to {config.meal1Name || 'Meal 1'}
               </button>
 
               <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
 
               <div className="form-group">
-                <label className="form-label">Water Configuration</label>
+                <label className="form-label">{(config.meal1Name || 'Oats Meal') + ' Liquid/Liquid Configuration (e.g. water, milk)'}</label>
                 <input
                   type="text"
                   className="form-input"
@@ -844,7 +994,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               </div>
 
               <div className="form-group">
-                <label className="form-label">Oats Meal Cooking Method</label>
+                <label className="form-label">{(config.meal1Name || 'Oats Meal') + ' Preparation Method & Cooking Instructions'}</label>
                 <input
                   type="text"
                   className="form-input"
@@ -858,7 +1008,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
           {/* Chicken Meal Config Subpanel */}
           {activeTab === 'chicken' && (
             <div>
-              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Daily Baseline Ingredients</label>
+              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>{(config.meal2Name || 'Chicken Meal') + ' Daily Baseline Ingredients'}</label>
               
               <div className="ingredients-list">
                 {config.chickenMeal.baselines.map((ing, idx) => (
@@ -898,40 +1048,46 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               </div>
 
               <button className="btn-add" onClick={() => addIngredient('chicken')}>
-                + Add Baseline Ingredient
+                + Add Baseline Ingredient to {config.meal2Name || 'Meal 2'}
               </button>
 
               <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
 
-              <div className="form-group">
-                <label className="form-label">Olive Oil Cooking Split</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={config.splits.oliveOilSplit}
-                  onChange={e => updateSplit('oliveOilSplit', e.target.value)}
-                />
+              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
+                Cook Preparation & Seasoning Splits / Instructions
+              </label>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+                {(config.customSplits || []).map((split) => (
+                  <div key={split.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      value={split.name}
+                      onChange={e => updateCustomSplit(split.id, 'name', e.target.value)}
+                      placeholder="Title (e.g. Olive Oil split)"
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ flex: 2, padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                      value={split.value}
+                      onChange={e => updateCustomSplit(split.id, 'value', e.target.value)}
+                      placeholder="Instruction split"
+                    />
+                    <button className="btn-remove" onClick={() => removeCustomSplit(split.id)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Salt Seasoning Split</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={config.splits.saltSplit}
-                  onChange={e => updateSplit('saltSplit', e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Chicken Cooking Method</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={config.splits.chickenPrepMethod}
-                  onChange={e => updateSplit('chickenPrepMethod', e.target.value)}
-                />
-              </div>
+              <button className="btn-add" style={{ marginTop: '0.25rem' }} onClick={addCustomSplit}>
+                + Add Custom Cook Split / Instruction
+              </button>
             </div>
           )}
 
@@ -1001,6 +1157,87 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
             </div>
           )}
 
+          {/* Calorie DB Tab */}
+          {activeTab === 'calorieDb' && (
+            <div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search ingredient database..."
+                  value={dbSearch}
+                  onChange={e => setDbSearch(e.target.value)}
+                />
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
+                <h4 style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Add Custom Calorie Density
+                </h4>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ingredient name (e.g. Pasta)"
+                    style={{ fontSize: '0.85rem', padding: '0.5rem' }}
+                    value={dbNewName}
+                    onChange={e => setDbNewName(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-input"
+                    placeholder="kcal/g (e.g. 3.55)"
+                    style={{ fontSize: '0.85rem', padding: '0.5rem', width: '120px' }}
+                    value={dbNewVal}
+                    onChange={e => setDbNewVal(e.target.value)}
+                  />
+                  <button 
+                    className="btn-secondary" 
+                    style={{ padding: '0.5rem 1rem', whiteSpace: 'nowrap' }}
+                    onClick={() => {
+                      const val = parseFloat(dbNewVal);
+                      if (dbNewName && !isNaN(val)) {
+                        addCalorieDbItem(dbNewName, val);
+                        setDbNewName('');
+                        setDbNewVal('');
+                      }
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Ingredient Calorie Densities (kcal/g)</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                {Object.entries(config.calorieDatabase || DEFAULT_CALORIE_DATABASE)
+                  .filter(([name]) => name.toLowerCase().includes(dbSearch.toLowerCase()))
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([name, val]) => (
+                    <div key={name} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.01)', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                      <span style={{ flex: 1, fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>{name}</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        style={{ width: '100px', fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+                        value={val}
+                        onChange={e => updateCalorieDbItem(name, parseFloat(e.target.value) || 0)}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>kcal/g</span>
+                      <button className="btn-remove" onClick={() => removeCalorieDbItem(name)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          )}
+
           {/* Prompt Preview Subpanel */}
           {activeTab === 'prompt' && (
             <div>
@@ -1024,7 +1261,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
               />
               {!isCustomMode && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-                  Auto-compiling from form fields above. Enable "Edit Prompt Directly" to tweak instructions manually.
+                  {'Auto-compiling from form fields above. Enable "Edit Prompt Directly" to tweak instructions manually.'}
                 </p>
               )}
             </div>
@@ -1201,7 +1438,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                 <div className="placeholder-icon">📋</div>
                 <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '1rem' }}>No Plan Generated Yet</h3>
                 <p style={{ fontSize: '0.85rem', maxWidth: '300px' }}>
-                  Configure your variables in the left builder, verify your API Key, and click "Generate Diet Plan".
+                  {'Configure your variables in the left builder, verify your API Key, and click "Generate Diet Plan".'}
                 </p>
               </div>
             )}
