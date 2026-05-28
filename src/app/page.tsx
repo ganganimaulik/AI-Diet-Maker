@@ -443,14 +443,46 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
   };
 
   // Simple custom Markdown rendering to HTML
+  const getPart1AndPart2 = (md: string) => {
+    if (!md) return { part1: '', part2: '' };
+    
+    // Find where PART 2 starts
+    const splitRegex = /(?:###?\s*)?PART\s*2:\s*FOR\s*MY\s*COOK[^\n]*/i;
+    const match = md.match(splitRegex);
+    
+    if (match && match.index !== undefined) {
+      const part1 = md.substring(0, match.index).trim();
+      let part2 = md.substring(match.index + match[0].length).trim();
+      
+      // Clean up leading horizontal rule if present
+      if (part2.startsWith('---')) {
+        part2 = part2.substring(3).trim();
+      }
+      
+      // Clean up trailing horizontal rule from part1
+      let cleanedPart1 = part1;
+      if (cleanedPart1.endsWith('---')) {
+        cleanedPart1 = cleanedPart1.substring(0, cleanedPart1.length - 3).trim();
+      }
+      
+      return { part1: cleanedPart1, part2 };
+    }
+    
+    // Fallback: split by last horizontal rule
+    const sections = md.split('---');
+    if (sections.length > 1) {
+      const part2 = sections[sections.length - 1].trim();
+      const part1 = sections.slice(0, sections.length - 1).join('---').trim();
+      return { part1, part2 };
+    }
+    
+    return { part1: md, part2: '' };
+  };
+
   const renderMarkdown = (md: string) => {
     if (!md) return '';
     
-    // Split into Part 1 and Part 2 (if horizontal rule exists)
-    const sections = md.split('---');
-    // We only render Part 1 in the "For Myself" tab
-    const part1 = sections[0] || md;
-    
+    const { part1 } = getPart1AndPart2(md);
     const lines = part1.split('\n');
     const html: string[] = [];
     let inList = false;
@@ -562,10 +594,7 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
   };
 
   const getCookPlanOnly = (md: string) => {
-    if (!md) return '';
-    const sections = md.split('---');
-    // Part 2 is usually after the first horizontal rule
-    return (sections[1] || '').trim();
+    return getPart1AndPart2(md).part2;
   };
 
   if (!isMounted) {
