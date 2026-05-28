@@ -700,9 +700,9 @@ cashew, almonds & walnuts [Insert calculated combined total weight of all nuts]g
                     onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
                   >
                     <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                    <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
                     <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                    <option value="gemini-2.0-flash-thinking-exp">Gemini 2.0 Thinking (Exp)</option>
                     <option value="custom">Custom Model Name</option>
                   </select>
                 </div>
