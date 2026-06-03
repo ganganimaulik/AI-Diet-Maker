@@ -325,8 +325,8 @@ export default function Home() {
     // Dynamic Olive Oil calculation
     const totalOil = c.global.totalOliveOil || 0;
     const oilPercent = c.global.oliveOilSplitPercent || 50;
-    const subjiOil = (totalOil * oilPercent / 100).toFixed(0);
-    const chickenOil = (totalOil - Number(subjiOil)).toFixed(0);
+    const subjiOil = Math.round(totalOil * oilPercent / 100);
+    const chickenOil = totalOil - subjiOil;
 
     const splitsText = [
       `Olive Oil Cooking Split: ${subjiOil}g in subji. ${chickenOil}g in chicken`,
