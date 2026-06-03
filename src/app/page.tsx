@@ -236,6 +236,12 @@ export default function Home() {
             { id: 'salt', name: 'Salt Seasoning Split', value: splitsObj.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
             { id: 'prep', name: 'Chicken Prep Method', value: splitsObj.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
           ];
+        } else {
+          // Force remove the old olive oil custom split from existing storage
+          // since it is now dynamically handled via the global setting
+          parsed.customSplits = parsed.customSplits.filter((s: any) => 
+            s.id !== 'oil' && !s.name.toLowerCase().includes('olive oil')
+          );
         }
         
         // Delete old/deprecated fields to keep storage clean
