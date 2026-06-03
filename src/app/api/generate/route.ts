@@ -1,5 +1,33 @@
 import { NextResponse } from 'next/server';
 
+interface GeminiPart {
+  text?: string;
+  thought?: boolean;
+}
+
+interface GeminiCandidate {
+  content?: {
+    parts?: GeminiPart[];
+  };
+}
+
+interface GeminiResponse {
+  candidates?: GeminiCandidate[];
+}
+
+interface GeminiPayload {
+  contents: Array<{
+    role: string;
+    parts: Array<{ text: string }>;
+  }>;
+  generationConfig: {
+    temperature: number;
+    thinkingConfig?: {
+      thinkingBudget: number;
+    };
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -28,7 +56,7 @@ export async function POST(req: Request) {
     }
 
     // Build the request payload for Gemini v1beta API
-    const payload: any = {
+    const payload: GeminiPayload = {
       contents: [
         {
           role: 'user',
@@ -68,13 +96,13 @@ export async function POST(req: Request) {
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorMessage;
-      } catch (e) {
+      } catch {
         errorMessage = errorText || errorMessage;
       }
       return NextResponse.json({ error: errorMessage }, { status: response.status });
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as GeminiResponse;
     
     // Extract candidate responses
     const candidate = data.candidates?.[0];
@@ -94,14 +122,15 @@ export async function POST(req: Request) {
     
     // Fallback: if text is empty and there's a part with text
     if (!text && parts.length > 0) {
-      text = parts.map((p: any) => p.text || '').join('');
+      text = parts.map((p) => p.text || '').join('');
     }
 
     return NextResponse.json({ text, thought });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in generate API route:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json(
-      { error: error.message || 'Internal Server Error' }, 
+      { error: errorMessage }, 
       { status: 500 }
     );
   }
