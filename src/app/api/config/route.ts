@@ -11,9 +11,55 @@ export async function GET() {
     await dbConnect();
     let config = await Config.findOne();
     
-    // If no config document exists, we will return an empty object or null
-    // and let the frontend initialize it with its DEFAULT_CONFIG.
-    return NextResponse.json({ config: config || null });
+    if (!config) {
+      // Create a default config document in database
+      const defaultData = {
+        apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
+        provider: 'google-ai-studio',
+        enterpriseAuthMethod: 'api-key',
+        enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
+        model: 'gemini-3.5-flash',
+        customModel: 'gemini-3.5-flash',
+        thinkingEnabled: true,
+        thinkingBudget: 2048,
+        global: {
+          dailyCalorieTarget: 1600,
+          totalOliveOil: 18,
+          oliveOilSplitPercent: 50
+        },
+        meals: [
+          {
+            id: 'meal-1',
+            name: 'Breakfast',
+            mealsPerDay: 1,
+            ingredients: [
+              { name: 'Oats', weight: '50', isAuto: false }
+            ],
+            water: '',
+            prepMethod: ''
+          }
+        ],
+        customSplits: [],
+        dailyVariables: {}
+      };
+      config = await Config.create(defaultData);
+    } else {
+      // Fallback/pre-fill API key from environment variables if not set in DB
+      let modified = false;
+      if (!config.apiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
+        config.apiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
+        modified = true;
+      }
+      if (!config.enterpriseApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
+        config.enterpriseApiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
+        modified = true;
+      }
+      if (modified) {
+        await Config.findOneAndUpdate({}, { $set: config.toObject() }, { upsert: true });
+      }
+    }
+
+    return NextResponse.json({ config });
   } catch (error) {
     console.error('Error fetching config:', error);
     return NextResponse.json(

@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     } = body;
     
     // Read API key from custom header or body (for AI Studio fallback)
-    const apiKey = req.headers.get('x-api-key') || body.apiKey;
+    const apiKey = req.headers.get('x-api-key') || body.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
 
     if (!prompt) {
       return NextResponse.json(
@@ -65,7 +65,8 @@ export async function POST(req: Request) {
 
     if (provider === 'gemini-enterprise') {
       if (enterpriseAuthMethod === 'api-key') {
-        if (!enterpriseApiKey) {
+        const activeEnterpriseApiKey = enterpriseApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
+        if (!activeEnterpriseApiKey) {
           return NextResponse.json(
             { error: 'Agent Platform API Key is required when API Key authentication is selected.' },
             { status: 400 }
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
 
         const loc = enterpriseLocation || 'global';
         const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
-        const endpoint = `https://${host}/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
+        const endpoint = `https://${host}/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${activeEnterpriseApiKey}`;
         
         const response = await fetch(endpoint, {
           method: 'POST',

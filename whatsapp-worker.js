@@ -1,8 +1,72 @@
 const { Client, RemoteAuth } = require('whatsapp-web.js');
-const { MongoStore } = require('wwebjs-mongo');
 const mongoose = require('mongoose');
 const qrcode = require('qrcode');
 const fs = require('fs');
+const path = require('path');
+
+class CustomMongoStore {
+  constructor({ mongoose, dataPath } = {}) {
+    if (!mongoose) throw new Error('A valid Mongoose instance is required for CustomMongoStore.');
+    this.mongoose = mongoose;
+    this.dataPath = path.resolve(dataPath || './.wwebjs_auth');
+  }
+
+  async sessionExists(options) {
+    let multiDeviceCollection = this.mongoose.connection.db.collection(`whatsapp-${options.session}.files`);
+    let hasExistingSession = await multiDeviceCollection.countDocuments();
+    return !!hasExistingSession;   
+  }
+  
+  async save(options) {
+    var bucket = new this.mongoose.mongo.GridFSBucket(this.mongoose.connection.db, {
+      bucketName: `whatsapp-${options.session}`
+    });
+    const zipPath = path.join(this.dataPath, `${options.session}.zip`);
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(zipPath)
+        .pipe(bucket.openUploadStream(`${options.session}.zip`))
+        .on('error', err => reject(err))
+        .on('close', () => resolve());
+    });
+    options.bucket = bucket;
+    await this.deletePrevious(options);
+  }
+
+  async extract(options) {
+    var bucket = new this.mongoose.mongo.GridFSBucket(this.mongoose.connection.db, {
+      bucketName: `whatsapp-${options.session}`
+    });
+    return new Promise((resolve, reject) => {
+      bucket.openDownloadStreamByName(`${options.session}.zip`)
+        .pipe(fs.createWriteStream(options.path))
+        .on('error', err => reject(err))
+        .on('close', () => resolve());
+    });
+  }
+
+  async delete(options) {
+    var bucket = new this.mongoose.mongo.GridFSBucket(this.mongoose.connection.db, {
+      bucketName: `whatsapp-${options.session}`
+    });
+    const documents = await bucket.find({
+      filename: `${options.session}.zip`
+    }).toArray();
+
+    for (const doc of documents) {
+      await bucket.delete(doc._id);
+    }
+  }
+
+  async deletePrevious(options) {
+    const documents = await options.bucket.find({
+      filename: `${options.session}.zip`
+    }).toArray();
+    if (documents.length > 1) {
+      const oldSession = documents.reduce((a, b) => a.uploadDate < b.uploadDate ? a : b);
+      await options.bucket.delete(oldSession._id);   
+    }
+  }
+}
 
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
@@ -83,7 +147,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     { upsert: true }
   );
 
-  const store = new MongoStore({ mongoose: mongoose });
+  const store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
   
   // Determine puppeteer executable path
   let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -280,6 +344,22 @@ async function schedulerCheck(client) {
     const isPastTargetTime = (parseInt(currHour) > parseInt(targetHour)) || 
                              (parseInt(currHour) === parseInt(targetHour) && parseInt(currMinute) >= parseInt(targetMinute));
 
+    // Enforce sending window: only between 03:00 and 08:30
+    const currHourInt = parseInt(currHour);
+    const currMinuteInt = parseInt(currMinute);
+    const currTotalMinutes = currHourInt * 60 + currMinuteInt;
+    const windowStart = 3 * 60;       // 03:00 = 180 minutes
+    const windowEnd = 8 * 60 + 30;    // 08:30 = 510 minutes
+    const isWithinWindow = currTotalMinutes >= windowStart && currTotalMinutes <= windowEnd;
+
+    if (!isWithinWindow) {
+      // Outside the allowed window — do not send
+      if (isPastTargetTime && currTotalMinutes > windowEnd) {
+        console.log(`Cook message window (03:00–08:30) has passed. Current: ${localTime}. Skipping for today.`);
+      }
+      return;
+    }
+
     if (isPastTargetTime) {
       // Check if we are in a retry cool-down
       if (scheduler.retryCount > 0 && Date.now() < scheduler.nextRetryTime) {
@@ -312,8 +392,17 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
 
     // 2. Fetch active diet configuration
     const configDoc = await Config.findOne();
-    if (!configDoc || !configDoc.apiKey) {
-      throw new Error('Diet configuration or Gemini API Key is missing.');
+    if (!configDoc) {
+      throw new Error('Diet configuration is missing.');
+    }
+    const hasEnterpriseCreds = configDoc.provider === 'gemini-enterprise' && (
+      configDoc.enterpriseAuthMethod === 'adc' ||
+      (configDoc.enterpriseAuthMethod === 'api-key' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.enterpriseApiKey)) ||
+      (configDoc.enterpriseAuthMethod === 'service-account' && configDoc.enterpriseServiceAccountJson)
+    );
+    const hasStudioCreds = configDoc.provider !== 'gemini-enterprise' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.apiKey);
+    if (!hasEnterpriseCreds && !hasStudioCreds) {
+      throw new Error('Gemini API Key or credentials are missing.');
     }
 
     // 3. Compile prompt for TODAY
@@ -516,7 +605,8 @@ async function callGeminiAPI(c, prompt) {
   
   if (c.provider === 'gemini-enterprise') {
     if (c.enterpriseAuthMethod === 'api-key') {
-      if (!c.enterpriseApiKey) {
+      const enterpriseApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || c.enterpriseApiKey;
+      if (!enterpriseApiKey) {
         throw new Error('Agent Platform API Key is required when API Key authentication is selected.');
       }
       if (!c.enterpriseProjectId) {
@@ -544,7 +634,7 @@ async function callGeminiAPI(c, prompt) {
 
       const loc = c.enterpriseLocation || 'global';
       const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
-      const endpoint = `https://${host}/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
+      const endpoint = `https://${host}/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -639,7 +729,8 @@ async function callGeminiAPI(c, prompt) {
     }
   } else {
     // Default: Google AI Studio API
-    if (!c.apiKey) {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || c.apiKey;
+    if (!apiKey) {
       throw new Error('Gemini API Key is missing.');
     }
 
@@ -662,7 +753,7 @@ async function callGeminiAPI(c, prompt) {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${c.apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
