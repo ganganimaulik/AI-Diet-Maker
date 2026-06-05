@@ -1,0 +1,39 @@
+name: Keep HF Space Awake
+
+on:
+  schedule:
+    # Trigger the workflow every 3 hours
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # Allows manually running the workflow from the GitHub Actions UI
+
+jobs:
+  keep-awake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for random interval
+        run: |
+          # Generate a random delay between 0 and 7200 seconds (0 to 2 hours)
+          # This guarantees that pings are randomized and occur once every 2 to 5 hours apart.
+          DELAY=$(( RANDOM % 7200 ))
+          echo "Delaying execution by $DELAY seconds (approx. $(( DELAY / 60 )) minutes) to randomize traffic..."
+          sleep $DELAY
+
+      - name: Ping Hugging Face Space
+        run: |
+          # The URL of your Hugging Face Space diagnostic endpoint.
+          # Update this URL if your space is named differently.
+          URL="https://ganganimaulik-diet-maker-worker.hf.space/diag"
+          
+          echo "Sending HTTP GET request to: $URL"
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "$URL")
+          
+          echo "Response received:"
+          echo "$RESPONSE"
+          
+          # Check if the HTTP status indicates success (2xx)
+          HTTP_STATUS=$(echo "$RESPONSE" | tr -d '\r' | tail -n 1 | cut -d':' -f2)
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Success: Space is awake and healthy (HTTP $HTTP_STATUS)."
+          else
+            echo "Warning: Received HTTP $HTTP_STATUS status. The space might be starting up or sleeping, curl will trigger a wake-up."
+          fi
