@@ -815,8 +815,7 @@ function extractCookInstructions(md, dayName) {
     }
   }
 
-  // Prepend a nice header for the cook
-  return `*Here is today's meal prep plan (${new Date().toLocaleDateString()})*:\n\n${part2}`;
+  return part2;
 }
 
 // -------------------------------------------------------------
