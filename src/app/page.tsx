@@ -170,6 +170,7 @@ export default function Home() {
   const [schedulerState, setSchedulerState] = useState({
     isEnabled: false,
     targetTime: '07:30',
+    timezone: 'Asia/Kolkata',
     recipientType: 'contact' as 'contact' | 'group',
     recipientId: '',
     recipientName: '',
@@ -1132,9 +1133,27 @@ prep method: airfryer 200c, 10min"]
                       value={schedulerState.targetTime}
                       onChange={e => setSchedulerState(prev => ({ ...prev, targetTime: e.target.value }))}
                     />
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                      Uses local system time of Hugging Face Space.
-                    </span>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Timezone</label>
+                    <select
+                      className="form-input"
+                      value={schedulerState.timezone || 'Asia/Kolkata'}
+                      onChange={e => setSchedulerState(prev => ({ ...prev, timezone: e.target.value }))}
+                    >
+                      <option value="Asia/Kolkata">India (IST) - GMT+5:30</option>
+                      <option value="UTC">Coordinated Universal Time (UTC)</option>
+                      <option value="America/New_York">US East (EST/EDT)</option>
+                      <option value="America/Chicago">US Central (CST/CDT)</option>
+                      <option value="America/Denver">US Mountain (MST/MDT)</option>
+                      <option value="America/Los_Angeles">US West (PST/PDT)</option>
+                      <option value="Europe/London">London (GMT/BST)</option>
+                      <option value="Europe/Paris">Paris (CET/CEST)</option>
+                      <option value="Asia/Singapore">Singapore (SGT)</option>
+                      <option value="Asia/Dubai">Dubai (GST)</option>
+                      <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                    </select>
                   </div>
 
                   <div className="form-group contact-picker-input">

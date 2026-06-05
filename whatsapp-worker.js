@@ -29,6 +29,7 @@ const ContactSchema = new mongoose.Schema({
 const SchedulerSchema = new mongoose.Schema({
   isEnabled: { type: Boolean, default: false },
   targetTime: { type: String, default: '07:30' },
+  timezone: { type: String, default: 'Asia/Kolkata' },
   recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
   recipientId: { type: String, default: '' },
   recipientName: { type: String, default: '' },
@@ -223,12 +224,14 @@ async function schedulerCheck(client) {
     }
 
     // 4. Check time and date conditions
-    // Get current local date and time values
     const now = new Date();
+    const timezone = scheduler.timezone || 'Asia/Kolkata';
     
-    // Format local date: YYYY-MM-DD
-    const localDate = now.toLocaleDateString('en-CA'); // Outputs YYYY-MM-DD reliably
-    const localTime = now.toTimeString().split(' ')[0].substring(0, 5); // Outputs HH:MM
+    // Format local date: YYYY-MM-DD in target timezone
+    const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    
+    // Format local time: HH:MM in target timezone
+    const localTime = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
     
     const [targetHour, targetMinute] = scheduler.targetTime.split(':');
     const [currHour, currMinute] = localTime.split(':');
@@ -259,7 +262,9 @@ async function schedulerCheck(client) {
 // CORE GENERATION & WHATSAPP TRANSMISSION
 // -------------------------------------------------------------
 async function executeScheduledSend(client, scheduler, isTest = false) {
-  const localDate = new Date().toLocaleDateString('en-CA');
+  const now = new Date();
+  const timezone = scheduler.timezone || 'Asia/Kolkata';
+  const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   
   try {
     // 1. Verify WhatsApp client is connected

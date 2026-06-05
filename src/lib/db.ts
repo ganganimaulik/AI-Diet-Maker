@@ -166,6 +166,7 @@ const ContactSchema = new Schema<IContact>({
 export interface IScheduler {
   isEnabled: boolean;
   targetTime: string; // "07:30" (24h format HH:MM)
+  timezone: string; // "Asia/Kolkata"
   recipientType: 'contact' | 'group';
   recipientId: string; // "919876543210@c.us"
   recipientName: string;
@@ -180,6 +181,7 @@ export interface IScheduler {
 const SchedulerSchema = new Schema<IScheduler>({
   isEnabled: { type: Boolean, default: false },
   targetTime: { type: String, default: '07:30' },
+  timezone: { type: String, default: 'Asia/Kolkata' },
   recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
   recipientId: { type: String, default: '' },
   recipientName: { type: String, default: '' },

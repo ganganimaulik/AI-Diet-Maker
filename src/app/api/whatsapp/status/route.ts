@@ -25,6 +25,7 @@ export async function GET() {
       scheduler = await Scheduler.create({
         isEnabled: false,
         targetTime: '07:30',
+        timezone: 'Asia/Kolkata',
         recipientType: 'contact',
         recipientId: '',
         recipientName: '',
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { isEnabled, targetTime, recipientType, recipientId, recipientName } = await req.json();
+    const { isEnabled, targetTime, timezone, recipientType, recipientId, recipientName } = await req.json();
     await dbConnect();
 
     const updatedScheduler = await Scheduler.findOneAndUpdate(
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
         $set: {
           isEnabled,
           targetTime,
+          timezone,
           recipientType,
           recipientId,
           recipientName,
