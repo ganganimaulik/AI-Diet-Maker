@@ -97,7 +97,8 @@ export async function POST(req: Request) {
           };
         }
 
-        const endpoint = `https://agentplatform.googleapis.com/v1/projects/${enterpriseProjectId}/locations/${enterpriseLocation}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
+        const loc = enterpriseLocation || 'us-central1';
+        const endpoint = `https://${loc}-aiplatform.googleapis.com/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
         
         const response = await fetch(endpoint, {
           method: 'POST',

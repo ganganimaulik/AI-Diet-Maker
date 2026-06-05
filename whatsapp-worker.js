@@ -528,7 +528,8 @@ async function callGeminiAPI(c, prompt) {
         };
       }
 
-      const endpoint = `https://agentplatform.googleapis.com/v1/projects/${c.enterpriseProjectId}/locations/${c.enterpriseLocation || 'us-central1'}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
+      const loc = c.enterpriseLocation || 'us-central1';
+      const endpoint = `https://${loc}-aiplatform.googleapis.com/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
       
       const response = await fetch(endpoint, {
         method: 'POST',
