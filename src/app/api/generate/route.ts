@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthenticated } from '@/lib/auth';
 
 interface GeminiPart {
   text?: string;
@@ -30,6 +31,10 @@ interface GeminiPayload {
 
 export async function POST(req: Request) {
   try {
+    if (!(await isAuthenticated())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { 
       prompt, 

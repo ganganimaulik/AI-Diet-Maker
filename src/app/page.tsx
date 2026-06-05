@@ -1,6 +1,6 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // Type definitions
 interface Ingredient {
@@ -152,155 +152,247 @@ export default function Home() {
   const [outputTab, setOutputTab] = useState<'user' | 'cook' | 'thoughts'>('user');
   const [copiedStatus, setCopiedStatus] = useState(false);
 
-  // Load from local storage
-  useEffect(() => {
-    const saved = localStorage.getItem('ai-diet-maker-config');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        
-        // Dynamic migration to dynamic n-meals architecture
-        if (!parsed.meals || parsed.meals.length === 0) {
-          const migratedMeals: Meal[] = [];
-          
-          // Migrate Oats Meal (Meal 1)
-          if (parsed.oatsMeal) {
-            migratedMeals.push({
-              id: 'meal-oats',
-              name: parsed.meal1Name || 'Oats Meal',
-              mealsPerDay: parsed.global?.oatsMealsPerDay || 1,
-              ingredients: parsed.oatsMeal.ingredients || [],
-              water: parsed.oatsMeal.water || '',
-              prepMethod: parsed.oatsMeal.prepMethod || ''
-            });
-          } else {
-            // Seed default oats meal
-            migratedMeals.push({
-              id: 'meal-oats',
-              name: 'Oats Meal',
-              mealsPerDay: 1,
-              ingredients: [
-                { name: 'Oats (Raw)', weight: '35', isAuto: false },
-                { name: 'Whey Protein Isolate', weight: '60', isAuto: false },
-                { name: 'Almonds', weight: '5', isAuto: false },
-                { name: 'Cashews', weight: '5', isAuto: false },
-                { name: 'Walnuts', weight: '5', isAuto: false },
-                { name: 'Banana', weight: '60', isAuto: false }
-              ],
-              water: '190g water',
-              prepMethod: 'Oats airfryer 200c, 10min'
-            });
-          }
-          
-          // Migrate Chicken Meal (Meal 2)
-          if (parsed.chickenMeal) {
-            migratedMeals.push({
-              id: 'meal-chicken',
-              name: parsed.meal2Name || 'Chicken Meal',
-              mealsPerDay: parsed.global?.chickenMealsPerDay || 3,
-              ingredients: parsed.chickenMeal.baselines || [],
-              water: parsed.splits?.oliveOilSplit || '',
-              prepMethod: parsed.splits?.chickenPrepMethod || ''
-            });
-          } else {
-            // Seed default chicken meal
-            migratedMeals.push({
-              id: 'meal-chicken',
-              name: 'Chicken Meal',
-              mealsPerDay: 3,
-              ingredients: [
-                { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false }
-              ],
-              water: '',
-              prepMethod: 'Chicken air fryer 200c, 15 min'
-            });
-          }
-          
-          parsed.meals = migratedMeals;
-        }
-        
-        // Migrate global olive oil settings if missing
-        if (!parsed.global.totalOliveOil) {
-          parsed.global.totalOliveOil = 18;
-          parsed.global.oliveOilSplitPercent = 50;
-        }
-        
-        // Migrate custom splits
-        if (!parsed.customSplits) {
-          const splitsObj = parsed.splits || {
-            oliveOilSplit: '9g in subji. 9g in chicken',
-            saltSplit: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste',
-            chickenPrepMethod: 'Chicken air fryer 200c, 15 min'
-          };
-          parsed.customSplits = [
-            { id: 'salt', name: 'Salt Seasoning Split', value: splitsObj.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-            { id: 'prep', name: 'Chicken Prep Method', value: splitsObj.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
-          ];
-        } else {
-          // Force remove the old olive oil custom split from existing storage
-          // since it is now dynamically handled via the global setting
-          parsed.customSplits = parsed.customSplits.filter((s: any) => 
-            s.id !== 'oil' && !s.name.toLowerCase().includes('olive oil')
-          );
-        }
-        
-        // Delete old/deprecated fields to keep storage clean
-        delete parsed.meal1Name;
-        delete parsed.meal2Name;
-        delete parsed.calorieDatabase;
-        delete parsed.oatsMeal;
-        delete parsed.chickenMeal;
-        
-        setConfig(parsed);
-      } catch (e) {
-        console.error('Failed to load configuration from local storage', e);
+  // Authentication and Save states
+  const [isAuthenticatedState, setIsAuthenticatedState] = useState<boolean | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const isInitialLoaded = useRef(false);
+
+  // WhatsApp bot states
+  const [whatsappState, setWhatsappState] = useState({
+    status: 'disconnected',
+    qr: '',
+    connectedPhone: '',
+    connectedName: '',
+  });
+  const [schedulerState, setSchedulerState] = useState({
+    isEnabled: false,
+    targetTime: '07:30',
+    recipientType: 'contact' as 'contact' | 'group',
+    recipientId: '',
+    recipientName: '',
+    lastSentDate: '',
+    lastError: '',
+    retryCount: 0,
+    nextRetryTime: 0,
+  });
+  const [contacts, setContacts] = useState<Array<{ id: string; name: string; isGroup: boolean }>>([]);
+  const [searchContact, setSearchContact] = useState('');
+  const [showContactsDropdown, setShowContactsDropdown] = useState(false);
+  const [isSavingScheduler, setIsSavingScheduler] = useState(false);
+  const [testSendStatus, setTestSendStatus] = useState({ status: 'idle', message: '' });
+
+  // Database Save Config Function
+  const saveConfig = async (configToSave = config) => {
+    setIsSavingConfig(true);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(configToSave)
+      });
+      if (!res.ok) {
+        throw new Error('Failed to save configuration.');
       }
-    } else {
-      // Default initialization
-      setConfig(prev => ({
-        ...prev,
-        meals: [
-          {
-            id: 'meal-oats',
-            name: 'Oats Meal',
-            mealsPerDay: 1,
-            ingredients: [
-              { name: 'Oats (Raw)', weight: '35', isAuto: false },
-              { name: 'Whey Protein Isolate', weight: '60', isAuto: false },
-              { name: 'Almonds', weight: '5', isAuto: false },
-              { name: 'Cashews', weight: '5', isAuto: false },
-              { name: 'Walnuts', weight: '5', isAuto: false },
-              { name: 'Banana', weight: '60', isAuto: false }
-            ],
-            water: '190g water',
-            prepMethod: 'Oats airfryer 200c, 10min'
-          },
-          {
-            id: 'meal-chicken',
-            name: 'Chicken Meal',
-            mealsPerDay: 3,
-            ingredients: [
-              { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false }
-            ],
-            water: '',
-            prepMethod: 'Chicken air fryer 200c, 15 min'
-          }
-        ],
-        customSplits: [
-          { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-          { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
-        ]
-      }));
+      setHasUnsavedChanges(false);
+    } catch (e) {
+      console.error('Error saving config:', e);
+      alert('Failed to save configuration to database.');
+    } finally {
+      setIsSavingConfig(false);
     }
-    setIsMounted(true);
+  };
+
+  // WhatsApp Poll Utilities
+  const fetchWhatsAppStatus = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setWhatsappState(data.state);
+        if (data.scheduler) {
+          setSchedulerState(data.scheduler);
+          if (data.scheduler.recipientId && !searchContact) {
+            setSearchContact(data.scheduler.recipientName ? `${data.scheduler.recipientName} (${data.scheduler.recipientId.split('@')[0]})` : data.scheduler.recipientId);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching WhatsApp status:', e);
+    }
+  };
+
+  const fetchContacts = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/contacts');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.contacts) setContacts(data.contacts);
+      }
+    } catch (e) {
+      console.error('Error fetching contacts:', e);
+    }
+  };
+
+  // Check login and fetch config on mount
+  useEffect(() => {
+    const checkAuthAndLoad = async () => {
+      try {
+        const authRes = await fetch('/api/auth/check');
+        const authData = await authRes.json();
+        
+        if (authData.authenticated) {
+          setIsAuthenticatedState(true);
+          
+          // Fetch configuration from MongoDB
+          const configRes = await fetch('/api/config');
+          const configData = await configRes.json();
+          
+          if (configData.config) {
+            setConfig(configData.config);
+          } else {
+            // First time setup, save default config to DB
+            await fetch('/api/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(DEFAULT_CONFIG)
+            });
+            setConfig(DEFAULT_CONFIG);
+          }
+          isInitialLoaded.current = true;
+          fetchWhatsAppStatus();
+          fetchContacts();
+        } else {
+          setIsAuthenticatedState(false);
+        }
+      } catch (e) {
+        console.error('Error checking auth:', e);
+        setIsAuthenticatedState(false);
+      } finally {
+        setIsMounted(true);
+      }
+    };
+    
+    checkAuthAndLoad();
   }, []);
 
-  // Save to local storage
+  // Sync configuration updates
   useEffect(() => {
-    if (isMounted) {
-      localStorage.setItem('ai-diet-maker-config', JSON.stringify(config));
+    if (isInitialLoaded.current) {
+      setHasUnsavedChanges(true);
     }
-  }, [config, isMounted]);
+  }, [config]);
+
+  // WhatsApp Poll Loop
+  useEffect(() => {
+    if (isAuthenticatedState !== true) return;
+
+    fetchWhatsAppStatus();
+    
+    // Poll status every 5 seconds to track QR updates or ready state changes
+    const interval = setInterval(() => {
+      fetchWhatsAppStatus();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticatedState, activeTab]);
+
+  // Login handler
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsAuthenticatedState(true);
+        // Load configuration from database
+        const configRes = await fetch('/api/config');
+        const configData = await configRes.json();
+        
+        if (configData.config) {
+          setConfig(configData.config);
+        } else {
+          await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(DEFAULT_CONFIG)
+          });
+          setConfig(DEFAULT_CONFIG);
+        }
+        isInitialLoaded.current = true;
+        fetchWhatsAppStatus();
+        fetchContacts();
+      } else {
+        setLoginError(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setLoginError('Network error occurred');
+    }
+  };
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/login', { method: 'DELETE' });
+      setIsAuthenticatedState(false);
+      isInitialLoaded.current = false;
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+  };
+
+  // Save Scheduler configuration
+  const saveSchedulerSettings = async () => {
+    setIsSavingScheduler(true);
+    try {
+      const res = await fetch('/api/whatsapp/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(schedulerState)
+      });
+      if (res.ok) {
+        alert('Scheduler settings saved successfully!');
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      alert('Failed to save scheduler settings.');
+    } finally {
+      setIsSavingScheduler(false);
+    }
+  };
+
+  // Trigger immediate test message delivery
+  const handleSendTestMessage = async () => {
+    setTestSendStatus({ status: 'sending', message: 'Triggering test send...' });
+    try {
+      // Auto-save the config first to ensure today's test matches edits
+      await saveConfig(config);
+      
+      const res = await fetch('/api/whatsapp/send-test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setTestSendStatus({ 
+          status: 'success', 
+          message: 'Test triggered successfully! The background worker will generate and send the message shortly.' 
+        });
+        setTimeout(() => setTestSendStatus({ status: 'idle', message: '' }), 5000);
+      } else {
+        throw new Error(data.error || 'Failed to trigger test send.');
+      }
+    } catch (e: any) {
+      setTestSendStatus({ status: 'error', message: e.message || 'Error triggering test send.' });
+    }
+  };
 
   // Helper: Get variant name for days (e.g. Tomato -> "Just Tomato")
   const getDayVariantName = (ingredients: Ingredient[]) => {
@@ -830,11 +922,48 @@ prep method: airfryer 200c, 10min"]
     return getPart1AndPart2(md).part2;
   };
 
-  if (!isMounted) {
+  if (isAuthenticatedState === null || !isMounted) {
     return (
-      <div className="loading-container">
+      <div className="loading-container" style={{ minHeight: '100vh' }}>
         <div className="spinner"></div>
-        <p style={{ color: 'var(--text-secondary)' }}>Loading configuration dashboard...</p>
+        <p style={{ color: 'var(--text-secondary)' }}>Checking credentials & loading configuration...</p>
+      </div>
+    );
+  }
+
+  if (isAuthenticatedState === false) {
+    return (
+      <div className="login-overlay">
+        <form onSubmit={handleLogin} className="login-card">
+          <div className="login-logo">🔒</div>
+          <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>AI Diet Maker</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+            Enter the password to access your diet dashboard
+          </p>
+          
+          <div className="form-group" style={{ textAlign: 'left' }}>
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              className="form-input"
+              style={{ padding: '0.75rem 1rem' }}
+              placeholder="••••••••"
+              value={passwordInput}
+              onChange={e => setPasswordInput(e.target.value)}
+              required
+            />
+          </div>
+          
+          {loginError && (
+            <div style={{ color: 'var(--accent-rose)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              {loginError}
+            </div>
+          )}
+          
+          <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }}>
+            Unlock Dashboard
+          </button>
+        </form>
       </div>
     );
   }
@@ -846,19 +975,24 @@ prep method: airfryer 200c, 10min"]
           <h1 className="header-title">AI Diet Maker</h1>
           <p className="header-subtitle">Strict meal prep calculator, solved via Gemini Thinking Models</p>
         </div>
-        <div className="api-status">
-          {config.apiKey ? (
-            <span className="api-key-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-              Gemini API Active
-            </span>
-          ) : (
-            <span className="api-key-badge missing">
-              ⚠️ API Key Needed
-            </span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="api-status">
+            {config.apiKey ? (
+              <span className="api-key-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                Gemini API Active
+              </span>
+            ) : (
+              <span className="api-key-badge missing">
+                ⚠️ API Key Needed
+              </span>
+            )}
+          </div>
+          <button className="btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }} onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </header>
 
@@ -875,9 +1009,28 @@ prep method: airfryer 200c, 10min"]
             </h2>
           </div>
 
+          {hasUnsavedChanges && (
+            <div className="save-config-bar">
+              <span style={{ fontSize: '0.85rem', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                ⚠️ You have unsaved changes
+              </span>
+              <button 
+                className="btn-secondary" 
+                style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: 700 }}
+                disabled={isSavingConfig}
+                onClick={() => saveConfig()}
+              >
+                {isSavingConfig ? 'Saving...' : 'Save Configuration'}
+              </button>
+            </div>
+          )}
+
           <div className="section-tabs" style={{ overflowX: 'auto', whiteSpace: 'nowrap', display: 'flex', gap: '0.5rem', scrollbarWidth: 'none' }}>
             <button className={`section-tab-btn ${activeTab === 'global' ? 'active' : ''}`} onClick={() => setActiveTab('global')}>
               Setup
+            </button>
+            <button className={`section-tab-btn ${activeTab === 'whatsapp' ? 'active' : ''}`} onClick={() => setActiveTab('whatsapp')}>
+              🟢 WhatsApp Bot
             </button>
             {(config.meals || []).map(meal => (
               <button
@@ -902,6 +1055,207 @@ prep method: airfryer 200c, 10min"]
               Prompt
             </button>
           </div>
+
+          {/* WhatsApp Subpanel */}
+          {activeTab === 'whatsapp' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Connection Status Card */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
+                  <span>Connection Status</span>
+                  <span className={`whatsapp-status-badge ${whatsappState.status}`}>
+                    {whatsappState.status === 'ready' && '🟢 Connected'}
+                    {whatsappState.status === 'connecting' && '🔵 Connecting'}
+                    {whatsappState.status === 'qr_code' && '🟡 Scan QR'}
+                    {whatsappState.status === 'disconnected' && '🔴 Disconnected'}
+                  </span>
+                </h3>
+
+                {whatsappState.status === 'qr_code' && (
+                  <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      Scan this QR code with WhatsApp on your phone:
+                    </p>
+                    <div className="whatsapp-qr-container">
+                      <img src={whatsappState.qr} alt="WhatsApp QR Code" className="whatsapp-qr-img" />
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      QR code refreshes automatically.
+                    </span>
+                  </div>
+                )}
+
+                {whatsappState.status === 'ready' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(16, 185, 129, 0.05)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)', marginTop: '0.75rem' }}>
+                    <span style={{ fontSize: '1.75rem' }}>📱</span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#fff' }}>{whatsappState.connectedName}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Number: {whatsappState.connectedPhone}</div>
+                    </div>
+                  </div>
+                )}
+
+                {whatsappState.status === 'disconnected' && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                    The WhatsApp background worker is starting up. If this message remains after 30 seconds, please check the Hugging Face space log.
+                  </p>
+                )}
+
+                {whatsappState.status === 'connecting' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', marginTop: '0.5rem' }}>
+                    <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px' }}></div>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Initializing WhatsApp Web session...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Scheduler Card */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: '#fff' }}>Daily Scheduler</h3>
+                
+                <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                  <div 
+                    className={`switch-container ${schedulerState.isEnabled ? 'checked' : ''}`}
+                    onClick={() => setSchedulerState(prev => ({ ...prev, isEnabled: !prev.isEnabled }))}
+                  >
+                    <div className="switch-control"></div>
+                    <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Automated Sending</span>
+                  </div>
+                </div>
+
+                <div className="input-row" style={{ marginBottom: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Send Time (Daily)</label>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={schedulerState.targetTime}
+                      onChange={e => setSchedulerState(prev => ({ ...prev, targetTime: e.target.value }))}
+                    />
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                      Uses local system time of Hugging Face Space.
+                    </span>
+                  </div>
+
+                  <div className="form-group contact-picker-input">
+                    <label className="form-label">Recipient (Contact or Group)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Search contact or group..."
+                      value={searchContact}
+                      onChange={e => {
+                        setSearchContact(e.target.value);
+                        setSchedulerState(prev => ({ ...prev, recipientId: e.target.value, recipientName: e.target.value }));
+                        setShowContactsDropdown(true);
+                      }}
+                      onFocus={() => setShowContactsDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowContactsDropdown(false), 200)}
+                    />
+                    
+                    {showContactsDropdown && contacts.length > 0 && (
+                      <div className="contacts-dropdown">
+                        {contacts
+                          .filter(c => c.name.toLowerCase().includes(searchContact.toLowerCase()) || c.id.includes(searchContact))
+                          .map(contact => (
+                            <div 
+                              key={contact.id} 
+                              className="contact-option"
+                              onMouseDown={() => {
+                                setSchedulerState(prev => ({
+                                  ...prev,
+                                  recipientId: contact.id,
+                                  recipientName: contact.name,
+                                  recipientType: contact.isGroup ? 'group' : 'contact'
+                                }));
+                                setSearchContact(`${contact.name} (${contact.id.split('@')[0]})`);
+                                setShowContactsDropdown(false);
+                              }}
+                            >
+                              <span>{contact.name}</span>
+                              <span className="contact-option-type">{contact.isGroup ? 'Group' : 'Contact'}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                      Selected: <strong>{schedulerState.recipientName || 'None'}</strong> ({schedulerState.recipientId || 'None'})
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                  <button 
+                    className="btn-primary" 
+                    style={{ flex: 1, padding: '0.6rem 1rem', fontSize: '0.85rem' }}
+                    onClick={saveSchedulerSettings}
+                    disabled={isSavingScheduler}
+                  >
+                    {isSavingScheduler ? 'Saving...' : 'Save Settings'}
+                  </button>
+                  
+                  <button 
+                    className="btn-secondary" 
+                    style={{ flex: 1, padding: '0.6rem 1rem', fontSize: '0.85rem', border: '1px solid var(--accent-purple)' }}
+                    onClick={handleSendTestMessage}
+                    disabled={testSendStatus.status === 'sending' || whatsappState.status !== 'ready'}
+                  >
+                    {testSendStatus.status === 'sending' ? 'Sending Test...' : 'Send Test Now'}
+                  </button>
+                </div>
+
+                {testSendStatus.message && (
+                  <div style={{ 
+                    marginTop: '1rem', 
+                    fontSize: '0.8rem', 
+                    padding: '0.5rem 0.75rem', 
+                    borderRadius: '6px',
+                    color: testSendStatus.status === 'success' ? '#6ee7b7' : testSendStatus.status === 'error' ? '#fca5a5' : 'var(--text-secondary)',
+                    background: testSendStatus.status === 'success' ? 'rgba(16, 185, 129, 0.1)' : testSendStatus.status === 'error' ? 'rgba(244, 63, 94, 0.1)' : 'rgba(255,255,255,0.03)'
+                  }}>
+                    {testSendStatus.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Status and Logs Dashboard */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: '#fff' }}>Scheduler Status Dashboard</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Last Sent Date</div>
+                    <div style={{ fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>{schedulerState.lastSentDate || 'Never'}</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Retry Attempts</div>
+                    <div style={{ fontWeight: 700, color: schedulerState.retryCount > 0 ? 'var(--accent-rose)' : '#fff', marginTop: '0.25rem' }}>
+                      {schedulerState.retryCount}
+                    </div>
+                  </div>
+
+                  {schedulerState.retryCount > 0 && (
+                    <div style={{ gridColumn: 'span 2', background: 'rgba(244, 63, 94, 0.05)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
+                      <div style={{ color: 'var(--accent-rose)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700 }}>Next Auto Retry</div>
+                      <div style={{ fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>
+                        {new Date(schedulerState.nextRetryTime).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+
+                  {schedulerState.lastError && (
+                    <div style={{ gridColumn: 'span 2', background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)', color: '#fda4af' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Last Error Log</div>
+                      <div style={{ marginTop: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                        {schedulerState.lastError}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Setup Subpanel */}
           {activeTab === 'global' && (
