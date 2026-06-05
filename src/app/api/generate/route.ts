@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       enterpriseAuthMethod = 'api-key',
       enterpriseApiKey = '',
       enterpriseProjectId = '',
-      enterpriseLocation = 'us-central1',
+      enterpriseLocation = 'global',
       enterpriseServiceAccountJson = ''
     } = body;
     
@@ -97,8 +97,9 @@ export async function POST(req: Request) {
           };
         }
 
-        const loc = enterpriseLocation || 'us-central1';
-        const endpoint = `https://${loc}-aiplatform.googleapis.com/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
+        const loc = enterpriseLocation || 'global';
+        const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
+        const endpoint = `https://${host}/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
         
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -168,7 +169,7 @@ export async function POST(req: Request) {
         const ai = new GoogleGenAI({
           vertexai: true,
           project: enterpriseProjectId,
-          location: enterpriseLocation || 'us-central1',
+          location: enterpriseLocation || 'global',
           googleAuthOptions
         });
 

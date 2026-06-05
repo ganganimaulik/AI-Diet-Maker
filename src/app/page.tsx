@@ -61,7 +61,7 @@ const DEFAULT_CONFIG: Config = {
   enterpriseAuthMethod: 'api-key',
   enterpriseApiKey: '',
   enterpriseProjectId: '',
-  enterpriseLocation: 'us-central1',
+  enterpriseLocation: 'global',
   enterpriseServiceAccountJson: '',
   model: 'gemini-3.5-flash',
   customModel: 'gemini-3.5-flash',
@@ -767,7 +767,7 @@ prep method: airfryer 200c, 10min"]
           enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
           enterpriseApiKey: config.enterpriseApiKey,
           enterpriseProjectId: config.enterpriseProjectId,
-          enterpriseLocation: config.enterpriseLocation || 'us-central1',
+          enterpriseLocation: config.enterpriseLocation || 'global',
           enterpriseServiceAccountJson: config.enterpriseServiceAccountJson
         })
       });
@@ -1429,8 +1429,8 @@ prep method: airfryer 200c, 10min"]
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="us-central1"
-                        value={config.enterpriseLocation || 'us-central1'}
+                        placeholder="global"
+                        value={config.enterpriseLocation || 'global'}
                         onChange={e => setConfig(prev => ({ ...prev, enterpriseLocation: e.target.value }))}
                       />
                     </div>

@@ -122,7 +122,7 @@ const ConfigSchema = new Schema<IConfig>({
   enterpriseAuthMethod: { type: String, default: 'api-key' },
   enterpriseApiKey: { type: String, default: '' },
   enterpriseProjectId: { type: String, default: '' },
-  enterpriseLocation: { type: String, default: 'us-central1' },
+  enterpriseLocation: { type: String, default: 'global' },
   enterpriseServiceAccountJson: { type: String, default: '' },
   model: { type: String, default: 'gemini-3.5-flash' },
   customModel: { type: String, default: 'gemini-3.5-flash' },

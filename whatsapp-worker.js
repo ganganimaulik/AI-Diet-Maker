@@ -46,7 +46,7 @@ const ConfigSchema = new mongoose.Schema({
   enterpriseAuthMethod: { type: String, default: 'api-key' },
   enterpriseApiKey: { type: String, default: '' },
   enterpriseProjectId: { type: String, default: '' },
-  enterpriseLocation: { type: String, default: 'us-central1' },
+  enterpriseLocation: { type: String, default: 'global' },
   enterpriseServiceAccountJson: { type: String, default: '' },
   model: { type: String, default: 'gemini-3.5-flash' },
   customModel: { type: String, default: 'gemini-3.5-flash' },
@@ -528,8 +528,9 @@ async function callGeminiAPI(c, prompt) {
         };
       }
 
-      const loc = c.enterpriseLocation || 'us-central1';
-      const endpoint = `https://${loc}-aiplatform.googleapis.com/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
+      const loc = c.enterpriseLocation || 'global';
+      const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
+      const endpoint = `https://${host}/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -586,7 +587,7 @@ async function callGeminiAPI(c, prompt) {
       const ai = new GoogleGenAI({
         vertexai: true,
         project: c.enterpriseProjectId,
-        location: c.enterpriseLocation || 'us-central1',
+        location: c.enterpriseLocation || 'global',
         googleAuthOptions
       });
 
