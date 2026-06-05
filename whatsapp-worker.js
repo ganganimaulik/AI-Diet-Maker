@@ -9,6 +9,9 @@ class CustomMongoStore {
     if (!mongoose) throw new Error('A valid Mongoose instance is required for CustomMongoStore.');
     this.mongoose = mongoose;
     this.dataPath = path.resolve(dataPath || './.wwebjs_auth');
+    if (!fs.existsSync(this.dataPath)) {
+      fs.mkdirSync(this.dataPath, { recursive: true });
+    }
   }
 
   async sessionExists(options) {
@@ -36,6 +39,10 @@ class CustomMongoStore {
     var bucket = new this.mongoose.mongo.GridFSBucket(this.mongoose.connection.db, {
       bucketName: `whatsapp-${options.session}`
     });
+    const dir = path.dirname(options.path);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     return new Promise((resolve, reject) => {
       bucket.openDownloadStreamByName(`${options.session}.zip`)
         .pipe(fs.createWriteStream(options.path))
