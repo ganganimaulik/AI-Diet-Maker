@@ -10,6 +10,15 @@ export async function POST() {
 
     await dbConnect();
     
+    // Check if recipient is configured in the scheduler first
+    const scheduler = await Scheduler.findOne();
+    if (!scheduler || !scheduler.recipientId) {
+      return NextResponse.json(
+        { error: 'Recipient is not configured in the scheduler. Please select a contact or group first.' },
+        { status: 400 }
+      );
+    }
+    
     // Set triggerTest: true in Scheduler document
     const updatedScheduler = await Scheduler.findOneAndUpdate(
       {},

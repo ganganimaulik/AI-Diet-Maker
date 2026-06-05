@@ -390,6 +390,11 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
       throw new Error('WhatsApp client is not connected / authenticated.');
     }
 
+    // Verify recipient is configured in the scheduler
+    if (!scheduler.recipientId) {
+      throw new Error('Recipient JID (ID) is not configured in the scheduler.');
+    }
+
     // 2. Fetch active diet configuration
     const configDoc = await Config.findOne();
     if (!configDoc) {
