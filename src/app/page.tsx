@@ -217,9 +217,6 @@ export default function Home() {
         if (data.state) setWhatsappState(data.state);
         if (data.scheduler) {
           setSchedulerState(data.scheduler);
-          if (data.scheduler.recipientId && !searchContact) {
-            setSearchContact(data.scheduler.recipientName ? `${data.scheduler.recipientName} (${data.scheduler.recipientId.split('@')[0]})` : data.scheduler.recipientId);
-          }
         }
       }
     } catch (e) {
@@ -1158,49 +1155,112 @@ prep method: airfryer 200c, 10min"]
 
                   <div className="form-group contact-picker-input">
                     <label className="form-label">Recipient (Contact or Group)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Search contact or group..."
-                      value={searchContact}
-                      onChange={e => {
-                        setSearchContact(e.target.value);
-                        setSchedulerState(prev => ({ ...prev, recipientId: e.target.value, recipientName: e.target.value }));
-                        setShowContactsDropdown(true);
-                      }}
-                      onFocus={() => setShowContactsDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowContactsDropdown(false), 200)}
-                    />
                     
-                    {showContactsDropdown && contacts.length > 0 && (
-                      <div className="contacts-dropdown">
-                        {contacts
-                          .filter(c => c.name.toLowerCase().includes(searchContact.toLowerCase()) || c.id.includes(searchContact))
-                          .map(contact => (
-                            <div 
-                              key={contact.id} 
-                              className="contact-option"
-                              onMouseDown={() => {
-                                setSchedulerState(prev => ({
-                                  ...prev,
-                                  recipientId: contact.id,
-                                  recipientName: contact.name,
-                                  recipientType: contact.isGroup ? 'group' : 'contact'
-                                }));
-                                setSearchContact(`${contact.name} (${contact.id.split('@')[0]})`);
-                                setShowContactsDropdown(false);
-                              }}
-                            >
-                              <span>{contact.name}</span>
-                              <span className="contact-option-type">{contact.isGroup ? 'Group' : 'Contact'}</span>
-                            </div>
-                          ))}
+                    {schedulerState.recipientId ? (
+                      <div className="selected-contact-card">
+                        <div className="selected-contact-info">
+                          <span className="selected-contact-name">
+                            {schedulerState.recipientName || 'Selected Recipient'}
+                            <span className="selected-contact-type">
+                              {schedulerState.recipientType === 'group' ? 'Group' : 'Contact'}
+                            </span>
+                          </span>
+                          <span className="selected-contact-id">
+                            {schedulerState.recipientId}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="selected-contact-clear"
+                          onClick={() => {
+                            setSchedulerState(prev => ({
+                              ...prev,
+                              recipientId: '',
+                              recipientName: '',
+                              recipientType: 'contact'
+                            }));
+                            setSearchContact('');
+                          }}
+                          title="Clear selection"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                          </svg>
+                        </button>
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Search contact or group by name or number..."
+                          value={searchContact}
+                          onChange={e => {
+                            setSearchContact(e.target.value);
+                            setShowContactsDropdown(true);
+                          }}
+                          onFocus={() => setShowContactsDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowContactsDropdown(false), 200)}
+                        />
+                        
+                        {showContactsDropdown && (
+                          <div className="contacts-dropdown">
+                            {contacts
+                              .filter(c => c.name.toLowerCase().includes(searchContact.toLowerCase()) || c.id.includes(searchContact))
+                              .map(contact => (
+                                <div 
+                                  key={contact.id} 
+                                  className="contact-option"
+                                  onMouseDown={() => {
+                                    setSchedulerState(prev => ({
+                                      ...prev,
+                                      recipientId: contact.id,
+                                      recipientName: contact.name,
+                                      recipientType: contact.isGroup ? 'group' : 'contact'
+                                    }));
+                                    setSearchContact('');
+                                    setShowContactsDropdown(false);
+                                  }}
+                                >
+                                  <span>{contact.name}</span>
+                                  <span className="contact-option-type">{contact.isGroup ? 'Group' : 'Contact'}</span>
+                                </div>
+                              ))}
+                              
+                            {searchContact.trim() && (
+                              <div 
+                                className="contact-option"
+                                style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', color: 'var(--accent-cyan)' }}
+                                onMouseDown={() => {
+                                  const inputVal = searchContact.trim();
+                                  const isGroup = inputVal.endsWith('@g.us') || inputVal.includes('-');
+                                  setSchedulerState(prev => ({
+                                    ...prev,
+                                    recipientId: inputVal,
+                                    recipientName: inputVal.split('@')[0],
+                                    recipientType: isGroup ? 'group' : 'contact'
+                                  }));
+                                  setSearchContact('');
+                                  setShowContactsDropdown(false);
+                                }}
+                              >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span>➕ Use manual ID:</span>
+                                  <strong style={{ fontFamily: 'var(--font-mono)' }}>{searchContact}</strong>
+                                </span>
+                                <span className="contact-option-type" style={{ color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)' }}>Manual</span>
+                              </div>
+                            )}
 
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                      Selected: <strong>{schedulerState.recipientName || 'None'}</strong> ({schedulerState.recipientId || 'None'})
-                    </span>
+                            {contacts.filter(c => c.name.toLowerCase().includes(searchContact.toLowerCase()) || c.id.includes(searchContact)).length === 0 && !searchContact.trim() && (
+                              <div className="contact-option" style={{ cursor: 'default', color: 'var(--text-muted)' }}>
+                                <span>No contacts found. Scan QR/connect first.</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
 
