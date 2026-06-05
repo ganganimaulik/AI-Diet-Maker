@@ -137,11 +137,40 @@ const DEFAULT_CONFIG: Config = {
       { name: 'Tomato', weight: '80', isAuto: false }
     ]
   },
+  customSplits: [
+    { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+    { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
+  ],
   generationRange: 'all',
   selectedGenerationDay: 'MONDAY'
 };
 
 const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+const normalizeConfig = (loaded: any): Config => {
+  const normalized = { ...DEFAULT_CONFIG, ...loaded };
+  normalized.global = { ...DEFAULT_CONFIG.global, ...(loaded.global || {}) };
+  normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0 ? loaded.meals : DEFAULT_CONFIG.meals;
+  normalized.dailyVariables = loaded.dailyVariables || DEFAULT_CONFIG.dailyVariables;
+
+  // Migrate old splits or populate customSplits if empty
+  if (!loaded.customSplits || !Array.isArray(loaded.customSplits) || loaded.customSplits.length === 0) {
+    if (loaded.splits) {
+      normalized.customSplits = [
+        { id: 'salt', name: 'Salt Seasoning Split', value: loaded.splits.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+        { id: 'prep', name: 'Chicken Prep Method', value: loaded.splits.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
+      ];
+    } else {
+      normalized.customSplits = [
+        { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+        { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
+      ];
+    }
+  } else {
+    normalized.customSplits = loaded.customSplits;
+  }
+  return normalized;
+};
 
 export default function Home() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
@@ -263,7 +292,7 @@ export default function Home() {
           const configData = await configRes.json();
           
           if (configData.config) {
-            setConfig(configData.config);
+            setConfig(normalizeConfig(configData.config));
           } else {
             // First time setup, save default config to DB
             await fetch('/api/config', {
@@ -329,7 +358,7 @@ export default function Home() {
         const configData = await configRes.json();
         
         if (configData.config) {
-          setConfig(configData.config);
+          setConfig(normalizeConfig(configData.config));
         } else {
           await fetch('/api/config', {
             method: 'POST',
@@ -422,7 +451,20 @@ export default function Home() {
     const dayRefLabel = isSingle ? 'the day' : 'each day';
 
     const mealsList = c.meals || [];
-    const splitsList = c.customSplits || [];
+    let splitsList = c.customSplits || [];
+    if (splitsList.length === 0) {
+      if (c.splits) {
+        splitsList = [
+          { id: 'salt', name: 'Salt Seasoning Split', value: c.splits.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+          { id: 'prep', name: 'Chicken Prep Method', value: c.splits.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
+        ];
+      } else {
+        splitsList = [
+          { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+          { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
+        ];
+      }
+    }
     
     // Dynamic Olive Oil calculation
     const totalOil = c.global.totalOliveOil || 0;

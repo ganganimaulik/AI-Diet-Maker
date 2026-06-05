@@ -377,7 +377,21 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
 // Helper: Compile single-day prompt
 function compilePromptTextForDay(c, dayName) {
   const mealsList = c.meals || [];
-  const splitsList = c.customSplits || [];
+  let splitsList = c.customSplits || [];
+  
+  if (splitsList.length === 0) {
+    if (c.splits) {
+      splitsList = [
+        { id: 'salt', name: 'Salt Seasoning Split', value: c.splits.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+        { id: 'prep', name: 'Chicken Prep Method', value: c.splits.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
+      ];
+    } else {
+      splitsList = [
+        { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
+        { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
+      ];
+    }
+  }
   
   const totalOil = c.global.totalOliveOil || 0;
   const oilPercent = c.global.oliveOilSplitPercent || 50;
