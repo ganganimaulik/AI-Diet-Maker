@@ -80,29 +80,54 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   const store = new MongoStore({ mongoose: mongoose });
   
   // Determine puppeteer executable path
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-                         (process.platform === 'linux' ? '/usr/bin/chromium' : undefined);
+  let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (!executablePath) {
+    if (process.platform === 'linux') {
+      executablePath = '/usr/bin/chromium';
+    } else if (process.platform === 'darwin') {
+      const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+      if (fs.existsSync(macChromePath)) {
+        executablePath = macChromePath;
+      }
+    }
+  }
   
   console.log(`Initializing WhatsApp Client (Chrome Path: ${executablePath || 'default'})...`);
+
+  // Build puppeteer args dynamically based on platform
+  const puppeteerArgs = [
+    '--no-sandbox', 
+    '--disable-setuid-sandbox', 
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--disable-blink-features=AutomationControlled',
+    '--disable-features=IsolateOrigins,site-per-process',
+    '--disable-web-security',
+    '--no-first-run',
+    '--no-default-browser-check'
+  ];
+
+  // Avoid --single-process as it causes crashes/timeouts in many Docker containers
+  if (process.platform !== 'darwin') {
+    puppeteerArgs.push('--no-zygote');
+  }
 
   const client = new Client({
     authStrategy: new RemoteAuth({
       store: store,
       backupSyncIntervalMs: 300000 // Backup session to DB every 5 mins
     }),
+    webVersionCache: {
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
+      strict: false
+    },
     puppeteer: {
       executablePath: executablePath,
       headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox', 
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote',
-        '--disable-blink-features=AutomationControlled'
-      ],
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      args: puppeteerArgs,
+      protocolTimeout: 120000, // Wait up to 2 mins for Puppeteer protocol calls
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
   });
 
@@ -551,7 +576,57 @@ function extractCookInstructions(md, dayName) {
 // HTTP HEALTH CHECK SERVER FOR HUGGING FACE SPACES
 // -------------------------------------------------------------
 const http = require('http');
+const net = require('net');
+
+function checkTcp(host, port) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const start = Date.now();
+    socket.setTimeout(4000);
+    
+    socket.on('connect', () => {
+      socket.destroy();
+      resolve({ success: true, timeMs: Date.now() - start });
+    });
+    
+    socket.on('error', (err) => {
+      resolve({ success: false, error: err.message });
+    });
+    
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve({ success: false, error: 'timeout' });
+    });
+    
+    socket.connect(port, host);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
+  const parsedUrl = req.url || '';
+  if (parsedUrl.startsWith('/diag')) {
+    try {
+      const googleDiag = await checkTcp('google.com', 443);
+      const whatsappDiag = await checkTcp('web.whatsapp.com', 443);
+      
+      res.writeHead(200, { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(JSON.stringify({
+        google: googleDiag,
+        whatsapp: whatsappDiag,
+        platform: process.platform,
+        arch: process.arch,
+        nodeVersion: process.version
+      }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Diagnostic Error: ' + err.message);
+    }
+    return;
+  }
+
   try {
     const stateDoc = await WhatsAppState.findOne();
     const schedulerDoc = await Scheduler.findOne();
