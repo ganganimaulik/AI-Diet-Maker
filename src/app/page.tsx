@@ -1413,27 +1413,15 @@ prep method: airfryer 200c, 10min"]
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.25rem' }}>
-                  <div className="input-row">
-                    <div className="form-group">
-                      <label className="form-label">GCP Project ID</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="my-gcp-project-id"
-                        value={config.enterpriseProjectId || ''}
-                        onChange={e => setConfig(prev => ({ ...prev, enterpriseProjectId: e.target.value }))}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">GCP Location</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="global"
-                        value={config.enterpriseLocation || 'global'}
-                        onChange={e => setConfig(prev => ({ ...prev, enterpriseLocation: e.target.value }))}
-                      />
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">GCP Project ID</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="my-gcp-project-id"
+                      value={config.enterpriseProjectId || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, enterpriseProjectId: e.target.value }))}
+                    />
                   </div>
 
                   <div className="form-group">
