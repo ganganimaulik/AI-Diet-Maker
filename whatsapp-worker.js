@@ -418,8 +418,7 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
     }
 
     // 3. Compile prompt for TODAY
-    const DAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-    const todayName = DAYS[new Date().getDay()]; // e.g. "FRIDAY"
+    const todayName = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now).toUpperCase(); // e.g. "SATURDAY"
     
     console.log(`Compiling diet prompt for today (${todayName})...`);
     const prompt = compilePromptTextForDay(configDoc, todayName);
