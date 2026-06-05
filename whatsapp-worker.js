@@ -42,6 +42,12 @@ const SchedulerSchema = new mongoose.Schema({
 
 const ConfigSchema = new mongoose.Schema({
   apiKey: { type: String, default: '' },
+  provider: { type: String, default: 'google-ai-studio' },
+  enterpriseAuthMethod: { type: String, default: 'api-key' },
+  enterpriseApiKey: { type: String, default: '' },
+  enterpriseProjectId: { type: String, default: '' },
+  enterpriseLocation: { type: String, default: 'us-central1' },
+  enterpriseServiceAccountJson: { type: String, default: '' },
   model: { type: String, default: 'gemini-3.5-flash' },
   customModel: { type: String, default: 'gemini-3.5-flash' },
   thinkingEnabled: { type: Boolean, default: true },
@@ -319,7 +325,7 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
 
     // 4. Call Gemini API
     console.log('Generating diet plan from Gemini...');
-    const generatedText = await callGeminiAPI(configDoc.apiKey, configDoc.model, configDoc.customModel, prompt, configDoc.thinkingEnabled, configDoc.thinkingBudget);
+    const generatedText = await callGeminiAPI(configDoc, prompt);
     
     // 5. Extract Part 2 (Cook instructions)
     const messageToSend = extractCookInstructions(generatedText, todayName);
@@ -491,58 +497,187 @@ prep method: airfryer 200c, 10min"]
 }
 
 // Helper: Call Google Gemini API
-async function callGeminiAPI(apiKey, modelName, customModelName, prompt, thinkingEnabled, thinkingBudget) {
-  const model = modelName === 'custom' ? customModelName : modelName;
-  const payload = {
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: prompt }]
-      }
-    ],
-    generationConfig: {
-      temperature: 0.1,
-    }
-  };
-
-  if (thinkingEnabled) {
-    payload.generationConfig.thinkingConfig = {
-      thinkingBudget: thinkingBudget || 2048
-    };
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API returned error (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
-  const candidate = data.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
+async function callGeminiAPI(c, prompt) {
+  const model = c.model === 'custom' ? c.customModel : c.model;
   
-  let text = '';
-  for (const part of parts) {
-    if (!part.thought && part.text) {
-      text += part.text;
+  if (c.provider === 'gemini-enterprise') {
+    if (c.enterpriseAuthMethod === 'api-key') {
+      if (!c.enterpriseApiKey) {
+        throw new Error('Agent Platform API Key is required when API Key authentication is selected.');
+      }
+      if (!c.enterpriseProjectId) {
+        throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
+      }
+
+      // Build the request payload for Gemini Enterprise REST API
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+        }
+      };
+
+      if (c.thinkingEnabled) {
+        payload.generationConfig.thinkingConfig = {
+          thinkingBudget: c.thinkingBudget || 2048
+        };
+      }
+
+      const endpoint = `https://agentplatform.googleapis.com/v1/projects/${c.enterpriseProjectId}/locations/${c.enterpriseLocation || 'us-central1'}/publishers/google/models/${model}:generateContent?key=${c.enterpriseApiKey}`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini Enterprise API returned error (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+
+      let text = '';
+      for (const part of parts) {
+        if (!part.thought && part.text) {
+          text += part.text;
+        }
+      }
+
+      if (!text && parts.length > 0) {
+        text = parts.map(p => p.text || '').join('');
+      }
+
+      return text;
+
+    } else {
+      // Service Account or ADC auth using @google/genai SDK
+      if (c.enterpriseAuthMethod === 'service-account' && !c.enterpriseServiceAccountJson) {
+        throw new Error('Service Account JSON is required when Service Account authentication is selected.');
+      }
+      if (!c.enterpriseProjectId) {
+        throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
+      }
+
+      const { GoogleGenAI } = require('@google/genai');
+
+      let googleAuthOptions = undefined;
+      if (c.enterpriseAuthMethod === 'service-account') {
+        try {
+          googleAuthOptions = {
+            credentials: JSON.parse(c.enterpriseServiceAccountJson)
+          };
+        } catch (err) {
+          throw new Error(`Invalid Service Account JSON: ${err.message}`);
+        }
+      }
+
+      const ai = new GoogleGenAI({
+        vertexai: true,
+        project: c.enterpriseProjectId,
+        location: c.enterpriseLocation || 'us-central1',
+        googleAuthOptions
+      });
+
+      const configObj = {
+        temperature: 0.1,
+      };
+
+      if (c.thinkingEnabled) {
+        configObj.thinkingConfig = {
+          thinkingBudget: c.thinkingBudget || 2048
+        };
+      }
+
+      const sdkResponse = await ai.models.generateContent({
+        model: model,
+        contents: prompt,
+        config: configObj
+      });
+
+      const candidate = sdkResponse.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+
+      let text = '';
+      for (const part of parts) {
+        if (!part.thought && part.text) {
+          text += part.text;
+        }
+      }
+
+      if (!text && parts.length > 0) {
+        text = parts.map(p => p.text || '').join('');
+      }
+
+      return text;
     }
-  }
+  } else {
+    // Default: Google AI Studio API
+    if (!c.apiKey) {
+      throw new Error('Gemini API Key is missing.');
+    }
 
-  if (!text && parts.length > 0) {
-    text = parts.map(p => p.text || '').join('');
-  }
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+      }
+    };
 
-  return text;
+    if (c.thinkingEnabled) {
+      payload.generationConfig.thinkingConfig = {
+        thinkingBudget: c.thinkingBudget || 2048
+      };
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${c.apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API returned error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    const candidate = data.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    
+    let text = '';
+    for (const part of parts) {
+      if (!part.thought && part.text) {
+        text += part.text;
+      }
+    }
+
+    if (!text && parts.length > 0) {
+      text = parts.map(p => p.text || '').join('');
+    }
+
+    return text;
+  }
 }
 
 // Helper: Extract Part 2 (Cook Instructions) from response markdown

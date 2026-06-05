@@ -26,6 +26,12 @@ interface Meal {
 
 interface Config {
   apiKey: string;
+  provider?: string;
+  enterpriseAuthMethod?: string;
+  enterpriseApiKey?: string;
+  enterpriseProjectId?: string;
+  enterpriseLocation?: string;
+  enterpriseServiceAccountJson?: string;
   model: string;
   customModel: string;
   thinkingEnabled: boolean;
@@ -51,6 +57,12 @@ interface Config {
 
 const DEFAULT_CONFIG: Config = {
   apiKey: '',
+  provider: 'google-ai-studio',
+  enterpriseAuthMethod: 'api-key',
+  enterpriseApiKey: '',
+  enterpriseProjectId: '',
+  enterpriseLocation: 'us-central1',
+  enterpriseServiceAccountJson: '',
   model: 'gemini-3.5-flash',
   customModel: 'gemini-3.5-flash',
   thinkingEnabled: true,
@@ -709,10 +721,28 @@ prep method: airfryer 200c, 10min"]
 
   // Run AI Generation
   const handleGenerate = async () => {
-    if (!config.apiKey) {
-      setErrorMsg('API Key is missing. Please enter your Gemini API Key in the "Global & API Setup" tab.');
-      setActiveTab('global');
-      return;
+    if (config.provider === 'gemini-enterprise') {
+      if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
+        setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in the "Global & API Setup" tab.');
+        setActiveTab('global');
+        return;
+      }
+      if (config.enterpriseAuthMethod === 'service-account' && !config.enterpriseServiceAccountJson) {
+        setErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in the "Global & API Setup" tab.');
+        setActiveTab('global');
+        return;
+      }
+      if (!config.enterpriseProjectId) {
+        setErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in the "Global & API Setup" tab.');
+        setActiveTab('global');
+        return;
+      }
+    } else {
+      if (!config.apiKey) {
+        setErrorMsg('API Key is missing. Please enter your Gemini API Key in the "Global & API Setup" tab.');
+        setActiveTab('global');
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -732,7 +762,13 @@ prep method: airfryer 200c, 10min"]
           prompt: activePrompt,
           model: selectedModel,
           thinkingEnabled: config.thinkingEnabled,
-          thinkingBudget: config.thinkingBudget
+          thinkingBudget: config.thinkingBudget,
+          provider: config.provider || 'google-ai-studio',
+          enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
+          enterpriseApiKey: config.enterpriseApiKey,
+          enterpriseProjectId: config.enterpriseProjectId,
+          enterpriseLocation: config.enterpriseLocation || 'us-central1',
+          enterpriseServiceAccountJson: config.enterpriseServiceAccountJson
         })
       });
 
@@ -975,16 +1011,21 @@ prep method: airfryer 200c, 10min"]
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div className="api-status">
-            {config.apiKey ? (
+            {((config.provider === 'gemini-enterprise' && (
+                (config.enterpriseAuthMethod === 'api-key' && config.enterpriseApiKey) ||
+                (config.enterpriseAuthMethod === 'service-account' && config.enterpriseServiceAccountJson) ||
+                (config.enterpriseAuthMethod === 'adc')
+              ) && config.enterpriseProjectId) ||
+              (config.provider !== 'gemini-enterprise' && config.apiKey)) ? (
               <span className="api-key-badge">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <path d="M20 6L9 17l-5-5"/>
                 </svg>
-                Gemini API Active
+                {config.provider === 'gemini-enterprise' ? 'Gemini Enterprise Active' : 'Gemini API Active'}
               </span>
             ) : (
               <span className="api-key-badge missing">
-                ⚠️ API Key Needed
+                ⚠️ Credentials Needed
               </span>
             )}
           </div>
@@ -1340,23 +1381,129 @@ prep method: airfryer 200c, 10min"]
           {activeTab === 'global' && (
             <div>
               <div className="form-group">
-                <label className="form-label">Gemini API Key</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    className="form-input"
-                    placeholder="AIzaSy..."
-                    value={config.apiKey}
-                    onChange={e => setConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                  />
-                  <button className="btn-secondary" onClick={() => setShowApiKey(!showApiKey)}>
-                    {showApiKey ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
-                  Your key is saved locally in localStorage and never sent anywhere except directly to Google.
-                </p>
+                <label className="form-label">API Provider</label>
+                <select
+                  className="form-input"
+                  value={config.provider || 'google-ai-studio'}
+                  onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}
+                >
+                  <option value="google-ai-studio">Google AI Studio (Gemini API)</option>
+                  <option value="gemini-enterprise">Gemini Enterprise Agent Platform (Vertex AI)</option>
+                </select>
               </div>
+
+              {(!config.provider || config.provider === 'google-ai-studio') ? (
+                <div className="form-group">
+                  <label className="form-label">Gemini API Key</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      className="form-input"
+                      placeholder="AIzaSy..."
+                      value={config.apiKey}
+                      onChange={e => setConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                    />
+                    <button className="btn-secondary" onClick={() => setShowApiKey(!showApiKey)}>
+                      {showApiKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                    Your key is saved locally in localStorage and never sent anywhere except directly to Google.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.25rem' }}>
+                  <div className="input-row">
+                    <div className="form-group">
+                      <label className="form-label">GCP Project ID</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="my-gcp-project-id"
+                        value={config.enterpriseProjectId || ''}
+                        onChange={e => setConfig(prev => ({ ...prev, enterpriseProjectId: e.target.value }))}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">GCP Location</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="us-central1"
+                        value={config.enterpriseLocation || 'us-central1'}
+                        onChange={e => setConfig(prev => ({ ...prev, enterpriseLocation: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Authentication Method</label>
+                    <select
+                      className="form-input"
+                      value={config.enterpriseAuthMethod || 'api-key'}
+                      onChange={e => setConfig(prev => ({ ...prev, enterpriseAuthMethod: e.target.value }))}
+                    >
+                      <option value="api-key">API Key (Express Mode)</option>
+                      <option value="service-account">Service Account JSON</option>
+                      <option value="adc">Application Default Credentials (ADC)</option>
+                    </select>
+                  </div>
+
+                  {config.enterpriseAuthMethod === 'api-key' && (
+                    <div className="form-group">
+                      <label className="form-label">Agent Platform API Key</label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          className="form-input"
+                          placeholder="Agent Platform API Key..."
+                          value={config.enterpriseApiKey || ''}
+                          onChange={e => setConfig(prev => ({ ...prev, enterpriseApiKey: e.target.value }))}
+                        />
+                        <button type="button" className="btn-secondary" onClick={() => setShowApiKey(!showApiKey)}>
+                          {showApiKey ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {config.enterpriseAuthMethod === 'service-account' && (
+                    <div className="form-group">
+                      <label className="form-label">Service Account Key (JSON)</label>
+                      <textarea
+                        className="form-input"
+                        style={{ height: '120px', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', resize: 'vertical' }}
+                        placeholder='{ "type": "service_account", ... }'
+                        value={config.enterpriseServiceAccountJson || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          let updatedProjId = config.enterpriseProjectId;
+                          try {
+                            const parsed = JSON.parse(val);
+                            if (parsed.project_id && !config.enterpriseProjectId) {
+                              updatedProjId = parsed.project_id;
+                            }
+                          } catch (err) {}
+                          setConfig(prev => ({
+                            ...prev,
+                            enterpriseServiceAccountJson: val,
+                            enterpriseProjectId: updatedProjId
+                          }));
+                        }}
+                      />
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                        Paste the contents of your Google Cloud Service Account JSON key.
+                      </p>
+                    </div>
+                  )}
+
+                  {config.enterpriseAuthMethod === 'adc' && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                      ℹ️ Authenticating via Application Default Credentials (ADC). Make sure your environment has GCP credentials configured.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="input-row">
                 <div className="form-group">

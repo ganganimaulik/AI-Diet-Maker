@@ -70,6 +70,12 @@ export interface IMeal {
 
 export interface IConfig {
   apiKey: string;
+  provider?: string;
+  enterpriseAuthMethod?: string;
+  enterpriseApiKey?: string;
+  enterpriseProjectId?: string;
+  enterpriseLocation?: string;
+  enterpriseServiceAccountJson?: string;
   model: string;
   customModel: string;
   thinkingEnabled: boolean;
@@ -112,6 +118,12 @@ const MealSchema = new Schema({
 
 const ConfigSchema = new Schema<IConfig>({
   apiKey: { type: String, default: '' },
+  provider: { type: String, default: 'google-ai-studio' },
+  enterpriseAuthMethod: { type: String, default: 'api-key' },
+  enterpriseApiKey: { type: String, default: '' },
+  enterpriseProjectId: { type: String, default: '' },
+  enterpriseLocation: { type: String, default: 'us-central1' },
+  enterpriseServiceAccountJson: { type: String, default: '' },
   model: { type: String, default: 'gemini-3.5-flash' },
   customModel: { type: String, default: 'gemini-3.5-flash' },
   thinkingEnabled: { type: Boolean, default: true },
