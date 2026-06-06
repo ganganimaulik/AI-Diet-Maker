@@ -143,6 +143,7 @@ const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
 // -------------------------------------------------------------
+let client;
 console.log('Connecting to MongoDB...');
 mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   console.log('Connected to MongoDB successfully.');
@@ -189,10 +190,10 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     puppeteerArgs.push('--no-zygote');
   }
 
-  const client = new Client({
+  client = new Client({
     authStrategy: new RemoteAuth({
       store: store,
-      backupSyncIntervalMs: 300000 // Backup session to DB every 5 mins
+      backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
     webVersionCache: {
       type: 'remote',
@@ -242,6 +243,20 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
     // Sync Contacts in the background
     syncContacts(client);
+
+    // Force an initial backup after the session stabilizes (60 seconds)
+    // This ensures that even if sessionExists was true on startup, we save the refreshed/updated session.
+    setTimeout(async () => {
+      try {
+        if (client && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+          console.log('Forcing initial WhatsApp session backup to MongoDB store...');
+          await client.authStrategy.storeRemoteSession();
+          console.log('Initial WhatsApp session backup completed.');
+        }
+      } catch (err) {
+        console.error('Failed to run initial forced session backup:', err);
+      }
+    }, 60000);
   });
 
   client.on('disconnected', async (reason) => {
@@ -904,3 +919,55 @@ const PORT = process.env.PORT || 7860;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`HTTP Health check server is listening on port ${PORT}`);
 });
+
+// -------------------------------------------------------------
+// GRACEFUL SHUTDOWN HANDLERS
+// -------------------------------------------------------------
+let isShuttingDown = false;
+
+async function handleShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Received ${signal}. Gracefully shutting down WhatsApp client...`);
+  
+  try {
+    if (mongoose.connection.readyState !== 0) {
+      // Reset status in database to disconnected on graceful shutdown
+      await WhatsAppState.findOneAndUpdate(
+        {},
+        { status: 'disconnected', qr: '' }
+      );
+    }
+  } catch (err) {
+    console.error('Failed to reset WhatsApp state in database during shutdown:', err);
+  }
+
+  try {
+    if (typeof client !== 'undefined' && client) {
+      console.log('Closing WhatsApp browser connection to release file locks...');
+      await client.destroy();
+      console.log('WhatsApp client destroyed.');
+      
+      if (client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+        console.log('Saving final WhatsApp session to MongoDB...');
+        await client.authStrategy.storeRemoteSession();
+        console.log('Final WhatsApp session saved successfully.');
+      }
+    }
+  } catch (err) {
+    console.error('Error during graceful shutdown of WhatsApp client:', err);
+  } finally {
+    try {
+      if (mongoose.connection.readyState !== 0) {
+        await mongoose.disconnect();
+        console.log('MongoDB connection closed.');
+      }
+    } catch (dbErr) {
+      console.error('Error closing MongoDB connection:', dbErr);
+    }
+    process.exit(0);
+  }
+}
+
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
