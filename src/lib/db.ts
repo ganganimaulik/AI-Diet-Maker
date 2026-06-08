@@ -92,6 +92,8 @@ export interface IConfig {
   };
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
+  huggingFaceToken?: string;
+  huggingFaceSpace?: string;
   updatedAt: Date;
 }
 
@@ -141,7 +143,9 @@ const ConfigSchema = new Schema<IConfig>({
     default: {}
   },
   generationRange: { type: String, enum: ['all', 'single'], default: 'all' },
-  selectedGenerationDay: { type: String, default: 'MONDAY' }
+  selectedGenerationDay: { type: String, default: 'MONDAY' },
+  huggingFaceToken: { type: String, default: '' },
+  huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }
 }, { timestamps: true });
 
 // 2. WhatsApp Client State Schema

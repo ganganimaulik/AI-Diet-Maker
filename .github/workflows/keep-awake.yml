@@ -19,13 +19,15 @@ jobs:
           sleep $DELAY
 
       - name: Ping Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # The URL of your Hugging Face Space diagnostic endpoint.
           # Update this URL if your space is named differently.
           URL="https://ganganimaulik-diet-maker-worker.hf.space/diag"
           
           echo "Sending HTTP GET request to: $URL"
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "$URL")
+          RESPONSE=$(curl -s -H "Authorization: Bearer $HF_TOKEN" -w "\nHTTP_STATUS:%{http_code}" "$URL")
           
           echo "Response received:"
           echo "$RESPONSE"

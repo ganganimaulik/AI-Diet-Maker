@@ -132,7 +132,9 @@ const ConfigSchema = new mongoose.Schema({
   customSplits: Array,
   dailyVariables: Map,
   generationRange: { type: String, default: 'all' },
-  selectedGenerationDay: { type: String, default: 'MONDAY' }
+  selectedGenerationDay: { type: String, default: 'MONDAY' },
+  huggingFaceToken: { type: String, default: '' },
+  huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }
 }, { timestamps: true });
 
 const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppState', WhatsAppStateSchema);

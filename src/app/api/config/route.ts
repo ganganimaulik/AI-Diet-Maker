@@ -40,7 +40,9 @@ export async function GET() {
           }
         ],
         customSplits: [],
-        dailyVariables: {}
+        dailyVariables: {},
+        huggingFaceToken: '',
+        huggingFaceSpace: 'ganganimaulik/diet-maker-worker'
       };
       config = await Config.create(defaultData);
     } else {
@@ -52,6 +54,14 @@ export async function GET() {
       }
       if (!config.enterpriseApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
         config.enterpriseApiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
+        modified = true;
+      }
+      if (config.huggingFaceSpace === undefined) {
+        config.huggingFaceSpace = 'ganganimaulik/diet-maker-worker';
+        modified = true;
+      }
+      if (config.huggingFaceToken === undefined) {
+        config.huggingFaceToken = '';
         modified = true;
       }
       if (modified) {
