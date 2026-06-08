@@ -63,10 +63,28 @@ export async function GET() {
           if (hfData.runtime && hfData.runtime.stage) {
             const stage = hfData.runtime.stage.toUpperCase();
             hfSpaceStatus = stage;
+            let hardwareStr = '';
+            if (hfData.runtime.hardware) {
+              if (typeof hfData.runtime.hardware === 'string') {
+                hardwareStr = hfData.runtime.hardware;
+              } else if (typeof hfData.runtime.hardware === 'object') {
+                hardwareStr = hfData.runtime.hardware.current || hfData.runtime.hardware.requested || '';
+              }
+            }
+
+            let sdkStr = '';
+            if (hfData.runtime.sdk) {
+              if (typeof hfData.runtime.sdk === 'string') {
+                sdkStr = hfData.runtime.sdk;
+              } else if (typeof hfData.runtime.sdk === 'object') {
+                sdkStr = hfData.runtime.sdk.current || '';
+              }
+            }
+
             hfSpaceDetails = {
               stage,
-              hardware: hfData.runtime.hardware || '',
-              sdk: hfData.runtime.sdk || ''
+              hardware: hardwareStr,
+              sdk: sdkStr
             };
 
             // If the space is sleeping, send a background request to wake it up
