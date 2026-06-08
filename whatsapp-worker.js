@@ -1,3 +1,21 @@
+const logsBuffer = [];
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = function(...args) {
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  logsBuffer.push(`[LOG] [${new Date().toISOString()}] ${message}`);
+  if (logsBuffer.length > 200) logsBuffer.shift();
+  originalLog.apply(console, args);
+};
+
+console.error = function(...args) {
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  logsBuffer.push(`[ERROR] [${new Date().toISOString()}] ${message}`);
+  if (logsBuffer.length > 200) logsBuffer.shift();
+  originalError.apply(console, args);
+};
+
 const { Client, RemoteAuth } = require('whatsapp-web.js');
 const mongoose = require('mongoose');
 const qrcode = require('qrcode');
@@ -893,6 +911,15 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end('Diagnostic Error: ' + err.message);
     }
+    return;
+  }
+
+  if (parsedUrl.startsWith('/logs')) {
+    res.writeHead(200, { 
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(logsBuffer.join('\n'));
     return;
   }
 
