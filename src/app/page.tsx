@@ -236,6 +236,7 @@ export default function Home() {
   const [hfDetails, setHfDetails] = useState<any>(null);
   const [showHfToken, setShowHfToken] = useState(false);
   const [wakingUp, setWakingUp] = useState(false);
+  const [isResettingWhatsapp, setIsResettingWhatsapp] = useState(false);
 
   // Database Save Config Function
   const saveConfig = async (configToSave = config) => {
@@ -310,6 +311,31 @@ export default function Home() {
       alert('Failed to send wake up request.');
     } finally {
       setWakingUp(false);
+    }
+  };
+
+  const handleResetWhatsapp = async () => {
+    if (!confirm('Are you sure you want to reset the WhatsApp connection? This will wipe the active session and force the worker to restart and generate a new QR code.')) {
+      return;
+    }
+    setIsResettingWhatsapp(true);
+    try {
+      const res = await fetch('/api/whatsapp/reset', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || 'WhatsApp session reset successfully. Please wait 10-15 seconds for a new QR code.');
+        // Refetch status immediately
+        fetchWhatsAppStatus();
+      } else {
+        alert(data.error || 'Failed to reset WhatsApp session.');
+      }
+    } catch (e) {
+      console.error('Error resetting WhatsApp:', e);
+      alert('An error occurred while resetting WhatsApp session.');
+    } finally {
+      setIsResettingWhatsapp(false);
     }
   };
 
@@ -1950,6 +1976,43 @@ prep method: airfryer 200c, 10min"]
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Initializing WhatsApp Web session...</span>
                 </div>
               )}
+
+              <div style={{ marginTop: '1.25rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem' }}>
+                <button
+                  className="btn-secondary"
+                  style={{ 
+                    width: '100%', 
+                    padding: '0.6rem 1rem', 
+                    fontSize: '0.85rem', 
+                    borderColor: 'rgba(244, 63, 94, 0.3)',
+                    color: '#fca5a5',
+                    background: 'rgba(244, 63, 94, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                  disabled={isResettingWhatsapp}
+                  onClick={handleResetWhatsapp}
+                >
+                  {isResettingWhatsapp ? (
+                    <>
+                      <div className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: '#fca5a5' }}></div>
+                      Resetting Connection...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                      </svg>
+                      Reset WhatsApp Connection
+                    </>
+                  )}
+                </button>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.5rem', textAlign: 'center', lineHeight: '1.3' }}>
+                  ⚠️ If you logged out from WhatsApp on your phone or need to switch accounts, use this reset button to clear the session and generate a new QR code.
+                </p>
+              </div>
             </section>
 
             {/* Hugging Face Space & Keep-Alive Settings Card */}

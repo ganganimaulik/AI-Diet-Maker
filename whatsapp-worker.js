@@ -93,6 +93,29 @@ class CustomMongoStore {
   }
 }
 
+async function resetWhatsAppSession() {
+  console.log('Resetting WhatsApp session in DB & local cache...');
+  try {
+    if (store) {
+      await store.delete({ session: 'session' });
+      console.log('Deleted remote WhatsApp session from GridFS.');
+    }
+  } catch (err) {
+    console.error('Failed to delete remote WhatsApp session:', err);
+  }
+  
+  // Clear local directory
+  const localPath = path.resolve('./.wwebjs_auth');
+  if (fs.existsSync(localPath)) {
+    try {
+      fs.rmSync(localPath, { recursive: true, force: true });
+      console.log('Deleted local .wwebjs_auth directory.');
+    } catch (err) {
+      console.error('Failed to delete local .wwebjs_auth directory:', err);
+    }
+  }
+}
+
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
   console.error('CRITICAL ERROR: MONGODB_URI environment variable is missing.');
@@ -164,6 +187,7 @@ const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 // INITIALIZE DATABASE & WORKER
 // -------------------------------------------------------------
 let client;
+let store;
 console.log('Connecting to MongoDB...');
 mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   console.log('Connected to MongoDB successfully.');
@@ -175,7 +199,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     { upsert: true }
   );
 
-  const store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
+  store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
   
   // Determine puppeteer executable path
   let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -281,20 +305,30 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client.on('disconnected', async (reason) => {
     console.log('WhatsApp Client disconnected. Reason:', reason);
+    await resetWhatsAppSession();
     await WhatsAppState.findOneAndUpdate(
       {},
       { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
       { upsert: true }
     );
+    console.log('Exiting worker process to restart and generate new QR code...');
+    setTimeout(() => {
+      process.exit(1);
+    }, 2000);
   });
 
   client.on('auth_failure', async (msg) => {
     console.error('WhatsApp Authentication Failure:', msg);
+    await resetWhatsAppSession();
     await WhatsAppState.findOneAndUpdate(
       {},
-      { status: 'disconnected', qr: '' },
+      { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
       { upsert: true }
     );
+    console.log('Exiting worker process to restart and generate new QR code...');
+    setTimeout(() => {
+      process.exit(1);
+    }, 2000);
   });
 
   client.on('loading_screen', (percent, message) => {
@@ -920,6 +954,40 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
     res.end(logsBuffer.join('\n'));
+    return;
+  }
+
+  if (parsedUrl.startsWith('/reset')) {
+    try {
+      res.writeHead(200, { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(JSON.stringify({ success: true, message: 'Resetting WhatsApp worker...' }));
+      
+      // Perform reset and restart worker
+      (async () => {
+        console.log('Manual reset requested via HTTP api.');
+        await resetWhatsAppSession();
+        await WhatsAppState.findOneAndUpdate(
+          {},
+          { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
+          { upsert: true }
+        );
+        if (client) {
+          try {
+            await client.destroy();
+          } catch (e) {}
+        }
+        console.log('Exiting worker process after manual reset...');
+        setTimeout(() => {
+          process.exit(1);
+        }, 1000);
+      })();
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Reset Error: ' + err.message);
+    }
     return;
   }
 
