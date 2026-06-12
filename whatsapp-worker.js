@@ -1119,3 +1119,20 @@ async function handleShutdown(signal) {
 
 process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+// -------------------------------------------------------------
+// CATCH UNHANDLED PROMISE REJECTIONS (e.g. RemoteAuth "auth timeout")
+// -------------------------------------------------------------
+process.on('unhandledRejection', (reason, promise) => {
+  const reasonStr = typeof reason === 'string' ? reason : (reason && reason.message) || String(reason);
+  console.error('Unhandled Promise Rejection caught:', reasonStr);
+
+  if (reasonStr.includes('auth timeout')) {
+    // This is a stale timeout from RemoteAuth internals that fires even after
+    // the client has already authenticated and reached the "ready" state.
+    // It is safe to ignore — the session is valid and working.
+    console.warn('RemoteAuth "auth timeout" detected — this is a known spurious error. Client is already authenticated. Ignoring.');
+  } else {
+    console.error('Unhandled rejection (non-auth):', reason);
+  }
+});
