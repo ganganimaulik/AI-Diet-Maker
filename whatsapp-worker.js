@@ -275,7 +275,14 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     }
   });
 
+  let isClientReady = false;
+
   client.on('ready', async () => {
+    if (isClientReady) {
+      console.log('WhatsApp Client is READY (already processed, skipping duplicate event).');
+      return;
+    }
+    isClientReady = true;
     console.log('WhatsApp Client is READY!');
     const phone = client.info.wid.user;
     const name = client.info.pushname || 'Connected Device';
@@ -306,6 +313,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client.on('disconnected', async (reason) => {
     console.log('WhatsApp Client disconnected. Reason:', reason);
+    isClientReady = false;
     await resetWhatsAppSession();
     await WhatsAppState.findOneAndUpdate(
       {},
