@@ -610,11 +610,25 @@ INSTRUCTIONS FOR THE CALCULATOR:
 5. If a day contains multiple \`[AUTO]\` ingredients, split the remaining deficit equally (50-50 in terms of calories) between them, then solve for each weight.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
 7. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.
+8. Calculate the total daily Sodium (Na) and Potassium (K) in milligrams (mg), and their ratio (Na:K ratio) for each day:
+   - Table salt (NaCl) contains approximately 388 mg of sodium per 1 g of salt.
+   - Look at the "Salt Seasoning Split" split value config under cooking splits. Identify the portion that is boiled with water where chicken is boiled and then the water is thrown away (e.g., "7g in chicken with 1 liter water"). For this portion, assume that only 10% of the salt/sodium is absorbed and retained by the chicken (meaning only 0.7g of salt is consumed, while the other 90% is discarded with the water). All other salt split allocations (e.g. in subji, in marinate paste) are assumed to be 100% consumed.
+   - Estimate natural sodium per 100g of raw ingredients: Raw Chicken Breast ≈ 70mg, White Rice ≈ 5mg, Potato (Raw) ≈ 6mg, Tomato ≈ 5mg, Bottle Gourd ≈ 2mg, Cluster Beans ≈ 2mg, Brinjal ≈ 2mg, Olive Oil ≈ 2mg, Eggs ≈ 140mg, Oats ≈ 2mg, Whey Protein ≈ 160mg, Nuts ≈ 1mg, Banana ≈ 1mg.
+   - Estimate natural potassium per 100g of raw ingredients: Raw Chicken Breast ≈ 256mg, White Rice ≈ 115mg, Potato (Raw) ≈ 400mg, Tomato ≈ 237mg, Bottle Gourd ≈ 150mg, Cluster Beans ≈ 230mg, Brinjal ≈ 230mg, Olive Oil ≈ 1mg, Eggs ≈ 130mg, Oats ≈ 429mg, Whey Protein ≈ 350mg, Almonds/Cashews/Walnuts ≈ 600mg, Banana ≈ 358mg.
+   - Compute Total Daily Sodium (mg) = Sodium from consumed salt + Natural sodium from all daily ingredients.
+   - Compute Total Daily Potassium (mg) = Natural potassium from all daily ingredients.
+   - Compute the Sodium-to-Potassium Ratio (Na:K Ratio) = Total Daily Sodium (mg) / Total Daily Potassium (mg) (rounded to 2 decimal places).
 
 ---
 
 PART 1: FOR MYSELF (User Breakdown)
 Generate this exact section first using markdown tables and bullet points based strictly on your calculations.
+
+At the very top of Part 1 (above any meal breakdowns/tables), you MUST print a bolded summary block for the daily sodium and potassium levels for each day generated. Format it exactly as follows:
+### Daily Sodium & Potassium Summary
+For ${isSingle ? `the day (${c.selectedGenerationDay})` : 'each day from Monday to Sunday'}:
+- **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]**
+  * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt includes 100% of [non-water-boiled splits] and only 10% of [water-boiled splits] (water discarded). Total potassium is from natural ingredients.")
 
 ${mealsList.map((meal, idx) => `
 ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''} Per Day)
