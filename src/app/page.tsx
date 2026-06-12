@@ -183,6 +183,10 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
   
+  // Drag and drop states for day swap
+  const [draggedDay, setDraggedDay] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+  
   // Custom prompt override state
   const [customPrompt, setCustomPrompt] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -803,6 +807,21 @@ prep method: airfryer 200c, 10min"]
         [dayKey]: (prev.dailyVariables[dayKey] || []).filter((_, idx) => idx !== index)
       }
     }));
+  };
+
+  const swapDayVariables = (dayA: string, dayB: string) => {
+    setConfig(prev => {
+      const varsA = prev.dailyVariables[dayA] || [];
+      const varsB = prev.dailyVariables[dayB] || [];
+      return {
+        ...prev,
+        dailyVariables: {
+          ...prev.dailyVariables,
+          [dayA]: varsB,
+          [dayB]: varsA
+        }
+      };
+    });
   };
 
   // Custom Splits manipulators
@@ -1456,14 +1475,43 @@ prep method: airfryer 200c, 10min"]
             {/* Daily Variables Config Subpanel */}
             {activeTab === 'daily' && (
               <div>
-                <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>Select Day of Week</label>
+                <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
+                  Select Day of Week <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'none', marginLeft: '0.5rem' }}>(Drag & Drop to Swap)</span>
+                </label>
                 
                 <div className="day-selector-grid">
                   {DAYS_OF_WEEK.map(day => (
                     <button
                       key={day}
-                      className={`day-btn ${activeDay === day ? 'active' : ''}`}
+                      draggable
+                      className={`day-btn ${activeDay === day ? 'active' : ''} ${dragOverDay === day ? 'drag-over' : ''}`}
                       onClick={() => setActiveDay(day)}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', day);
+                        setDraggedDay(day);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedDay(null);
+                        setDragOverDay(null);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedDay && draggedDay !== day) {
+                          setDragOverDay(day);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        setDragOverDay(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const sourceDay = e.dataTransfer.getData('text/plain') || draggedDay;
+                        if (sourceDay && sourceDay !== day) {
+                          swapDayVariables(sourceDay, day);
+                        }
+                        setDraggedDay(null);
+                        setDragOverDay(null);
+                      }}
                     >
                       {day.substring(0, 3)}
                     </button>
