@@ -1038,19 +1038,95 @@ prep method: airfryer 200c, 10min"]
         })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || 'Server responded with an error.');
+        let errorMessage = 'Server responded with an error.';
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
       }
 
-      setOutputText(data.text);
-      if (data.thought) {
-        setThinkingText(data.thought);
-        setOutputTab('thoughts');
-      } else {
-        setOutputTab('user');
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable.');
       }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentText = '';
+      let currentThought = '';
+      let hasSwitchedToThoughts = false;
+      let hasSwitchedToUser = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed.startsWith('data:')) {
+            const dataStr = trimmed.slice(5).trim();
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+              if (parsed.thought) {
+                currentThought += parsed.thought;
+                setThinkingText(currentThought);
+                if (!hasSwitchedToThoughts) {
+                  hasSwitchedToThoughts = true;
+                  setOutputTab('thoughts');
+                }
+              }
+              if (parsed.text) {
+                currentText += parsed.text;
+                setOutputText(currentText);
+                if (!hasSwitchedToUser) {
+                  hasSwitchedToUser = true;
+                  setOutputTab('user');
+                }
+              }
+            } catch (err) {
+              console.error('Error parsing SSE line:', err);
+            }
+          }
+        }
+      }
+
+      const trimmed = buffer.trim();
+      if (trimmed.startsWith('data:')) {
+        const dataStr = trimmed.slice(5).trim();
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+          if (parsed.thought) {
+            currentThought += parsed.thought;
+            setThinkingText(currentThought);
+            if (!hasSwitchedToThoughts) {
+              hasSwitchedToThoughts = true;
+              setOutputTab('thoughts');
+            }
+          }
+          if (parsed.text) {
+            currentText += parsed.text;
+            setOutputText(currentText);
+            if (!hasSwitchedToUser) {
+              hasSwitchedToUser = true;
+              setOutputTab('user');
+            }
+          }
+        } catch (err) {}
+      }
+
     } catch (e: any) {
       console.error(e);
       setErrorMsg(e.message || 'An error occurred while connecting to the Gemini API.');
@@ -1870,27 +1946,35 @@ prep method: airfryer 200c, 10min"]
 
           {/* Right Column: AI Outputs */}
           <section className="glass-panel" style={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
-            <div className="output-header-tabs">
-              {thinkingText && (
+            <div className="output-header-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '1.5rem' }}>
+                {thinkingText && (
+                  <button 
+                    className={`output-tab ${outputTab === 'thoughts' ? 'active' : ''}`} 
+                    onClick={() => setOutputTab('thoughts')}
+                  >
+                    Thinking Process
+                  </button>
+                )}
                 <button 
-                  className={`output-tab ${outputTab === 'thoughts' ? 'active' : ''}`} 
-                  onClick={() => setOutputTab('thoughts')}
+                  className={`output-tab ${outputTab === 'user' ? 'active' : ''}`} 
+                  onClick={() => setOutputTab('user')}
                 >
-                  Thinking Process
+                  Part 1: For Myself
                 </button>
+                <button 
+                  className={`output-tab ${outputTab === 'cook' ? 'active' : ''}`} 
+                  onClick={() => setOutputTab('cook')}
+                >
+                  Part 2: For Cook
+                </button>
+              </div>
+              {isGenerating && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>
+                  <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', boxShadow: 'none', margin: 0 }}></div>
+                  <span style={{ opacity: 0.9 }}>Streaming...</span>
+                </div>
               )}
-              <button 
-                className={`output-tab ${outputTab === 'user' ? 'active' : ''}`} 
-                onClick={() => setOutputTab('user')}
-              >
-                Part 1: For Myself
-              </button>
-              <button 
-                className={`output-tab ${outputTab === 'cook' ? 'active' : ''}`} 
-                onClick={() => setOutputTab('cook')}
-              >
-                Part 2: For Cook
-              </button>
             </div>
 
             {errorMsg && (
@@ -1901,13 +1985,13 @@ prep method: airfryer 200c, 10min"]
             )}
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              {isGenerating ? (
+              {isGenerating && !outputText && !thinkingText ? (
                 <div className="loading-container" style={{ flex: 1 }}>
                   <div className="spinner"></div>
                   <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Gemini is solving calculations...</p>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
                 </div>
-              ) : outputText ? (
+              ) : outputText || thinkingText ? (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   {outputTab === 'thoughts' && thinkingText && (
                     <div className="thinking-box" style={{ flex: 1 }}>
