@@ -199,6 +199,17 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     { upsert: true }
   );
 
+  // Reset scheduler retry status on startup so we don't wait for cooldowns
+  try {
+    await Scheduler.findOneAndUpdate(
+      {},
+      { $set: { retryCount: 0, nextRetryTime: 0 } }
+    );
+    console.log('Reset scheduler retry status on startup.');
+  } catch (err) {
+    console.error('Failed to reset scheduler retry status on startup:', err);
+  }
+
   store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
   
   // Determine puppeteer executable path
@@ -295,6 +306,12 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
     // Sync Contacts in the background
     syncContacts(client);
+
+    // Run an immediate scheduler check once ready (after 5 seconds to let contacts/session stabilize)
+    setTimeout(() => {
+      console.log('Running immediate startup scheduler check...');
+      schedulerCheck(client);
+    }, 5000);
 
     // Force an initial backup after the session stabilizes (60 seconds)
     // This ensures that even if sessionExists was true on startup, we save the refreshed/updated session.
@@ -545,6 +562,47 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
     const messageToSend = extractCookInstructions(generatedText, todayName);
 
     // 6. Transmit message
+    // Verify window.WWebJS is defined before attempting to send
+    let isWWebReady = false;
+    try {
+      if (client && client.pupPage) {
+        isWWebReady = await client.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined');
+      }
+    } catch (err) {
+      console.error('Failed to check window.WWebJS state in browser:', err);
+    }
+
+    if (!isWWebReady) {
+      console.warn('WhatsApp Client: window.WWebJS is undefined in the browser context. Attempting recovery...');
+      try {
+        if (client && client.pupPage) {
+          await client.inject();
+          // Force the appStateHasSyncedEvent handler to run to re-evaluate LoadUtils
+          await client.pupPage.evaluate(() => {
+            if (typeof window.onAppStateHasSyncedEvent === 'function') {
+              window.onAppStateHasSyncedEvent();
+            }
+          });
+          
+          // Wait up to 5 seconds for re-injection to complete
+          let start = Date.now();
+          while (Date.now() - start < 5000) {
+            isWWebReady = await client.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined').catch(() => false);
+            if (isWWebReady) break;
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+        }
+      } catch (injectErr) {
+        console.error('Failed recovery injection:', injectErr);
+      }
+
+      if (!isWWebReady) {
+        throw new Error('WhatsApp browser context is broken (window.WWebJS is undefined and recovery failed).');
+      } else {
+        console.log('WhatsApp Client recovery: window.WWebJS restored successfully!');
+      }
+    }
+
     console.log(`Sending WhatsApp message to ${scheduler.recipientName || scheduler.recipientId}...`);
     await client.sendMessage(scheduler.recipientId, messageToSend);
     console.log('WhatsApp message sent successfully!');
@@ -568,6 +626,15 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
   } catch (error) {
     console.error('Failed to execute scheduled send:', error);
     
+    const errMsg = error.message || String(error);
+    const isBrowserBroken = errMsg.includes('getChat') || 
+                            errMsg.includes('window.WWebJS') ||
+                            errMsg.includes('browser context is broken') ||
+                            errMsg.includes('Protocol error') ||
+                            errMsg.includes('Session closed') ||
+                            errMsg.includes('Target closed') ||
+                            errMsg.includes('Navigation failed');
+
     if (!isTest) {
       // Set retry fields: retry in 30 minutes
       const retryCount = (scheduler.retryCount || 0) + 1;
@@ -577,13 +644,20 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
         {},
         {
           $set: {
-            lastError: error.message || 'Unknown error',
+            lastError: errMsg,
             retryCount: retryCount,
             nextRetryTime: nextRetryTime
           }
         }
       );
       console.log(`Scheduler updated with retry status. Attempt #${retryCount}. Next retry: ${new Date(nextRetryTime).toLocaleTimeString()}`);
+    }
+
+    if (isBrowserBroken) {
+      console.error('CRITICAL: WhatsApp browser context appears broken/disconnected. Exiting worker process to force restart...');
+      setTimeout(() => {
+        process.exit(1);
+      }, 3000);
     }
   }
 }
