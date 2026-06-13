@@ -795,9 +795,12 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
     todayIngredients = dailyVariablesMap[dayName] || [];
   }
 
+  // Filter out disabled ingredients
+  todayIngredients = todayIngredients.filter(ing => !ing.disabled);
+
   const getDayVariantName = (ingredients) => {
     const nonStapleNames = ingredients
-      .filter(ing => !ing.isAuto)
+      .filter(ing => !ing.disabled && !ing.isAuto)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;

@@ -7,6 +7,7 @@ interface Ingredient {
   name: string;
   weight: string;
   isAuto: boolean;
+  disabled?: boolean;
 }
 
 interface CustomSplit {
@@ -543,7 +544,7 @@ export default function Home() {
   // Helper: Get variant name for days (e.g. Tomato -> "Just Tomato")
   const getDayVariantName = (ingredients: Ingredient[]) => {
     const nonStapleNames = ingredients
-      .filter(ing => !ing.isAuto)
+      .filter(ing => !ing.disabled && !ing.isAuto)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
@@ -637,7 +638,7 @@ ${splitsText}
 [DAILY VARIABLE INGREDIENT WEIGHTS (WHOLE DAY)]
 * Note: Use [AUTO] for any ingredient you want the calculator to dynamically scale to hit your exact Daily Calorie Target.
 ${activeDays.map(day => {
-  const ingredients = c.dailyVariables[day] || [];
+  const ingredients = (c.dailyVariables[day] || []).filter(ing => !ing.disabled);
   const variant = getDayVariantName(ingredients);
   const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
@@ -800,7 +801,7 @@ prep method: airfryer 200c, 10min"]
             item.weight = value;
             if (value) item.isAuto = false;
           } else {
-            item[field] = value as string;
+            (item as any)[field] = value;
           }
           
           updatedIngs[idx] = item;
@@ -855,8 +856,10 @@ prep method: airfryer 200c, 10min"]
       } else if (field === 'weight') {
         item.weight = value;
         if (value) item.isAuto = false;
+      } else if (field === 'disabled') {
+        item.disabled = value;
       } else {
-        item[field] = value as string;
+        (item as any)[field] = value;
       }
       updated[index] = item;
       return {
@@ -1654,12 +1657,13 @@ prep method: airfryer 200c, 10min"]
 
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
-                    <div key={idx} className="ingredient-item">
+                    <div key={idx} className={`ingredient-item daily-item ${ing.disabled ? 'is-disabled' : ''}`}>
                       <input
                         type="text"
                         className="form-input"
-                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
                         value={ing.name}
+                        disabled={ing.disabled}
                         onChange={e => updateIngredient('daily', idx, 'name', e.target.value, activeDay)}
                       />
                       <input
@@ -1667,19 +1671,31 @@ prep method: airfryer 200c, 10min"]
                         className="form-input"
                         style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                         placeholder="g"
-                        disabled={ing.isAuto}
+                        disabled={ing.isAuto || ing.disabled}
                         value={ing.weight}
                         onChange={e => updateIngredient('daily', idx, 'weight', e.target.value, activeDay)}
                       />
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>grams</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
+                      
                       <label className="auto-checkbox-container">
                         <input
                           type="checkbox"
+                          checked={!ing.disabled}
+                          onChange={e => updateIngredient('daily', idx, 'disabled', !e.target.checked, activeDay)}
+                        />
+                        Active
+                      </label>
+
+                      <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                        <input
+                          type="checkbox"
+                          disabled={ing.disabled}
                           checked={ing.isAuto}
                           onChange={e => updateIngredient('daily', idx, 'isAuto', e.target.checked, activeDay)}
                         />
                         AUTO
                       </label>
+
                       <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

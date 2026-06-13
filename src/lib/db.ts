@@ -51,6 +51,7 @@ export interface IIngredient {
   name: string;
   weight: string;
   isAuto: boolean;
+  disabled?: boolean;
 }
 
 export interface ICustomSplit {
@@ -103,7 +104,8 @@ export interface IConfig {
 const IngredientSchema = new Schema({
   name: { type: String, required: true },
   weight: { type: String, default: '' },
-  isAuto: { type: Boolean, default: false }
+  isAuto: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false }
 }, { _id: false });
 
 const CustomSplitSchema = new Schema({
