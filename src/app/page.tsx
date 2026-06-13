@@ -243,6 +243,12 @@ export default function Home() {
     retryCount: 0,
     nextRetryTime: 0,
   });
+  const [isSchedulerDirty, setIsSchedulerDirtyState] = useState(false);
+  const isSchedulerDirtyRef = useRef(false);
+  const setIsSchedulerDirty = (value: boolean) => {
+    isSchedulerDirtyRef.current = value;
+    setIsSchedulerDirtyState(value);
+  };
   const [contacts, setContacts] = useState<Array<{ id: string; name: string; isGroup: boolean }>>([]);
   const [searchContact, setSearchContact] = useState('');
   const [showContactsDropdown, setShowContactsDropdown] = useState(false);
@@ -289,7 +295,18 @@ export default function Home() {
         const data = await res.json();
         if (data.state) setWhatsappState(data.state);
         if (data.scheduler) {
-          setSchedulerState(data.scheduler);
+          if (!isSchedulerDirtyRef.current) {
+            setSchedulerState(data.scheduler);
+          } else {
+            // Merge background updates into local state without losing user edits
+            setSchedulerState(prev => ({
+              ...prev,
+              lastSentDate: data.scheduler.lastSentDate,
+              lastError: data.scheduler.lastError,
+              retryCount: data.scheduler.retryCount,
+              nextRetryTime: data.scheduler.nextRetryTime,
+            }));
+          }
         }
         if (data.hfSpaceStatus) setHfStatus(data.hfSpaceStatus);
         if (data.hfSpaceDetails) setHfDetails(data.hfSpaceDetails);
@@ -508,6 +525,7 @@ export default function Home() {
         }
       }
       await saveSchedulerDb(schedulerState);
+      setIsSchedulerDirty(false);
       alert('Scheduler settings saved successfully!');
     } catch (e) {
       alert('Failed to save scheduler settings.');
@@ -525,6 +543,7 @@ export default function Home() {
       
       // Auto-save scheduler settings first to ensure the recipient JID is updated in the DB
       await saveSchedulerDb(schedulerState);
+      setIsSchedulerDirty(false);
       
       const res = await fetch('/api/whatsapp/send-test', { 
         method: 'POST',
@@ -2518,7 +2537,10 @@ prep method: airfryer 200c, 10min"]
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <div 
                   className={`switch-container ${schedulerState.isEnabled ? 'checked' : ''}`}
-                  onClick={() => setSchedulerState(prev => ({ ...prev, isEnabled: !prev.isEnabled }))}
+                  onClick={() => {
+                    setSchedulerState(prev => ({ ...prev, isEnabled: !prev.isEnabled }));
+                    setIsSchedulerDirty(true);
+                  }}
                 >
                   <div className="switch-control"></div>
                   <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Automated Sending</span>
@@ -2532,7 +2554,10 @@ prep method: airfryer 200c, 10min"]
                     type="time"
                     className="form-input"
                     value={schedulerState.targetTime}
-                    onChange={e => setSchedulerState(prev => ({ ...prev, targetTime: e.target.value }))}
+                    onChange={e => {
+                      setSchedulerState(prev => ({ ...prev, targetTime: e.target.value }));
+                      setIsSchedulerDirty(true);
+                    }}
                   />
                 </div>
 
@@ -2541,7 +2566,10 @@ prep method: airfryer 200c, 10min"]
                   <select
                     className="form-input"
                     value={schedulerState.timezone || 'Asia/Kolkata'}
-                    onChange={e => setSchedulerState(prev => ({ ...prev, timezone: e.target.value }))}
+                    onChange={e => {
+                      setSchedulerState(prev => ({ ...prev, timezone: e.target.value }));
+                      setIsSchedulerDirty(true);
+                    }}
                   >
                     <option value="Asia/Kolkata">India (IST) - GMT+5:30</option>
                     <option value="UTC">Coordinated Universal Time (UTC)</option>
@@ -2586,7 +2614,13 @@ prep method: airfryer 200c, 10min"]
                             recipientType: 'contact' as const
                           };
                           setSchedulerState(newState);
-                          saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                          setIsSchedulerDirty(true);
+                          saveSchedulerDb(newState)
+                            .then(() => setIsSchedulerDirty(false))
+                            .catch(e => {
+                              console.error('Failed to auto-save:', e);
+                              setIsSchedulerDirty(false);
+                            });
                           setSearchContact('');
                         }}
                         title="Clear selection"
@@ -2627,7 +2661,13 @@ prep method: airfryer 200c, 10min"]
                                     recipientType: (contact.isGroup ? 'group' : 'contact') as 'group' | 'contact'
                                   };
                                   setSchedulerState(newState);
-                                  saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                  setIsSchedulerDirty(true);
+                                  saveSchedulerDb(newState)
+                                    .then(() => setIsSchedulerDirty(false))
+                                    .catch(e => {
+                                      console.error('Failed to auto-save:', e);
+                                      setIsSchedulerDirty(false);
+                                    });
                                   setSearchContact('');
                                   setShowContactsDropdown(false);
                                 }}
@@ -2651,7 +2691,13 @@ prep method: airfryer 200c, 10min"]
                                   recipientType: (isGroup ? 'group' : 'contact') as 'group' | 'contact'
                                 };
                                 setSchedulerState(newState);
-                                saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                setIsSchedulerDirty(true);
+                                saveSchedulerDb(newState)
+                                  .then(() => setIsSchedulerDirty(false))
+                                  .catch(e => {
+                                    console.error('Failed to auto-save:', e);
+                                    setIsSchedulerDirty(false);
+                                  });
                                 setSearchContact('');
                                 setShowContactsDropdown(false);
                               }}
@@ -2702,7 +2748,13 @@ prep method: airfryer 200c, 10min"]
                             userRecipientType: 'contact' as const
                           };
                           setSchedulerState(newState);
-                          saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                          setIsSchedulerDirty(true);
+                          saveSchedulerDb(newState)
+                            .then(() => setIsSchedulerDirty(false))
+                            .catch(e => {
+                              console.error('Failed to auto-save:', e);
+                              setIsSchedulerDirty(false);
+                            });
                           setSearchUserContact('');
                         }}
                         title="Clear selection"
@@ -2743,7 +2795,13 @@ prep method: airfryer 200c, 10min"]
                                     userRecipientType: (contact.isGroup ? 'group' : 'contact') as 'group' | 'contact'
                                   };
                                   setSchedulerState(newState);
-                                  saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                  setIsSchedulerDirty(true);
+                                  saveSchedulerDb(newState)
+                                    .then(() => setIsSchedulerDirty(false))
+                                    .catch(e => {
+                                      console.error('Failed to auto-save:', e);
+                                      setIsSchedulerDirty(false);
+                                    });
                                   setSearchUserContact('');
                                   setShowUserContactsDropdown(false);
                                 }}
@@ -2767,7 +2825,13 @@ prep method: airfryer 200c, 10min"]
                                   userRecipientType: (isGroup ? 'group' : 'contact') as 'group' | 'contact'
                                 };
                                 setSchedulerState(newState);
-                                saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                setIsSchedulerDirty(true);
+                                saveSchedulerDb(newState)
+                                  .then(() => setIsSchedulerDirty(false))
+                                  .catch(e => {
+                                    console.error('Failed to auto-save:', e);
+                                    setIsSchedulerDirty(false);
+                                  });
                                 setSearchUserContact('');
                                 setShowUserContactsDropdown(false);
                               }}
