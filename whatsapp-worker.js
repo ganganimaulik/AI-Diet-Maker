@@ -897,7 +897,7 @@ Separate this from Part 1 using a horizontal rule (---). Output only the day ${d
 Exact Output Template to Follow:
 
 ### ${dayName}: ${variant}
-[For each meal, list its ingredients with daily total weights in grams. Then list liquid configuration and prep methods without any hyphen or bullet point prefix. E.g.
+[For each meal, list its ingredients with daily total weights in grams. Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
 "Meal Name:
 ingredient1 name 150g
 ingredient2 name 100g
