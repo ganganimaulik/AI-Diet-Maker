@@ -728,6 +728,10 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
 
 // Helper: Compile single-day prompt
 function compilePromptTextForDay(c, dayName) {
+  const idealMin = c.global.idealSodiumPotassiumRatioMin === undefined ? 0.70 : c.global.idealSodiumPotassiumRatioMin;
+  const idealMax = c.global.idealSodiumPotassiumRatioMax === undefined ? 0.80 : c.global.idealSodiumPotassiumRatioMax;
+  const idealMinStr = idealMin.toFixed(2);
+  const idealMaxStr = idealMax.toFixed(2);
   const mealsList = c.meals || [];
   let splitsList = c.customSplits || [];
   
@@ -847,9 +851,9 @@ INSTRUCTIONS FOR THE CALCULATOR:
 3. Subtract that total (meals + variables + olive oil) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
 5. If a day contains multiple \`[AUTO]\` ingredients:
-   - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of 0.70 to 0.80.
-   - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above 0.80, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below 0.70, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
-   - If the ratio is already in the ideal range of 0.70 to 0.80 with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
+   - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
+   - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
+   - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
    - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
    - Show in your thinking process/output how the calorie split was determined to hit the target ratio.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
@@ -862,10 +866,10 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Compute Total Daily Sodium (mg) = Sodium from consumed salt + Natural sodium from all daily ingredients.
    - Compute Total Daily Potassium (mg) = Natural potassium from all daily ingredients.
    - Compute the Sodium-to-Potassium Ratio (Na:K Ratio) = Total Daily Sodium (mg) / Total Daily Potassium (mg) (rounded to 2 decimal places).
-   - Evaluate the Na:K Ratio against the ideal range of 0.70 to 0.80:
-     - If the ratio is below 0.70, calculate the additional Sodium required to reach a ratio of 0.70: Additional Na (mg) = (0.70 * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
-     - If the ratio is above 0.80, calculate the additional Potassium required to reach a ratio of 0.80: Additional Potassium to 0.80 (mg) = (Total Daily Sodium / 0.80) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of 0.70: Additional Potassium to 0.70 (mg) = (Total Daily Sodium / 0.70) - Total Daily Potassium (rounded to the nearest whole number).
-     - If the ratio is between 0.70 and 0.80 (inclusive), the ratio is ideal.
+   - Evaluate the Na:K Ratio against the ideal range of ${idealMinStr} to ${idealMaxStr}:
+     - If the ratio is below ${idealMinStr}, calculate the additional Sodium required to reach a ratio of ${idealMinStr}: Additional Na (mg) = (${idealMinStr} * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
+     - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
+     - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
 
 ---
 
@@ -877,7 +881,7 @@ At the very top of Part 1 (above any meal breakdowns/tables), you MUST print a b
 For the day (${dayName}):
 - **${dayName}**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
   * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt includes 100% of [non-water-boiled splits] and only 10% of [water-boiled splits] (water discarded). Total potassium is from natural ingredients.")
-  * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (0.70 - 0.80)." If below 0.70: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach 0.70." If above 0.80: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach 0.80 (or [D] mg to reach 0.70)."]
+  * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (${idealMinStr} - ${idealMaxStr})." If below ${idealMinStr}: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach ${idealMinStr}." If above ${idealMaxStr}: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach ${idealMaxStr} (or [D] mg to reach ${idealMinStr})."]
 
 ${mealsList.map((meal, idx) => `
 ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''} Per Day)

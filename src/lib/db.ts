@@ -86,6 +86,8 @@ export interface IConfig {
     dailyCalorieTarget: number;
     totalOliveOil: number;
     oliveOilSplitPercent: number;
+    idealSodiumPotassiumRatioMin?: number;
+    idealSodiumPotassiumRatioMax?: number;
   };
   meals: IMeal[];
   customSplits: ICustomSplit[];
@@ -140,7 +142,9 @@ const ConfigSchema = new Schema<IConfig>({
   global: {
     dailyCalorieTarget: { type: Number, default: 1600 },
     totalOliveOil: { type: Number, default: 18 },
-    oliveOilSplitPercent: { type: Number, default: 50 }
+    oliveOilSplitPercent: { type: Number, default: 50 },
+    idealSodiumPotassiumRatioMin: { type: Number, default: 0.70 },
+    idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
   },
   meals: [MealSchema],
   customSplits: [CustomSplitSchema],

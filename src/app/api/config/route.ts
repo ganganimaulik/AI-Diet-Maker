@@ -25,7 +25,9 @@ export async function GET() {
         global: {
           dailyCalorieTarget: 1600,
           totalOliveOil: 18,
-          oliveOilSplitPercent: 50
+          oliveOilSplitPercent: 50,
+          idealSodiumPotassiumRatioMin: 0.70,
+          idealSodiumPotassiumRatioMax: 0.80
         },
         meals: [
           {
@@ -63,6 +65,25 @@ export async function GET() {
       if (config.huggingFaceToken === undefined) {
         config.huggingFaceToken = '';
         modified = true;
+      }
+      if (!config.global) {
+        config.global = {
+          dailyCalorieTarget: 1600,
+          totalOliveOil: 18,
+          oliveOilSplitPercent: 50,
+          idealSodiumPotassiumRatioMin: 0.70,
+          idealSodiumPotassiumRatioMax: 0.80
+        };
+        modified = true;
+      } else {
+        if (config.global.idealSodiumPotassiumRatioMin === undefined) {
+          config.global.idealSodiumPotassiumRatioMin = 0.70;
+          modified = true;
+        }
+        if (config.global.idealSodiumPotassiumRatioMax === undefined) {
+          config.global.idealSodiumPotassiumRatioMax = 0.80;
+          modified = true;
+        }
       }
       if (modified) {
         await Config.findOneAndUpdate({}, { $set: config.toObject() }, { upsert: true });
