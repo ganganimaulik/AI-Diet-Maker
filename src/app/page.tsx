@@ -656,7 +656,12 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Global Olive Oil calories = Total Daily Olive Oil x (calorie density of Olive Oil)
 3. Subtract that total (meals + variables + olive oil) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
-5. If a day contains multiple \`[AUTO]\` ingredients, split the remaining deficit equally (50-50 in terms of calories) between them, then solve for each weight.
+5. If a day contains multiple \`[AUTO]\` ingredients:
+   - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of 0.70 to 0.80.
+   - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above 0.80, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below 0.70, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
+   - If the ratio is already in the ideal range of 0.70 to 0.80 with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
+   - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
+   - Show in your thinking process/output how the calorie split was determined to hit the target ratio.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
 7. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.
 8. Calculate the total daily Sodium (Na) and Potassium (K) in milligrams (mg), and their ratio (Na:K ratio) for each day:
