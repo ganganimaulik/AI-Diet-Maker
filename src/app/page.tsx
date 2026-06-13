@@ -8,6 +8,7 @@ interface Ingredient {
   weight: string;
   isAuto: boolean;
   disabled?: boolean;
+  personalOnly?: boolean;
 }
 
 interface CustomSplit {
@@ -544,7 +545,7 @@ export default function Home() {
   // Helper: Get variant name for days (e.g. Tomato -> "Just Tomato")
   const getDayVariantName = (ingredients: Ingredient[]) => {
     const nonStapleNames = ingredients
-      .filter(ing => !ing.disabled)
+      .filter(ing => !ing.disabled && !ing.personalOnly)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
@@ -640,7 +641,7 @@ ${splitsText}
 ${activeDays.map(day => {
   const ingredients = (c.dailyVariables[day] || []).filter(ing => !ing.disabled);
   const variant = getDayVariantName(ingredients);
-  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join(', ');
+  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
 }).join('\n')}
 
@@ -703,6 +704,8 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 
 PART 2: FOR MY COOK (Weekly Text Plan)
 Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+
+CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
 Exact Output Template to Follow for Each Day:
 
@@ -835,7 +838,7 @@ prep method: airfryer 200c, 10min"]
 
   // Ingredients Lists manipulators (for Daily variables)
   const addIngredient = (target: 'daily', dayKey: string) => {
-    const defaultIng: Ingredient = { name: 'New Item', weight: '0', isAuto: false };
+    const defaultIng: Ingredient = { name: 'New Item', weight: '0', isAuto: false, personalOnly: false };
     setConfig(prev => ({
       ...prev,
       dailyVariables: {
@@ -1775,6 +1778,16 @@ prep method: airfryer 200c, 10min"]
                           onChange={e => updateIngredient('daily', idx, 'isAuto', e.target.checked, activeDay)}
                         />
                         AUTO
+                      </label>
+
+                      <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                        <input
+                          type="checkbox"
+                          disabled={ing.disabled}
+                          checked={!!ing.personalOnly}
+                          onChange={e => updateIngredient('daily', idx, 'personalOnly', e.target.checked, activeDay)}
+                        />
+                        Personal
                       </label>
 
                       <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)}>

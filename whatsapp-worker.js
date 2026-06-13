@@ -800,7 +800,7 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
 
   const getDayVariantName = (ingredients) => {
     const nonStapleNames = ingredients
-      .filter(ing => !ing.disabled)
+      .filter(ing => !ing.disabled && !ing.personalOnly)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
@@ -808,7 +808,7 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
   };
 
   const variant = getDayVariantName(todayIngredients);
-  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join(', ');
+  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   const dailyVariablesText = `- ${dayName} (${variant}): ${itemsText}`;
 
   return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
@@ -893,6 +893,8 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 
 PART 2: FOR MY COOK (Weekly Text Plan)
 Separate this from Part 1 using a horizontal rule (---). Output only the day ${dayName} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+
+CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
 Exact Output Template to Follow:
 
