@@ -2406,7 +2406,9 @@ prep method: airfryer 200c, 10min"]
                     <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
                   </select>
                 </div>
+              </div>
 
+              <div className="input-row" style={{ marginBottom: '1rem' }}>
                 <div className="form-group contact-picker-input">
                   <label className="form-label">Cook Recipient (Part 2: For Cook)</label>
                   
