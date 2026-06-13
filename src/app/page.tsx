@@ -239,6 +239,7 @@ export default function Home() {
     userRecipientId: '',
     userRecipientName: '',
     lastSentDate: '',
+    lastSentTime: '',
     lastError: '',
     retryCount: 0,
     nextRetryTime: 0,
@@ -302,6 +303,7 @@ export default function Home() {
             setSchedulerState(prev => ({
               ...prev,
               lastSentDate: data.scheduler.lastSentDate,
+              lastSentTime: data.scheduler.lastSentTime,
               lastError: data.scheduler.lastError,
               retryCount: data.scheduler.retryCount,
               nextRetryTime: data.scheduler.nextRetryTime,

@@ -149,6 +149,7 @@ const SchedulerSchema = new mongoose.Schema({
   userRecipientId: { type: String, default: '' },
   userRecipientName: { type: String, default: '' },
   lastSentDate: { type: String, default: '' },
+  lastSentTime: { type: String, default: '' },
   lastError: { type: String, default: '' },
   retryCount: { type: Number, default: 0 },
   nextRetryTime: { type: Number, default: 0 },
@@ -520,8 +521,22 @@ async function schedulerCheck(client) {
     // Check if current time is past/equal target time
     const isPastTargetTime = currTotalMinutes >= targetTotalMinutes;
 
-    // If already sent today, skip
-    if (scheduler.lastSentDate === localDate) return;
+    // If already sent today, skip (unless last send was in the morning before 9 AM, and we are currently in the afternoon window)
+    if (scheduler.lastSentDate === localDate) {
+      let shouldSkip = true;
+      if (isAfternoonWindow && scheduler.lastSentTime) {
+        const [lastHourStr, lastMinStr] = scheduler.lastSentTime.split(':');
+        const lastHour = parseInt(lastHourStr);
+        const lastMinute = parseInt(lastMinStr);
+        const lastTotalMinutes = lastHour * 60 + lastMinute;
+        
+        // If the last message was sent before 9:00 AM today (540 minutes), do not skip (allow afternoon send)
+        if (lastTotalMinutes < 9 * 60) {
+          shouldSkip = false;
+        }
+      }
+      if (shouldSkip) return;
+    }
 
     if (isPastTargetTime) {
       // Check if we are in a retry cool-down
@@ -673,11 +688,13 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
 
     // 7. Update scheduler states on Success
     if (!isTest) {
+      const localTime = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
       await Scheduler.findOneAndUpdate(
         {},
         {
           $set: {
             lastSentDate: localDate,
+            lastSentTime: localTime,
             lastError: '',
             retryCount: 0,
             nextRetryTime: 0

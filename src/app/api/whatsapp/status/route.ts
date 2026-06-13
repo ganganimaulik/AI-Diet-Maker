@@ -33,6 +33,7 @@ export async function GET() {
         userRecipientId: '',
         userRecipientName: '',
         lastSentDate: '',
+        lastSentTime: '',
         lastError: '',
         retryCount: 0,
         nextRetryTime: 0,

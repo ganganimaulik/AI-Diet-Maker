@@ -206,6 +206,7 @@ export interface IScheduler {
   userRecipientId: string;
   userRecipientName: string;
   lastSentDate: string; // "YYYY-MM-DD"
+  lastSentTime: string; // "HH:MM"
   lastError: string;
   retryCount: number;
   nextRetryTime: number; // Timestamp ms
@@ -226,6 +227,7 @@ const SchedulerSchema = new Schema<IScheduler>({
   userRecipientId: { type: String, default: '' },
   userRecipientName: { type: String, default: '' },
   lastSentDate: { type: String, default: '' },
+  lastSentTime: { type: String, default: '' },
   lastError: { type: String, default: '' },
   retryCount: { type: Number, default: 0 },
   nextRetryTime: { type: Number, default: 0 },
