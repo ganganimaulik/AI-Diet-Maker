@@ -642,6 +642,10 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Compute Total Daily Sodium (mg) = Sodium from consumed salt + Natural sodium from all daily ingredients.
    - Compute Total Daily Potassium (mg) = Natural potassium from all daily ingredients.
    - Compute the Sodium-to-Potassium Ratio (Na:K Ratio) = Total Daily Sodium (mg) / Total Daily Potassium (mg) (rounded to 2 decimal places).
+   - Evaluate the Na:K Ratio against the ideal range of 0.70 to 0.80:
+     - If the ratio is below 0.70, calculate the additional Sodium required to reach a ratio of 0.70: Additional Na (mg) = (0.70 * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
+     - If the ratio is above 0.80, calculate the additional Potassium required to reach a ratio of 0.80: Additional Potassium (mg) = (Total Daily Sodium / 0.80) - Total Daily Potassium (rounded to the nearest whole number).
+     - If the ratio is between 0.70 and 0.80 (inclusive), the ratio is ideal.
 
 ---
 
@@ -651,8 +655,9 @@ Generate this exact section first using markdown tables and bullet points based 
 At the very top of Part 1 (above any meal breakdowns/tables), you MUST print a bolded summary block for the daily sodium and potassium levels for each day generated. Format it exactly as follows:
 ### Daily Sodium & Potassium Summary
 For ${isSingle ? `the day (${c.selectedGenerationDay})` : 'each day from Monday to Sunday'}:
-- **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]**
+- **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
   * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt includes 100% of [non-water-boiled splits] and only 10% of [water-boiled splits] (water discarded). Total potassium is from natural ingredients.")
+  * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (0.70 - 0.80)." If below 0.70: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach 0.70." If above 0.80: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach 0.80."]
 
 ${mealsList.map((meal, idx) => `
 ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''} Per Day)
