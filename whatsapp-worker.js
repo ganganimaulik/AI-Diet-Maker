@@ -140,16 +140,21 @@ const ContactSchema = new mongoose.Schema({
 
 const SchedulerSchema = new mongoose.Schema({
   isEnabled: { type: Boolean, default: false },
-  targetTime: { type: String, default: '07:30' },
+  targetTime: { type: String, default: '14:00' },
   timezone: { type: String, default: 'Asia/Kolkata' },
   recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
   recipientId: { type: String, default: '' },
   recipientName: { type: String, default: '' },
+  userRecipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
+  userRecipientId: { type: String, default: '' },
+  userRecipientName: { type: String, default: '' },
   lastSentDate: { type: String, default: '' },
   lastError: { type: String, default: '' },
   retryCount: { type: Number, default: 0 },
   nextRetryTime: { type: Number, default: 0 },
-  triggerTest: { type: Boolean, default: false }
+  triggerTest: { type: Boolean, default: false },
+  triggerCookTest: { type: Boolean, default: false },
+  triggerMyselfTest: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const ConfigSchema = new mongoose.Schema({
@@ -447,10 +452,21 @@ async function schedulerCheck(client) {
 
     // 1. Check if a manual Test Send was triggered
     if (scheduler.triggerTest) {
-      console.log('Manual Test Send triggered.');
-      // Instantly reset the flag in DB so we don't double-trigger
+      console.log('Manual Test Send (All) triggered.');
       await Scheduler.findOneAndUpdate({}, { $set: { triggerTest: false } });
-      await executeScheduledSend(client, scheduler, true);
+      await executeScheduledSend(client, scheduler, true, 'all');
+      return;
+    }
+    if (scheduler.triggerCookTest) {
+      console.log('Manual Cook Test Send triggered.');
+      await Scheduler.findOneAndUpdate({}, { $set: { triggerCookTest: false } });
+      await executeScheduledSend(client, scheduler, true, 'cook');
+      return;
+    }
+    if (scheduler.triggerMyselfTest) {
+      console.log('Manual Myself Test Send triggered.');
+      await Scheduler.findOneAndUpdate({}, { $set: { triggerMyselfTest: false } });
+      await executeScheduledSend(client, scheduler, true, 'myself');
       return;
     }
 
@@ -458,8 +474,8 @@ async function schedulerCheck(client) {
     if (!scheduler.isEnabled) return;
 
     // 3. Verify recipient configurations
-    if (!scheduler.recipientId) {
-      console.warn('Daily Scheduler enabled but recipientId is missing.');
+    if (!scheduler.recipientId && !scheduler.userRecipientId) {
+      console.warn('Daily Scheduler enabled but both recipientId and userRecipientId are missing.');
       return;
     }
 
@@ -476,28 +492,36 @@ async function schedulerCheck(client) {
     const [targetHour, targetMinute] = scheduler.targetTime.split(':');
     const [currHour, currMinute] = localTime.split(':');
 
-    // If already sent today, skip
-    if (scheduler.lastSentDate === localDate) return;
-
-    // Check if current time is past/equal target time
-    const isPastTargetTime = (parseInt(currHour) > parseInt(targetHour)) || 
-                             (parseInt(currHour) === parseInt(targetHour) && parseInt(currMinute) >= parseInt(targetMinute));
-
-    // Enforce sending window: only between 03:00 and 08:30
     const currHourInt = parseInt(currHour);
     const currMinuteInt = parseInt(currMinute);
     const currTotalMinutes = currHourInt * 60 + currMinuteInt;
-    const windowStart = 3 * 60;       // 03:00 = 180 minutes
-    const windowEnd = 8 * 60 + 30;    // 08:30 = 510 minutes
-    const isWithinWindow = currTotalMinutes >= windowStart && currTotalMinutes <= windowEnd;
 
-    if (!isWithinWindow) {
-      // Outside the allowed window — do not send
-      if (isPastTargetTime && currTotalMinutes > windowEnd) {
-        console.log(`Cook message window (03:00–08:30) has passed. Current: ${localTime}. Skipping for today.`);
-      }
+    const targetHourInt = parseInt(targetHour);
+    const targetMinuteInt = parseInt(targetMinute);
+    const targetTotalMinutes = targetHourInt * 60 + targetMinuteInt;
+
+    // Evaluate active window
+    const isMorningWindow = currTotalMinutes >= 0 && currTotalMinutes <= 9 * 60 + 30; // 00:00 to 09:30
+    const isAfternoonWindow = currTotalMinutes >= 14 * 60 && currTotalMinutes <= 23 * 60 + 59; // 14:00 to 23:59
+
+    if (!isMorningWindow && !isAfternoonWindow) {
+      // Outside valid sending windows — skip checking
       return;
     }
+
+    // Ensure the configured targetTime falls in our current active window to trigger sending
+    const isTargetTimeInCurrentWindow = (isMorningWindow && targetTotalMinutes >= 0 && targetTotalMinutes <= 9 * 60 + 30) ||
+                                       (isAfternoonWindow && targetTotalMinutes >= 14 * 60 && targetTotalMinutes <= 23 * 60 + 59);
+
+    if (!isTargetTimeInCurrentWindow) {
+      return;
+    }
+
+    // Check if current time is past/equal target time
+    const isPastTargetTime = currTotalMinutes >= targetTotalMinutes;
+
+    // If already sent today, skip
+    if (scheduler.lastSentDate === localDate) return;
 
     if (isPastTargetTime) {
       // Check if we are in a retry cool-down
@@ -517,7 +541,7 @@ async function schedulerCheck(client) {
 // -------------------------------------------------------------
 // CORE GENERATION & WHATSAPP TRANSMISSION
 // -------------------------------------------------------------
-async function executeScheduledSend(client, scheduler, isTest = false) {
+async function executeScheduledSend(client, scheduler, isTest = false, testTarget = 'all') {
   const now = new Date();
   const timezone = scheduler.timezone || 'Asia/Kolkata';
   const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
@@ -530,8 +554,20 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
     }
 
     // Verify recipient is configured in the scheduler
-    if (!scheduler.recipientId) {
-      throw new Error('Recipient JID (ID) is not configured in the scheduler.');
+    if (isTest) {
+      if (testTarget === 'cook' && !scheduler.recipientId) {
+        throw new Error('Cook Recipient is not configured in the scheduler.');
+      }
+      if (testTarget === 'myself' && !scheduler.userRecipientId) {
+        throw new Error('Myself Recipient is not configured in the scheduler.');
+      }
+      if (testTarget === 'all' && !scheduler.recipientId && !scheduler.userRecipientId) {
+        throw new Error('Neither Cook Recipient nor Myself Recipient is configured in the scheduler.');
+      }
+    } else {
+      if (!scheduler.recipientId && !scheduler.userRecipientId) {
+        throw new Error('Neither Cook Recipient nor Myself Recipient is configured in the scheduler.');
+      }
     }
 
     // 2. Fetch active diet configuration
@@ -549,18 +585,35 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
       throw new Error('Gemini API Key or credentials are missing.');
     }
 
-    // 3. Compile prompt for TODAY
-    const todayName = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(now).toUpperCase(); // e.g. "SATURDAY"
-    
-    console.log(`Compiling diet prompt for today (${todayName})...`);
-    const prompt = compilePromptTextForDay(configDoc, todayName);
+    // 3. Compile prompt for target day
+    const localTime = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+    const [currHour, currMinute] = localTime.split(':');
+    const currHourInt = parseInt(currHour);
+    const currMinuteInt = parseInt(currMinute);
+    const currTotalMinutes = currHourInt * 60 + currMinuteInt;
+
+    // If afternoon/evening window (after 2 PM / 14:00), we send for tomorrow (the next day)
+    let isTomorrow = false;
+    if (currTotalMinutes >= 14 * 60 && currTotalMinutes <= 23 * 60 + 59) {
+      isTomorrow = true;
+    }
+
+    let targetDate = now;
+    if (isTomorrow) {
+      targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    }
+    const targetDayName = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(targetDate).toUpperCase();
+
+    console.log(`Compiling diet prompt for ${isTomorrow ? 'tomorrow' : 'today'} (${targetDayName})...`);
+    const prompt = compilePromptTextForDay(configDoc, targetDayName);
 
     // 4. Call Gemini API
     console.log('Generating diet plan from Gemini...');
     const generatedText = await callGeminiAPI(configDoc, prompt);
     
-    // 5. Extract Part 2 (Cook instructions)
-    const messageToSend = extractCookInstructions(generatedText, todayName);
+    // 5. Extract Part 1 (Myself) and Part 2 (Cook instructions)
+    const userMessageToSend = extractMyselfInstructions(generatedText, targetDayName);
+    const cookMessageToSend = extractCookInstructions(generatedText, targetDayName);
 
     // 6. Transmit message
     // Verify window.WWebJS is defined before attempting to send
@@ -604,9 +657,19 @@ async function executeScheduledSend(client, scheduler, isTest = false) {
       }
     }
 
-    console.log(`Sending WhatsApp message to ${scheduler.recipientName || scheduler.recipientId}...`);
-    await client.sendMessage(scheduler.recipientId, messageToSend);
-    console.log('WhatsApp message sent successfully!');
+    const shouldSendCook = scheduler.recipientId && (!isTest || testTarget === 'cook' || testTarget === 'all');
+    const shouldSendMyself = scheduler.userRecipientId && (!isTest || testTarget === 'myself' || testTarget === 'all');
+
+    if (shouldSendCook) {
+      console.log(`Sending WhatsApp Cook message to ${scheduler.recipientName || scheduler.recipientId}...`);
+      await client.sendMessage(scheduler.recipientId, cookMessageToSend);
+      console.log('WhatsApp Cook message sent successfully!');
+    }
+    if (shouldSendMyself) {
+      console.log(`Sending WhatsApp Myself message to ${scheduler.userRecipientName || scheduler.userRecipientId}...`);
+      await client.sendMessage(scheduler.userRecipientId, userMessageToSend);
+      console.log('WhatsApp Myself message sent successfully!');
+    }
 
     // 7. Update scheduler states on Success
     if (!isTest) {
@@ -1022,6 +1085,39 @@ async function callGeminiAPI(c, prompt) {
 
     return text;
   }
+}
+
+// Helper: Extract Part 1 (Myself Instructions) from response markdown
+function extractMyselfInstructions(md, dayName) {
+  if (!md) return `No plan generated for ${dayName}.`;
+
+  const part1Regex = /(?:###?\s*)?PART\s*1:\s*FOR\s*MYSELF[^\n]*/i;
+  const part2Regex = /(?:###?\s*)?PART\s*2:\s*FOR\s*MY\s*COOK[^\n]*/i;
+  
+  const match1 = md.match(part1Regex);
+  const match2 = md.match(part2Regex);
+  
+  let startIndex = 0;
+  if (match1 && match1.index !== undefined) {
+    startIndex = match1.index + match1[0].length;
+  }
+  
+  let endIndex = md.length;
+  if (match2 && match2.index !== undefined) {
+    endIndex = match2.index;
+  }
+  
+  let part1 = md.substring(startIndex, endIndex).trim();
+  
+  // Clean up leading/trailing markdown dividers if any
+  if (part1.endsWith('---')) {
+    part1 = part1.substring(0, part1.length - 3).trim();
+  }
+  if (part1.startsWith('---')) {
+    part1 = part1.substring(3).trim();
+  }
+  
+  return part1;
 }
 
 // Helper: Extract Part 2 (Cook Instructions) from response markdown

@@ -224,11 +224,14 @@ export default function Home() {
   });
   const [schedulerState, setSchedulerState] = useState({
     isEnabled: false,
-    targetTime: '07:30',
+    targetTime: '14:00',
     timezone: 'Asia/Kolkata',
     recipientType: 'contact' as 'contact' | 'group',
     recipientId: '',
     recipientName: '',
+    userRecipientType: 'contact' as 'contact' | 'group',
+    userRecipientId: '',
+    userRecipientName: '',
     lastSentDate: '',
     lastError: '',
     retryCount: 0,
@@ -237,6 +240,8 @@ export default function Home() {
   const [contacts, setContacts] = useState<Array<{ id: string; name: string; isGroup: boolean }>>([]);
   const [searchContact, setSearchContact] = useState('');
   const [showContactsDropdown, setShowContactsDropdown] = useState(false);
+  const [searchUserContact, setSearchUserContact] = useState('');
+  const [showUserContactsDropdown, setShowUserContactsDropdown] = useState(false);
   const [isSavingScheduler, setIsSavingScheduler] = useState(false);
   const [testSendStatus, setTestSendStatus] = useState({ status: 'idle', message: '' });
 
@@ -476,10 +481,25 @@ export default function Home() {
   const saveSchedulerSettings = async () => {
     setIsSavingScheduler(true);
     try {
-      if (schedulerState.isEnabled && !schedulerState.recipientId) {
-        alert('Please select a recipient (contact or group) before enabling the automated scheduler.');
+      if (schedulerState.isEnabled && !schedulerState.recipientId && !schedulerState.userRecipientId) {
+        alert('Please select at least one recipient (Cook or Myself) before enabling the automated scheduler.');
         setIsSavingScheduler(false);
         return;
+      }
+      if (schedulerState.isEnabled) {
+        const [hourStr, minStr] = schedulerState.targetTime.split(':');
+        const hour = parseInt(hourStr);
+        const minute = parseInt(minStr);
+        const totalMinutes = hour * 60 + minute;
+        
+        const isMorning = totalMinutes >= 0 && totalMinutes <= 9 * 60 + 30;
+        const isAfternoon = totalMinutes >= 14 * 60 && totalMinutes <= 23 * 60 + 59;
+        
+        if (!isMorning && !isAfternoon) {
+          alert('Automated messages must be scheduled to send either in the morning (12:00 AM to 9:30 AM) for the same day, or after 2:00 PM (14:00 to 11:59 PM) today for the next day. Please update the send time.');
+          setIsSavingScheduler(false);
+          return;
+        }
       }
       await saveSchedulerDb(schedulerState);
       alert('Scheduler settings saved successfully!');
@@ -491,8 +511,8 @@ export default function Home() {
   };
 
   // Trigger immediate test message delivery
-  const handleSendTestMessage = async () => {
-    setTestSendStatus({ status: 'sending', message: 'Triggering test send...' });
+  const handleSendTestMessage = async (type: 'myself' | 'cook') => {
+    setTestSendStatus({ status: 'sending', message: `Triggering test send for ${type === 'myself' ? 'Myself' : 'Cook'}...` });
     try {
       // Auto-save the config first to ensure today's test matches edits
       await saveConfig(config);
@@ -500,12 +520,16 @@ export default function Home() {
       // Auto-save scheduler settings first to ensure the recipient JID is updated in the DB
       await saveSchedulerDb(schedulerState);
       
-      const res = await fetch('/api/whatsapp/send-test', { method: 'POST' });
+      const res = await fetch('/api/whatsapp/send-test', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
       const data = await res.json();
       if (res.ok) {
         setTestSendStatus({ 
           status: 'success', 
-          message: 'Test triggered successfully! The background worker will generate and send the message shortly.' 
+          message: `Test for ${type === 'myself' ? 'Myself' : 'Cook'} triggered successfully! The background worker will generate and send the message shortly.` 
         });
         setTimeout(() => setTestSendStatus({ status: 'idle', message: '' }), 5000);
       } else {
@@ -2384,7 +2408,7 @@ prep method: airfryer 200c, 10min"]
                 </div>
 
                 <div className="form-group contact-picker-input">
-                  <label className="form-label">Recipient (Contact or Group)</label>
+                  <label className="form-label">Cook Recipient (Part 2: For Cook)</label>
                   
                   {schedulerState.recipientId ? (
                     <div className="selected-contact-card">
@@ -2498,6 +2522,122 @@ prep method: airfryer 200c, 10min"]
                     </>
                   )}
                 </div>
+
+                <div className="form-group contact-picker-input">
+                  <label className="form-label">Myself Recipient (Part 1: For Myself)</label>
+                  
+                  {schedulerState.userRecipientId ? (
+                    <div className="selected-contact-card" style={{ background: 'rgba(6, 182, 212, 0.08)', border: '1px solid rgba(6, 182, 212, 0.25)' }}>
+                      <div className="selected-contact-info">
+                        <span className="selected-contact-name">
+                          {schedulerState.userRecipientName || 'Selected Recipient'}
+                          <span className="selected-contact-type" style={{ background: 'rgba(6, 182, 212, 0.2)', color: 'var(--accent-cyan)' }}>
+                            {schedulerState.userRecipientType === 'group' ? 'Group' : 'Contact'}
+                          </span>
+                        </span>
+                        <span className="selected-contact-id">
+                          {schedulerState.userRecipientId}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="selected-contact-clear"
+                        onClick={() => {
+                          const newState = {
+                            ...schedulerState,
+                            userRecipientId: '',
+                            userRecipientName: '',
+                            userRecipientType: 'contact' as const
+                          };
+                          setSchedulerState(newState);
+                          saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                          setSearchUserContact('');
+                        }}
+                        title="Clear selection"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                          <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Search contact or group by name or number..."
+                        value={searchUserContact}
+                        onChange={e => {
+                          setSearchUserContact(e.target.value);
+                          setShowUserContactsDropdown(true);
+                        }}
+                        onFocus={() => setShowUserContactsDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowUserContactsDropdown(false), 200)}
+                      />
+                      
+                      {showUserContactsDropdown && (
+                        <div className="contacts-dropdown">
+                          {contacts
+                            .filter(c => c.name.toLowerCase().includes(searchUserContact.toLowerCase()) || c.id.includes(searchUserContact))
+                            .map(contact => (
+                              <div 
+                                key={contact.id} 
+                                className="contact-option"
+                                onMouseDown={() => {
+                                  const newState = {
+                                    ...schedulerState,
+                                    userRecipientId: contact.id,
+                                    userRecipientName: contact.name,
+                                    userRecipientType: (contact.isGroup ? 'group' : 'contact') as 'group' | 'contact'
+                                  };
+                                  setSchedulerState(newState);
+                                  saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                  setSearchUserContact('');
+                                  setShowUserContactsDropdown(false);
+                                }}
+                              >
+                                <span>{contact.name}</span>
+                                <span className="contact-option-type">{contact.isGroup ? 'Group' : 'Contact'}</span>
+                              </div>
+                            ))}
+                            
+                          {searchUserContact.trim() && (
+                            <div 
+                              className="contact-option"
+                              style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', color: 'var(--accent-cyan)' }}
+                              onMouseDown={() => {
+                                const inputVal = searchUserContact.trim();
+                                const isGroup = inputVal.endsWith('@g.us') || inputVal.includes('-');
+                                const newState = {
+                                  ...schedulerState,
+                                  userRecipientId: inputVal,
+                                  userRecipientName: inputVal.split('@')[0],
+                                  userRecipientType: (isGroup ? 'group' : 'contact') as 'group' | 'contact'
+                                };
+                                setSchedulerState(newState);
+                                saveSchedulerDb(newState).catch(e => console.error('Failed to auto-save:', e));
+                                setSearchUserContact('');
+                                setShowUserContactsDropdown(false);
+                              }}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span>➕ Use manual ID:</span>
+                                <strong style={{ fontFamily: 'var(--font-mono)' }}>{searchUserContact}</strong>
+                              </span>
+                              <span className="contact-option-type" style={{ color: 'var(--accent-cyan)', background: 'rgba(6, 182, 212, 0.15)' }}>Manual</span>
+                            </div>
+                          )}
+
+                          {contacts.filter(c => c.name.toLowerCase().includes(searchUserContact.toLowerCase()) || c.id.includes(searchUserContact)).length === 0 && !searchUserContact.trim() && (
+                            <div className="contact-option" style={{ cursor: 'default', color: 'var(--text-muted)' }}>
+                              <span>No contacts found. Scan QR/connect first.</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
@@ -2512,15 +2652,24 @@ prep method: airfryer 200c, 10min"]
                 
                 <button 
                   className="btn-secondary" 
-                  style={{ flex: 1, padding: '0.6rem 1rem', fontSize: '0.85rem', border: '1px solid var(--accent-purple)' }}
-                  onClick={handleSendTestMessage}
+                  style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.8rem', border: '1px solid var(--accent-cyan)', color: 'var(--accent-cyan)' }}
+                  onClick={() => handleSendTestMessage('myself')}
+                  disabled={testSendStatus.status === 'sending' || whatsappState.status !== 'ready' || !schedulerState.userRecipientId}
+                >
+                  {testSendStatus.status === 'sending' ? 'Sending...' : 'Test Myself'}
+                </button>
+                
+                <button 
+                  className="btn-secondary" 
+                  style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.8rem', border: '1px solid var(--accent-purple)' }}
+                  onClick={() => handleSendTestMessage('cook')}
                   disabled={testSendStatus.status === 'sending' || whatsappState.status !== 'ready' || !schedulerState.recipientId}
                 >
-                  {testSendStatus.status === 'sending' ? 'Sending Test...' : 'Send Test Now'}
+                  {testSendStatus.status === 'sending' ? 'Sending...' : 'Test Cook'}
                 </button>
               </div>
 
-              {!schedulerState.recipientId && whatsappState.status === 'ready' && (
+              {!schedulerState.recipientId && !schedulerState.userRecipientId && whatsappState.status === 'ready' && (
                 <div style={{ 
                   marginTop: '1rem', 
                   fontSize: '0.8rem', 
@@ -2530,7 +2679,7 @@ prep method: airfryer 200c, 10min"]
                   background: 'rgba(244, 63, 94, 0.08)',
                   border: '1px solid rgba(244, 63, 94, 0.15)'
                 }}>
-                  ⚠️ Select a recipient (contact or group) above to enable test sending.
+                  ⚠️ Select at least one recipient (Cook or Myself) above to enable test sending.
                 </div>
               )}
 

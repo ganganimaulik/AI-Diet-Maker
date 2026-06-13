@@ -189,31 +189,41 @@ const ContactSchema = new Schema<IContact>({
 // 4. Scheduler Schema
 export interface IScheduler {
   isEnabled: boolean;
-  targetTime: string; // "07:30" (24h format HH:MM)
+  targetTime: string; // "14:00" (24h format HH:MM)
   timezone: string; // "Asia/Kolkata"
   recipientType: 'contact' | 'group';
   recipientId: string; // "919876543210@c.us"
   recipientName: string;
+  userRecipientType: 'contact' | 'group';
+  userRecipientId: string;
+  userRecipientName: string;
   lastSentDate: string; // "YYYY-MM-DD"
   lastError: string;
   retryCount: number;
   nextRetryTime: number; // Timestamp ms
   triggerTest: boolean; // Flag to run manual check
+  triggerCookTest?: boolean;
+  triggerMyselfTest?: boolean;
   updatedAt: Date;
 }
 
 const SchedulerSchema = new Schema<IScheduler>({
   isEnabled: { type: Boolean, default: false },
-  targetTime: { type: String, default: '07:30' },
+  targetTime: { type: String, default: '14:00' },
   timezone: { type: String, default: 'Asia/Kolkata' },
   recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
   recipientId: { type: String, default: '' },
   recipientName: { type: String, default: '' },
+  userRecipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
+  userRecipientId: { type: String, default: '' },
+  userRecipientName: { type: String, default: '' },
   lastSentDate: { type: String, default: '' },
   lastError: { type: String, default: '' },
   retryCount: { type: Number, default: 0 },
   nextRetryTime: { type: Number, default: 0 },
-  triggerTest: { type: Boolean, default: false }
+  triggerTest: { type: Boolean, default: false },
+  triggerCookTest: { type: Boolean, default: false },
+  triggerMyselfTest: { type: Boolean, default: false }
 }, { timestamps: true });
 
 // Compile models

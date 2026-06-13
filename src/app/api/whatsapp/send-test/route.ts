@@ -2,27 +2,56 @@ import { NextResponse } from 'next/server';
 import { dbConnect, Scheduler } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     if (!(await isAuthenticated())) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const type = body.type || 'all'; // 'cook' | 'myself' | 'all'
+
     await dbConnect();
     
-    // Check if recipient is configured in the scheduler first
     const scheduler = await Scheduler.findOne();
-    if (!scheduler || !scheduler.recipientId) {
+    if (!scheduler) {
       return NextResponse.json(
-        { error: 'Recipient is not configured in the scheduler. Please select a contact or group first.' },
+        { error: 'Scheduler config is missing.' },
         { status: 400 }
       );
     }
+
+    const updateFields: Record<string, boolean> = {};
+
+    if (type === 'cook') {
+      if (!scheduler.recipientId) {
+        return NextResponse.json(
+          { error: 'Cook Recipient is not configured in the scheduler.' },
+          { status: 400 }
+        );
+      }
+      updateFields.triggerCookTest = true;
+    } else if (type === 'myself') {
+      if (!scheduler.userRecipientId) {
+        return NextResponse.json(
+          { error: 'Myself Recipient is not configured in the scheduler.' },
+          { status: 400 }
+        );
+      }
+      updateFields.triggerMyselfTest = true;
+    } else {
+      if (!scheduler.recipientId && !scheduler.userRecipientId) {
+        return NextResponse.json(
+          { error: 'Neither Cook Recipient nor Myself Recipient is configured in the scheduler.' },
+          { status: 400 }
+        );
+      }
+      updateFields.triggerTest = true;
+    }
     
-    // Set triggerTest: true in Scheduler document
     const updatedScheduler = await Scheduler.findOneAndUpdate(
       {},
-      { $set: { triggerTest: true } },
+      { $set: updateFields },
       { upsert: true, new: true }
     );
 
