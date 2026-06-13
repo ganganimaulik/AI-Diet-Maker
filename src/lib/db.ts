@@ -90,6 +90,9 @@ export interface IConfig {
   dailyVariables: {
     [key: string]: IIngredient[];
   };
+  dailySplits?: {
+    [key: string]: ICustomSplit[];
+  };
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -140,6 +143,11 @@ const ConfigSchema = new Schema<IConfig>({
   dailyVariables: {
     type: Map,
     of: [IngredientSchema],
+    default: {}
+  },
+  dailySplits: {
+    type: Map,
+    of: [CustomSplitSchema],
     default: {}
   },
   generationRange: { type: String, enum: ['all', 'single'], default: 'all' },

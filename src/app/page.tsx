@@ -51,6 +51,9 @@ interface Config {
   dailyVariables: {
     [key: string]: Ingredient[];
   };
+  dailySplits?: {
+    [key: string]: CustomSplit[];
+  };
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -145,6 +148,7 @@ const DEFAULT_CONFIG: Config = {
     { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
     { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
   ],
+  dailySplits: {},
   generationRange: 'all',
   selectedGenerationDay: 'MONDAY'
 };
@@ -156,6 +160,7 @@ const normalizeConfig = (loaded: any): Config => {
   normalized.global = { ...DEFAULT_CONFIG.global, ...(loaded.global || {}) };
   normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0 ? loaded.meals : DEFAULT_CONFIG.meals;
   normalized.dailyVariables = loaded.dailyVariables || DEFAULT_CONFIG.dailyVariables;
+  normalized.dailySplits = loaded.dailySplits || {};
 
   // Migrate old splits or populate customSplits if empty
   if (!loaded.customSplits || !Array.isArray(loaded.customSplits) || loaded.customSplits.length === 0) {
@@ -550,10 +555,29 @@ export default function Home() {
     const subjiOil = Math.round(totalOil * oilPercent / 100);
     const chickenOil = totalOil - subjiOil;
 
-    const splitsText = [
-      `Olive Oil Cooking Split: ${subjiOil}g in subji. ${chickenOil}g in chicken`,
-      ...splitsList.map(s => `${s.name}: ${s.value}`)
-    ].map(s => `- ${s}`).join('\n');
+    const getSplitsForDayText = (day: string, prefix = '') => {
+      const dayOverrides = c.dailySplits?.[day] || [];
+      const daySplits = splitsList.map(globalSplit => {
+        const override = dayOverrides.find(o => o.id === globalSplit.id);
+        return {
+          name: globalSplit.name,
+          value: override ? override.value : globalSplit.value
+        };
+      });
+      return [
+        `Olive Oil Cooking Split: ${subjiOil}g in subji. ${chickenOil}g in chicken`,
+        ...daySplits.map(s => `${s.name}: ${s.value}`)
+      ].map(s => `${prefix}- ${s}`).join('\n');
+    };
+
+    let splitsText = '';
+    if (isSingle) {
+      splitsText = getSplitsForDayText(c.selectedGenerationDay);
+    } else {
+      splitsText = activeDays.map(day => {
+        return `- ${day}:\n${getSplitsForDayText(day, '  ')}`;
+      }).join('\n');
+    }
 
     const mealsTargetText = mealsList
       .map((meal, idx) => `- Meal ${idx + 1} (${meal.name}): eaten ${meal.mealsPerDay} times per day`)
@@ -827,13 +851,23 @@ prep method: airfryer 200c, 10min"]
     setConfig(prev => {
       const varsA = prev.dailyVariables[dayA] || [];
       const varsB = prev.dailyVariables[dayB] || [];
+      
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      const splitsA = dailySplits[dayA] || [];
+      const splitsB = dailySplits[dayB] || [];
+      
+      dailySplits[dayA] = splitsB;
+      dailySplits[dayB] = splitsA;
+      
+      setHasUnsavedChanges(true);
       return {
         ...prev,
         dailyVariables: {
           ...prev.dailyVariables,
           [dayA]: varsB,
           [dayB]: varsA
-        }
+        },
+        dailySplits
       };
     });
   };
@@ -843,7 +877,15 @@ prep method: airfryer 200c, 10min"]
     setConfig(prev => {
       const splitsList = prev.customSplits || [];
       const updated = splitsList.map(s => s.id === id ? { ...s, [field]: val } : s);
-      return { ...prev, customSplits: updated };
+      
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      if (field === 'name') {
+        for (const day in dailySplits) {
+          dailySplits[day] = dailySplits[day].map(s => s.id === id ? { ...s, name: val } : s);
+        }
+      }
+      setHasUnsavedChanges(true);
+      return { ...prev, customSplits: updated, dailySplits };
     });
   };
 
@@ -860,10 +902,53 @@ prep method: airfryer 200c, 10min"]
   };
 
   const removeCustomSplit = (id: string) => {
-    setConfig(prev => ({
-      ...prev,
-      customSplits: (prev.customSplits || []).filter(s => s.id !== id)
-    }));
+    setConfig(prev => {
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      for (const day in dailySplits) {
+        dailySplits[day] = dailySplits[day].filter(s => s.id !== id);
+      }
+      setHasUnsavedChanges(true);
+      return {
+        ...prev,
+        customSplits: (prev.customSplits || []).filter(s => s.id !== id),
+        dailySplits
+      };
+    });
+  };
+
+  const updateDailySplit = (dayKey: string, splitId: string, value: string) => {
+    setConfig(prev => {
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      const daySplits = [...(dailySplits[dayKey] || [])];
+      
+      const existingIdx = daySplits.findIndex(s => s.id === splitId);
+      const globalSplit = (prev.customSplits || []).find(s => s.id === splitId);
+      const name = globalSplit ? globalSplit.name : '';
+      
+      if (existingIdx >= 0) {
+        daySplits[existingIdx] = { ...daySplits[existingIdx], value };
+      } else {
+        daySplits.push({ id: splitId, name, value });
+      }
+      
+      dailySplits[dayKey] = daySplits;
+      setHasUnsavedChanges(true);
+      return { ...prev, dailySplits };
+    });
+  };
+
+  const resetDailySplit = (dayKey: string, splitId: string) => {
+    setConfig(prev => {
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      if (dailySplits[dayKey]) {
+        dailySplits[dayKey] = dailySplits[dayKey].filter(s => s.id !== splitId);
+        if (dailySplits[dayKey].length === 0) {
+          delete dailySplits[dayKey];
+        }
+      }
+      setHasUnsavedChanges(true);
+      return { ...prev, dailySplits };
+    });
   };
 
 
@@ -1578,6 +1663,65 @@ prep method: airfryer 200c, 10min"]
                 <button className="btn-add" onClick={() => addIngredient('daily', activeDay)}>
                   + Add Ingredient to {activeDay}
                 </button>
+
+                <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
+
+                <h4 style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                  Cook Seasoning & Instructions Splits for {activeDay}
+                </h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {(config.customSplits || []).map((globalSplit) => {
+                    const daySplits = config.dailySplits?.[activeDay] || [];
+                    const override = daySplits.find(s => s.id === globalSplit.id);
+                    const currentValue = override ? override.value : globalSplit.value;
+                    const isCustomized = !!override;
+                    
+                    return (
+                      <div key={globalSplit.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{globalSplit.name}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{
+                              fontSize: '0.7rem',
+                              padding: '0.15rem 0.4rem',
+                              borderRadius: '4px',
+                              fontWeight: 600,
+                              background: isCustomized ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)',
+                              color: isCustomized ? '#c084fc' : 'var(--text-muted)'
+                            }}>
+                              {isCustomized ? 'Customized' : 'Global Default'}
+                            </span>
+                            {isCustomized && (
+                              <button
+                                onClick={() => resetDailySplit(activeDay, globalSplit.id)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#c084fc',
+                                  fontSize: '0.7rem',
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                  padding: 0
+                                }}
+                              >
+                                Reset to default
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                          value={currentValue}
+                          onChange={e => updateDailySplit(activeDay, globalSplit.id, e.target.value)}
+                          placeholder={`Default: ${globalSplit.value}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

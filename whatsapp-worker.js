@@ -172,6 +172,7 @@ const ConfigSchema = new mongoose.Schema({
   meals: Array,
   customSplits: Array,
   dailyVariables: Map,
+  dailySplits: Map,
   generationRange: { type: String, default: 'all' },
   selectedGenerationDay: { type: String, default: 'MONDAY' },
   huggingFaceToken: { type: String, default: '' },
@@ -680,6 +681,24 @@ function compilePromptTextForDay(c, dayName) {
       ];
     }
   }
+  
+  // Load overridden splits for today (with fallback to global defaults)
+  const dailySplitsMap = c.dailySplits || {};
+  let todaySplits = [];
+  if (typeof dailySplitsMap.get === 'function') {
+    todaySplits = dailySplitsMap.get(dayName) || [];
+  } else {
+    todaySplits = dailySplitsMap[dayName] || [];
+  }
+
+  splitsList = splitsList.map(globalSplit => {
+    const override = todaySplits.find(o => o.id === globalSplit.id);
+    return {
+      id: globalSplit.id,
+      name: globalSplit.name,
+      value: override ? override.value : globalSplit.value
+    };
+  });
   
   const totalOil = c.global.totalOliveOil || 0;
   const oilPercent = c.global.oliveOilSplitPercent || 50;
