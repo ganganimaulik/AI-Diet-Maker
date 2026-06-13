@@ -544,7 +544,7 @@ export default function Home() {
   // Helper: Get variant name for days (e.g. Tomato -> "Just Tomato")
   const getDayVariantName = (ingredients: Ingredient[]) => {
     const nonStapleNames = ingredients
-      .filter(ing => !ing.disabled && !ing.isAuto)
+      .filter(ing => !ing.disabled)
       .map(ing => ing.name);
     if (nonStapleNames.length === 0) return 'Staples Only';
     if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
