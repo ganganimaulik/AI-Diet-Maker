@@ -1096,10 +1096,18 @@ function extractMyselfInstructions(md, dayName) {
   
   const match1 = md.match(part1Regex);
   const match2 = md.match(part2Regex);
+  const summaryRegex = /(?:###?\s*)?Daily\s*Sodium\s*&\s*Potassium\s*Summary/i;
+  const matchSummary = md.match(summaryRegex);
   
   let startIndex = 0;
   if (match1 && match1.index !== undefined) {
     startIndex = match1.index + match1[0].length;
+  }
+  
+  if (matchSummary && matchSummary.index !== undefined) {
+    if (!match1 || matchSummary.index < match1.index) {
+      startIndex = matchSummary.index;
+    }
   }
   
   let endIndex = md.length;
