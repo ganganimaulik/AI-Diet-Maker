@@ -409,9 +409,21 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   initializeWithRetry();
 
+  // Guard flag to prevent overlapping scheduler executions
+  let isSchedulerRunning = false;
+
   // Start Scheduler Loop (check every 60 seconds)
-  setInterval(() => {
-    schedulerCheck(client);
+  setInterval(async () => {
+    if (isSchedulerRunning) {
+      console.log('Scheduler check skipped — previous execution still in progress.');
+      return;
+    }
+    isSchedulerRunning = true;
+    try {
+      await schedulerCheck(client);
+    } finally {
+      isSchedulerRunning = false;
+    }
   }, 60000);
 
 }).catch(err => {
