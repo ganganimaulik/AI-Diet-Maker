@@ -694,7 +694,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     }
     if (shouldSendMyself) {
       console.log(`Sending WhatsApp Myself message to ${scheduler.userRecipientName || scheduler.userRecipientId}...`);
-      await client.sendMessage(scheduler.userRecipientId, userMessageToSend);
+      await client.sendMessage(scheduler.userRecipientId, formatMarkdownForWhatsApp(userMessageToSend));
       console.log('WhatsApp Myself message sent successfully!');
     }
 
@@ -918,7 +918,7 @@ Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total 
 `).join('\n')}
 
 For daily variables and splits:
-List out only the day ${dayName} using bullet points. Under this day, list ALL fixed items and variable items together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for the day.
+List out only the day ${dayName} using bullet points. Under this day, list ONLY the daily variable ingredients (excluding the fixed meal ingredients, since they are already detailed in the tables above) showing their solved weights and calculated calorie breakdown, and list the custom seasoning/cooking splits. Show a calculated "Meal Total" for the day.
 
 Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals (and include the global Olive Oil calories) to prove it hits your configured target.
 
@@ -1169,6 +1169,102 @@ function extractMyselfInstructions(md, dayName) {
   }
   
   return part1;
+}
+
+// Helper: Format Markdown content specifically for WhatsApp (convert tables to lists, etc.)
+function formatMarkdownForWhatsApp(text) {
+  if (!text) return '';
+
+  const lines = text.split('\n');
+  const resultLines = [];
+  let currentTable = [];
+
+  const flushTable = () => {
+    if (currentTable.length === 0) return;
+    
+    // Process the table rows
+    // Filter out header separators
+    const dataRows = currentTable.filter(row => {
+      const cells = row.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      if (cells.length > 0 && cells.every(c => /^[-:]+$/.test(c))) {
+        return false;
+      }
+      return true;
+    });
+
+    if (dataRows.length > 0) {
+      const firstRowCells = dataRows[0].split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      const isHeader = firstRowCells.some(c => /ingredient|weight|calorie/i.test(c));
+      
+      const startIdx = isHeader ? 1 : 0;
+      
+      for (let i = startIdx; i < dataRows.length; i++) {
+        const cells = dataRows[i].split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        if (cells.length === 0) continue;
+
+        const firstCell = cells[0].toLowerCase();
+        if (firstCell.includes('total') || firstCell.includes('sum')) {
+          let val = '';
+          for (let j = cells.length - 1; j >= 0; j--) {
+            if (cells[j]) {
+              val = cells[j];
+              break;
+            }
+          }
+          if (val && !/kcal/i.test(val) && !isNaN(val.replace(/[^\d.]/g, ''))) {
+            val = `${val} kcal`;
+          }
+          resultLines.push(`*${cells[0]}: ${val}*`);
+        } else {
+          if (cells.length >= 4) {
+            let calVal = cells[3];
+            if (calVal && !/kcal/i.test(calVal) && !isNaN(calVal.replace(/[^\d.]/g, ''))) {
+              calVal = `${calVal} kcal`;
+            }
+            resultLines.push(`• *${cells[0]}*: ${cells[1]} (Daily: ${cells[2]}) — _${calVal}_`);
+          } else if (cells.length === 3) {
+            let calVal = cells[2];
+            if (calVal && !/kcal/i.test(calVal) && !isNaN(calVal.replace(/[^\d.]/g, ''))) {
+              calVal = `${calVal} kcal`;
+            }
+            resultLines.push(`• *${cells[0]}*: ${cells[1]} — _${calVal}_`);
+          } else if (cells.length === 2) {
+            resultLines.push(`• *${cells[0]}*: ${cells[1]}`);
+          } else {
+            resultLines.push(`• *${cells[0]}*`);
+          }
+        }
+      }
+    }
+    
+    currentTable = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 1) {
+      currentTable.push(trimmed);
+    } else {
+      if (currentTable.length > 0) {
+        flushTable();
+      }
+      
+      let processed = line;
+      processed = processed.replace(/^\s*(#+)\s*(.*)$/g, '*$2*');
+      processed = processed.replace(/^(\s*)[-*+]\s+/g, '$1• ');
+      processed = processed.replace(/\*\*/g, '*');
+      
+      resultLines.push(processed);
+    }
+  }
+
+  if (currentTable.length > 0) {
+    flushTable();
+  }
+
+  return resultLines.join('\n');
 }
 
 // Helper: Extract Part 2 (Cook Instructions) from response markdown

@@ -725,7 +725,7 @@ Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total 
 `).join('\n')}
 
 For daily variables and splits:
-List out ${daysLabel} using bullet points. Under ${dayRefLabel}, list ALL fixed items and variable items together, displaying the per-meal weight, daily weight, and calculated calorie breakdown. If an item was calculated via \`[AUTO]\`, replace the \`[AUTO]\` tag with the calculated real weights. Show a calculated "Meal Total" for each day.
+List out ${daysLabel} using bullet points. Under ${dayRefLabel}, list ONLY the daily variable ingredients (excluding the fixed meal ingredients, since they are already detailed in the tables above) showing their solved weights and calculated calorie breakdown, and list the custom seasoning/cooking splits. Show a calculated "Meal Total" for each day.
 
 Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals (and include the global Olive Oil calories) to prove it hits your configured target.
 
