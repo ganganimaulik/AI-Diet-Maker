@@ -1541,8 +1541,8 @@ prep method: airfryer 200c, 10min"]
                     <input
                       type="number"
                       className="form-input"
-                      value={config.global.totalOliveOil || 18}
-                      onChange={e => updateGlobal('totalOliveOil', parseInt(e.target.value) || 0)}
+                      value={config.global.totalOliveOil === undefined ? 18 : config.global.totalOliveOil}
+                      onChange={e => updateGlobal('totalOliveOil', e.target.value === '' ? 0 : parseInt(e.target.value))}
                     />
                   </div>
                   <div className="form-group">
@@ -1553,14 +1553,14 @@ prep method: airfryer 200c, 10min"]
                         min="0"
                         max="100"
                         step="5"
-                        value={config.global.oliveOilSplitPercent || 50}
-                        onChange={e => updateGlobal('oliveOilSplitPercent', parseInt(e.target.value) || 50)}
+                        value={config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent}
+                        onChange={e => updateGlobal('oliveOilSplitPercent', parseInt(e.target.value))}
                         style={{ flex: 1, accentColor: 'var(--accent-purple)' }}
                       />
-                      <span style={{ fontSize: '0.85rem', width: '40px' }}>{config.global.oliveOilSplitPercent || 50}%</span>
+                      <span style={{ fontSize: '0.85rem', width: '40px' }}>{config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent}%</span>
                     </div>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                      Remaining {(100 - (config.global.oliveOilSplitPercent || 50))}% goes to chicken
+                      Remaining {(100 - (config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent))}% goes to chicken
                     </p>
                   </div>
                 </div>
