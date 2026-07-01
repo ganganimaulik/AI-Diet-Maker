@@ -68,6 +68,8 @@ export interface IMeal {
   ingredients: IIngredient[];
   water: string;
   prepMethod: string;
+  totalOliveOil?: number;
+  oliveOilSplitPercent?: number;
 }
 
 export interface IConfig {
@@ -124,7 +126,9 @@ const MealSchema = new Schema({
   mealsPerDay: { type: Number, default: 1 },
   ingredients: [IngredientSchema],
   water: { type: String, default: '' },
-  prepMethod: { type: String, default: '' }
+  prepMethod: { type: String, default: '' },
+  totalOliveOil: { type: Number, default: 0 },
+  oliveOilSplitPercent: { type: Number, default: 50 }
 }, { _id: false });
 
 const ConfigSchema = new Schema<IConfig>({

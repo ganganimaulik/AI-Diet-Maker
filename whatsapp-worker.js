@@ -807,19 +807,38 @@ function compilePromptTextForDay(c, dayName) {
     };
   });
   
-  const splitsText = splitsList.map(s => `- ${s.name}: ${s.value}`).join('\n');
+  const mealOilSplits = [];
+  mealsList.forEach(meal => {
+    const totalOil = meal.totalOliveOil || 0;
+    if (totalOil > 0) {
+      const splitPercent = meal.oliveOilSplitPercent === undefined ? 50 : meal.oliveOilSplitPercent;
+      const subjiOil = Math.round(totalOil * splitPercent / 100);
+      const chickenOil = totalOil - subjiOil;
+      mealOilSplits.push(`${meal.name} Olive Oil Cooking Split: ${subjiOil}g in subji, ${chickenOil}g in chicken`);
+    }
+  });
+
+  const allSplits = [
+    ...mealOilSplits,
+    ...splitsList.map(s => `${s.name}: ${s.value}`)
+  ];
+
+  const splitsText = allSplits.map(s => `- ${s}`).join('\n');
 
   const mealsTargetText = mealsList
     .map((meal, idx) => `- Meal ${idx + 1} (${meal.name}): eaten ${meal.mealsPerDay} times per day`)
     .join('\n');
 
   const mealsDetailsText = mealsList
-    .map((meal, idx) => `
+    .map((meal, idx) => {
+      const oilLine = meal.totalOliveOil ? `\n- Olive Oil: ${meal.totalOliveOil}g (daily total for this meal; split equally across the ${meal.mealsPerDay} daily serving(s), meaning ${Math.round(meal.totalOliveOil / meal.mealsPerDay)}g per meal serving)` : '';
+      return `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}
+${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}${oilLine}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
-`).join('\n');
+`;
+    }).join('\n');
 
   // Load variables for today
   // Since dailyVariables is a Map in Mongoose schema, we fetch keys

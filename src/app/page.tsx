@@ -24,6 +24,8 @@ interface Meal {
   ingredients: Ingredient[];
   water: string;
   prepMethod: string;
+  totalOliveOil?: number;
+  oliveOilSplitPercent?: number;
 }
 
 interface Config {
@@ -613,7 +615,24 @@ export default function Home() {
           value: override ? override.value : globalSplit.value
         };
       });
-      return daySplits.map(s => `${prefix}- ${s.name}: ${s.value}`).join('\n');
+
+      const mealOilSplits: string[] = [];
+      mealsList.forEach(meal => {
+        const totalOil = meal.totalOliveOil || 0;
+        if (totalOil > 0) {
+          const splitPercent = meal.oliveOilSplitPercent === undefined ? 50 : meal.oliveOilSplitPercent;
+          const subjiOil = Math.round(totalOil * splitPercent / 100);
+          const chickenOil = totalOil - subjiOil;
+          mealOilSplits.push(`${meal.name} Olive Oil Cooking Split: ${subjiOil}g in subji, ${chickenOil}g in chicken`);
+        }
+      });
+
+      const allSplits = [
+        ...mealOilSplits,
+        ...daySplits.map(s => `${s.name}: ${s.value}`)
+      ];
+
+      return allSplits.map(s => `${prefix}- ${s}`).join('\n');
     };
 
     let splitsText = '';
@@ -630,12 +649,15 @@ export default function Home() {
       .join('\n');
 
     const mealsDetailsText = mealsList
-      .map((meal, idx) => `
+      .map((meal, idx) => {
+        const oilLine = meal.totalOliveOil ? `\n- Olive Oil: ${meal.totalOliveOil}g (daily total for this meal; split equally across the ${meal.mealsPerDay} daily serving(s), meaning ${Math.round(meal.totalOliveOil / meal.mealsPerDay)}g per meal serving)` : '';
+        return `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}
+${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}${oilLine}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
-`).join('\n');
+`;
+      }).join('\n');
 
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
 
@@ -1691,6 +1713,38 @@ prep method: airfryer 200c, 10min"]
                       onChange={e => updateMeal(selectedMeal.id, 'prepMethod', e.target.value)}
                       placeholder="e.g. Cook in airfryer 200c for 10 min"
                     />
+                  </div>
+
+                  <div className="input-row" style={{ marginTop: '1.25rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">Meal Olive Oil (g)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={selectedMeal.totalOliveOil === undefined ? 0 : selectedMeal.totalOliveOil}
+                        onChange={e => updateMeal(selectedMeal.id, 'totalOliveOil', e.target.value === '' ? 0 : parseInt(e.target.value))}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Olive Oil for Subji (%)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          disabled={(selectedMeal.totalOliveOil === undefined ? 0 : selectedMeal.totalOliveOil) === 0}
+                          value={selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent}
+                          onChange={e => updateMeal(selectedMeal.id, 'oliveOilSplitPercent', parseInt(e.target.value))}
+                          style={{ flex: 1, accentColor: 'var(--accent-purple)' }}
+                        />
+                        <span style={{ fontSize: '0.85rem', width: '40px' }}>{selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent}%</span>
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                        Remaining {(100 - (selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent))}% goes to chicken
+                      </p>
+                    </div>
+                    <div className="form-group" style={{ visibility: 'hidden' }}></div>
                   </div>
                 </div>
               );
