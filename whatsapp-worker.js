@@ -806,6 +806,19 @@ function compilePromptTextForDay(c, dayName) {
       value: override ? override.value : globalSplit.value
     };
   });
+
+  // Load variables for today
+  // Since dailyVariables is a Map in Mongoose schema, we fetch keys
+  const dailyVariablesMap = c.dailyVariables || {};
+  let todayIngredients = [];
+  if (typeof dailyVariablesMap.get === 'function') {
+    todayIngredients = dailyVariablesMap.get(dayName) || [];
+  } else {
+    todayIngredients = dailyVariablesMap[dayName] || [];
+  }
+
+  // Filter out disabled ingredients
+  todayIngredients = todayIngredients.filter(ing => !ing.disabled);
   
   const dynamicIngredientSplits = [];
   mealsList.forEach(meal => {
@@ -841,19 +854,6 @@ ${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.w
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
 `).join('\n');
-
-  // Load variables for today
-  // Since dailyVariables is a Map in Mongoose schema, we fetch keys
-  const dailyVariablesMap = c.dailyVariables || {};
-  let todayIngredients = [];
-  if (typeof dailyVariablesMap.get === 'function') {
-    todayIngredients = dailyVariablesMap.get(dayName) || [];
-  } else {
-    todayIngredients = dailyVariablesMap[dayName] || [];
-  }
-
-  // Filter out disabled ingredients
-  todayIngredients = todayIngredients.filter(ing => !ing.disabled);
 
   const getDayVariantName = (ingredients) => {
     const nonStapleNames = ingredients
@@ -949,6 +949,8 @@ PART 2: FOR MY COOK (Weekly Text Plan)
 Separate this from Part 1 using a horizontal rule (---). Output only the day ${dayName} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
 CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
+
+CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details in the splits/cooking instructions section.
 
 Exact Output Template to Follow:
 

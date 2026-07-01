@@ -94,7 +94,7 @@ const DEFAULT_CONFIG: Config = {
       name: 'Oats Meal',
       mealsPerDay: 1,
       ingredients: [
-        { name: 'Oats (Raw)', weight: '35', isAuto: false },
+        { name: 'Oats (Raw)', weight: '30', isAuto: false },
         { name: 'Whey Protein Isolate', weight: '60', isAuto: false },
         { name: 'Almonds', weight: '5', isAuto: false },
         { name: 'Cashews', weight: '5', isAuto: false },
@@ -109,7 +109,8 @@ const DEFAULT_CONFIG: Config = {
       name: 'Chicken Meal',
       mealsPerDay: 3,
       ingredients: [
-        { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false }
+        { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false },
+        { name: 'Olive oil', weight: '18', isAuto: false, split: '9g in subji, 9g in chicken' }
       ],
       water: '',
       prepMethod: 'Chicken air fryer 200c, 15 min'
@@ -748,6 +749,8 @@ PART 2: FOR MY COOK (Weekly Text Plan)
 Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
 CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
+
+CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details in the splits/cooking instructions section.
 
 Exact Output Template to Follow for Each Day:
 
