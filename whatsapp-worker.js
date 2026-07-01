@@ -352,13 +352,24 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client.on('auth_failure', async (msg) => {
     console.error('WhatsApp Authentication Failure:', msg);
-    await resetWhatsAppSession();
+    
+    // If the process has been running for less than 3 minutes, do not delete the session.
+    // It's highly likely an overlapping deployment collision or temporary connectivity issue.
+    // Exiting will cause HF to restart the container, by which time the old container will be dead.
+    const processUptime = process.uptime();
+    if (processUptime < 180) {
+      console.warn(`Auth failure occurred during startup (uptime: ${Math.round(processUptime)}s). Retaining session in MongoDB and exiting to allow container restart.`);
+    } else {
+      console.log('Auth failure occurred after startup. Wiping session.');
+      await resetWhatsAppSession();
+    }
+
     await WhatsAppState.findOneAndUpdate(
       {},
       { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
       { upsert: true }
     );
-    console.log('Exiting worker process to restart and generate new QR code...');
+    console.log('Exiting worker process to restart...');
     setTimeout(() => {
       process.exit(1);
     }, 2000);
@@ -1466,15 +1477,15 @@ async function handleShutdown(signal) {
 
   try {
     if (typeof client !== 'undefined' && client) {
-      console.log('Closing WhatsApp browser connection to release file locks...');
-      await client.destroy();
-      console.log('WhatsApp client destroyed.');
-      
       if (client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
-        console.log('Saving final WhatsApp session to MongoDB...');
+        console.log('Saving final WhatsApp session to MongoDB before destroying client...');
         await client.authStrategy.storeRemoteSession();
         console.log('Final WhatsApp session saved successfully.');
       }
+      
+      console.log('Closing WhatsApp browser connection to release file locks...');
+      await client.destroy();
+      console.log('WhatsApp client destroyed.');
     }
   } catch (err) {
     console.error('Error during graceful shutdown of WhatsApp client:', err);
