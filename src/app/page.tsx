@@ -9,6 +9,7 @@ interface Ingredient {
   isAuto: boolean;
   disabled?: boolean;
   personalOnly?: boolean;
+  split?: string;
 }
 
 interface CustomSplit {
@@ -616,19 +617,24 @@ export default function Home() {
         };
       });
 
-      const mealOilSplits: string[] = [];
+      const dynamicIngredientSplits: string[] = [];
       mealsList.forEach(meal => {
-        const totalOil = meal.totalOliveOil || 0;
-        if (totalOil > 0) {
-          const splitPercent = meal.oliveOilSplitPercent === undefined ? 50 : meal.oliveOilSplitPercent;
-          const subjiOil = Math.round(totalOil * splitPercent / 100);
-          const chickenOil = totalOil - subjiOil;
-          mealOilSplits.push(`${meal.name} Olive Oil Cooking Split: ${subjiOil}g in subji, ${chickenOil}g in chicken`);
+        (meal.ingredients || []).forEach(ing => {
+          if (ing.split && ing.split.trim()) {
+            dynamicIngredientSplits.push(`${meal.name} Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}"`);
+          }
+        });
+      });
+
+      const dayVars = c.dailyVariables[day] || [];
+      dayVars.forEach(ing => {
+        if (!ing.disabled && ing.split && ing.split.trim()) {
+          dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}"`);
         }
       });
 
       const allSplits = [
-        ...mealOilSplits,
+        ...dynamicIngredientSplits,
         ...daySplits.map(s => `${s.name}: ${s.value}`)
       ];
 
@@ -649,15 +655,12 @@ export default function Home() {
       .join('\n');
 
     const mealsDetailsText = mealsList
-      .map((meal, idx) => {
-        const oilLine = meal.totalOliveOil ? `\n- Olive Oil: ${meal.totalOliveOil}g (daily total for this meal; split equally across the ${meal.mealsPerDay} daily serving(s), meaning ${Math.round(meal.totalOliveOil / meal.mealsPerDay)}g per meal serving)` : '';
-        return `
+      .map((meal, idx) => `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}${oilLine}
+${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
-`;
-      }).join('\n');
+`).join('\n');
 
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
 
@@ -682,7 +685,7 @@ ${splitsText}
 ${activeDays.map(day => {
   const ingredients = (c.dailyVariables[day] || []).filter(ing => !ing.disabled);
   const variant = getDayVariantName(ingredients);
-  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
 }).join('\n')}
 
@@ -718,6 +721,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
 9. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights and variables) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
+10. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1 and Part 2. Ensure the sum of split weights matches the total ingredient weight exactly.
 
 ---
 
@@ -1652,37 +1656,50 @@ prep method: airfryer 200c, 10min"]
 
                   <div className="ingredients-list">
                     {selectedMeal.ingredients.map((ing, idx) => (
-                      <div key={idx} className="ingredient-item">
-                        <input
-                          type="text"
-                          className="form-input"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                          value={ing.name}
-                          onChange={e => updateMealIngredient(selectedMeal.id, idx, 'name', e.target.value)}
-                        />
-                        <input
-                          type="number"
-                          className="form-input"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                          placeholder="g"
-                          disabled={ing.isAuto}
-                          value={ing.weight}
-                          onChange={e => updateMealIngredient(selectedMeal.id, idx, 'weight', e.target.value)}
-                        />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>grams</span>
-                        <label className="auto-checkbox-container">
+                      <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr auto', alignItems: 'center', gap: '0.75rem' }}>
                           <input
-                            type="checkbox"
-                            checked={ing.isAuto}
-                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'isAuto', e.target.checked)}
+                            type="text"
+                            className="form-input"
+                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                            value={ing.name}
+                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'name', e.target.value)}
                           />
-                          AUTO
-                        </label>
-                        <button className="btn-remove" onClick={() => removeMealIngredient(selectedMeal.id, idx)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                            placeholder="g"
+                            disabled={ing.isAuto}
+                            value={ing.weight}
+                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'weight', e.target.value)}
+                          />
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
+                          <label className="auto-checkbox-container" style={{ margin: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={ing.isAuto}
+                              onChange={e => updateMealIngredient(selectedMeal.id, idx, 'isAuto', e.target.checked)}
+                            />
+                            AUTO
+                          </label>
+                          <button className="btn-remove" onClick={() => removeMealIngredient(selectedMeal.id, idx)} style={{ padding: '0.25rem' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.15rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px' }}>Split:</span>
+                          <input 
+                            type="text" 
+                            className="form-input" 
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.1)' }} 
+                            placeholder="Optional (e.g. 50% in subji, remaining in chicken)"
+                            value={ing.split || ''}
+                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'split', e.target.value)}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1713,38 +1730,6 @@ prep method: airfryer 200c, 10min"]
                       onChange={e => updateMeal(selectedMeal.id, 'prepMethod', e.target.value)}
                       placeholder="e.g. Cook in airfryer 200c for 10 min"
                     />
-                  </div>
-
-                  <div className="input-row" style={{ marginTop: '1.25rem' }}>
-                    <div className="form-group">
-                      <label className="form-label">Meal Olive Oil (g)</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={selectedMeal.totalOliveOil === undefined ? 0 : selectedMeal.totalOliveOil}
-                        onChange={e => updateMeal(selectedMeal.id, 'totalOliveOil', e.target.value === '' ? 0 : parseInt(e.target.value))}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Olive Oil for Subji (%)</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="5"
-                          disabled={(selectedMeal.totalOliveOil === undefined ? 0 : selectedMeal.totalOliveOil) === 0}
-                          value={selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent}
-                          onChange={e => updateMeal(selectedMeal.id, 'oliveOilSplitPercent', parseInt(e.target.value))}
-                          style={{ flex: 1, accentColor: 'var(--accent-purple)' }}
-                        />
-                        <span style={{ fontSize: '0.85rem', width: '40px' }}>{selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent}%</span>
-                      </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                        Remaining {(100 - (selectedMeal.oliveOilSplitPercent === undefined ? 50 : selectedMeal.oliveOilSplitPercent))}% goes to chicken
-                      </p>
-                    </div>
-                    <div className="form-group" style={{ visibility: 'hidden' }}></div>
                   </div>
                 </div>
               );
@@ -1804,60 +1789,75 @@ prep method: airfryer 200c, 10min"]
 
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
-                    <div key={idx} className={`ingredient-item daily-item ${ing.disabled ? 'is-disabled' : ''}`}>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
-                        value={ing.name}
-                        disabled={ing.disabled}
-                        onChange={e => updateIngredient('daily', idx, 'name', e.target.value, activeDay)}
-                      />
-                      <input
-                        type="number"
-                        className="form-input"
-                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                        placeholder="g"
-                        disabled={ing.isAuto || ing.disabled}
-                        value={ing.weight}
-                        onChange={e => updateIngredient('daily', idx, 'weight', e.target.value, activeDay)}
-                      />
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
-                      
-                      <label className="auto-checkbox-container">
+                    <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr auto 1.2fr 1.2fr 2.2fr auto', alignItems: 'center', gap: '0.75rem' }}>
                         <input
-                          type="checkbox"
-                          checked={!ing.disabled}
-                          onChange={e => updateIngredient('daily', idx, 'disabled', !e.target.checked, activeDay)}
-                        />
-                        Active
-                      </label>
-
-                      <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
-                        <input
-                          type="checkbox"
+                          type="text"
+                          className="form-input"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
+                          value={ing.name}
                           disabled={ing.disabled}
-                          checked={ing.isAuto}
-                          onChange={e => updateIngredient('daily', idx, 'isAuto', e.target.checked, activeDay)}
+                          onChange={e => updateIngredient('daily', idx, 'name', e.target.value, activeDay)}
                         />
-                        AUTO
-                      </label>
-
-                      <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
                         <input
-                          type="checkbox"
-                          disabled={ing.disabled}
-                          checked={!!ing.personalOnly}
-                          onChange={e => updateIngredient('daily', idx, 'personalOnly', e.target.checked, activeDay)}
+                          type="number"
+                          className="form-input"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                          placeholder="g"
+                          disabled={ing.isAuto || ing.disabled}
+                          value={ing.weight}
+                          onChange={e => updateIngredient('daily', idx, 'weight', e.target.value, activeDay)}
                         />
-                        Personal
-                      </label>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
+                        
+                        <label className="auto-checkbox-container">
+                          <input
+                            type="checkbox"
+                            checked={!ing.disabled}
+                            onChange={e => updateIngredient('daily', idx, 'disabled', !e.target.checked, activeDay)}
+                          />
+                          Active
+                        </label>
 
-                      <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </button>
+                        <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                          <input
+                            type="checkbox"
+                            disabled={ing.disabled}
+                            checked={ing.isAuto}
+                            onChange={e => updateIngredient('daily', idx, 'isAuto', e.target.checked, activeDay)}
+                          />
+                          AUTO
+                        </label>
+
+                        <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                          <input
+                            type="checkbox"
+                            disabled={ing.disabled}
+                            checked={!!ing.personalOnly}
+                            onChange={e => updateIngredient('daily', idx, 'personalOnly', e.target.checked, activeDay)}
+                          />
+                          Personal
+                        </label>
+
+                        <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)} style={{ padding: '0.25rem' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                      </div>
+                      {!ing.disabled && (
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.15rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px' }}>Split:</span>
+                          <input 
+                            type="text" 
+                            className="form-input" 
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.1)' }} 
+                            placeholder="Optional (e.g. 50% in subji, remaining in chicken)"
+                            value={ing.split || ''}
+                            onChange={e => updateIngredient('daily', idx, 'split', e.target.value, activeDay)}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

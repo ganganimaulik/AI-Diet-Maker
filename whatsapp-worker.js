@@ -807,19 +807,24 @@ function compilePromptTextForDay(c, dayName) {
     };
   });
   
-  const mealOilSplits = [];
+  const dynamicIngredientSplits = [];
   mealsList.forEach(meal => {
-    const totalOil = meal.totalOliveOil || 0;
-    if (totalOil > 0) {
-      const splitPercent = meal.oliveOilSplitPercent === undefined ? 50 : meal.oliveOilSplitPercent;
-      const subjiOil = Math.round(totalOil * splitPercent / 100);
-      const chickenOil = totalOil - subjiOil;
-      mealOilSplits.push(`${meal.name} Olive Oil Cooking Split: ${subjiOil}g in subji, ${chickenOil}g in chicken`);
+    (meal.ingredients || []).forEach(ing => {
+      if (ing.split && ing.split.trim()) {
+        dynamicIngredientSplits.push(`${meal.name} Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}"`);
+      }
+    });
+  });
+
+  const dayVars = todayIngredients;
+  dayVars.forEach(ing => {
+    if (!ing.disabled && ing.split && ing.split.trim()) {
+      dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}"`);
     }
   });
 
   const allSplits = [
-    ...mealOilSplits,
+    ...dynamicIngredientSplits,
     ...splitsList.map(s => `${s.name}: ${s.value}`)
   ];
 
@@ -830,15 +835,12 @@ function compilePromptTextForDay(c, dayName) {
     .join('\n');
 
   const mealsDetailsText = mealsList
-    .map((meal, idx) => {
-      const oilLine = meal.totalOliveOil ? `\n- Olive Oil: ${meal.totalOliveOil}g (daily total for this meal; split equally across the ${meal.mealsPerDay} daily serving(s), meaning ${Math.round(meal.totalOliveOil / meal.mealsPerDay)}g per meal serving)` : '';
-      return `
+    .map((meal, idx) => `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}`).join('\n')}${oilLine}
+${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
-`;
-    }).join('\n');
+`).join('\n');
 
   // Load variables for today
   // Since dailyVariables is a Map in Mongoose schema, we fetch keys
@@ -863,7 +865,7 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
   };
 
   const variant = getDayVariantName(todayIngredients);
-  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   const dailyVariablesText = `- ${dayName} (${variant}): ${itemsText}`;
 
   return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
@@ -919,7 +921,8 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is below ${idealMinStr}, calculate the additional Sodium required to reach a ratio of ${idealMinStr}: Additional Na (mg) = (${idealMinStr} * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
-9. Calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights, variables, and olive oil) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
+9. Calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights and variables) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
+10. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1 and Part 2. Ensure the sum of split weights matches the total ingredient weight exactly.
 
 ---
 
