@@ -807,15 +807,7 @@ function compilePromptTextForDay(c, dayName) {
     };
   });
   
-  const totalOil = c.global.totalOliveOil || 0;
-  const oilPercent = c.global.oliveOilSplitPercent || 50;
-  const subjiOil = Math.round(totalOil * oilPercent / 100);
-  const chickenOil = totalOil - subjiOil;
-
-  const splitsText = [
-    `Olive Oil Cooking Split: ${subjiOil}g in subji. ${chickenOil}g in chicken`,
-    ...splitsList.map(s => `${s.name}: ${s.value}`)
-  ].map(s => `- ${s}`).join('\n');
+  const splitsText = splitsList.map(s => `- ${s.name}: ${s.value}`).join('\n');
 
   const mealsTargetText = mealsList
     .map((meal, idx) => `- Meal ${idx + 1} (${meal.name}): eaten ${meal.mealsPerDay} times per day`)
@@ -867,7 +859,6 @@ Your task is to automatically calculate all calories using standard nutritional 
 
 [GLOBAL DIET TARGETS]
 - Daily Calorie Target: ${c.global.dailyCalorieTarget} kcal
-- Total Daily Olive Oil: ${c.global.totalOliveOil}g (MUST include this globally in daily calorie sum calculations)
 ${mealsTargetText}
 
 ${mealsDetailsText}
@@ -887,8 +878,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
 2. For the selected day (${dayName}), sum the calculated calories of all strictly defined weights across all meals and daily variables:
    - Daily calories from meals = Sum over all meals of: (sum of calories of all ingredients in that meal) x (meals per day for that meal)
    - Daily variables calories = sum of calories of all variables for that day
-   - Global Olive Oil calories = Total Daily Olive Oil x (calorie density of Olive Oil)
-3. Subtract that total (meals + variables + olive oil) from the [Daily Calorie Target] to find the remaining calorie deficit.
+3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
 5. If a day contains multiple \`[AUTO]\` ingredients:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
@@ -929,7 +919,7 @@ ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' :
 Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''}), Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal). For Protein, Carbs, and Fat, estimate their values from the raw ingredient weights using standard USDA values and print them as "Xg (Y kcal)". At the bottom of the table, include a "Total" row summing the total calculated calories, protein, carbs, and fat for the meal (e.g. Total calories, and macro sums formatted as "Total_grams g (Total_kcal kcal)").
 `).join('\n')}
 
-Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals (and include the global Olive Oil calories) to prove it hits your configured target. You MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
+Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals to prove it hits your configured target. You MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
 
 ---
 

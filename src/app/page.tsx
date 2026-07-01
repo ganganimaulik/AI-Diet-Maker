@@ -604,12 +604,6 @@ export default function Home() {
       }
     }
     
-    // Dynamic Olive Oil calculation
-    const totalOil = c.global.totalOliveOil || 0;
-    const oilPercent = c.global.oliveOilSplitPercent || 50;
-    const subjiOil = Math.round(totalOil * oilPercent / 100);
-    const chickenOil = totalOil - subjiOil;
-
     const getSplitsForDayText = (day: string, prefix = '') => {
       const dayOverrides = c.dailySplits?.[day] || [];
       const daySplits = splitsList.map(globalSplit => {
@@ -619,10 +613,7 @@ export default function Home() {
           value: override ? override.value : globalSplit.value
         };
       });
-      return [
-        `Olive Oil Cooking Split: ${subjiOil}g in subji. ${chickenOil}g in chicken`,
-        ...daySplits.map(s => `${s.name}: ${s.value}`)
-      ].map(s => `${prefix}- ${s}`).join('\n');
+      return daySplits.map(s => `${prefix}- ${s.name}: ${s.value}`).join('\n');
     };
 
     let splitsText = '';
@@ -658,7 +649,6 @@ Your task is to automatically calculate all calories using standard nutritional 
 
 [GLOBAL DIET TARGETS]
 - Daily Calorie Target: ${c.global.dailyCalorieTarget} kcal
-- Total Daily Olive Oil: ${c.global.totalOliveOil}g (MUST include this globally in daily calorie sum calculations)
 ${mealsTargetText}
 
 ${mealsDetailsText}
@@ -683,8 +673,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
 2. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, sum the calculated calories of all strictly defined weights across all meals and daily variables:
    - Daily calories from meals = Sum over all meals of: (sum of calories of all ingredients in that meal) x (meals per day for that meal)
    - Daily variables calories = sum of calories of all variables for that day
-   - Global Olive Oil calories = Total Daily Olive Oil x (calorie density of Olive Oil)
-3. Subtract that total (meals + variables + olive oil) from the [Daily Calorie Target] to find the remaining calorie deficit.
+3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
 5. If a day contains multiple \`[AUTO]\` ingredients:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
@@ -706,7 +695,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is below ${idealMinStr}, calculate the additional Sodium required to reach a ratio of ${idealMinStr}: Additional Na (mg) = (${idealMinStr} * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
-9. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights, variables, and olive oil) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
+9. For ${isSingle ? `the selected day (${c.selectedGenerationDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights and variables) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
 
 ---
 
@@ -725,7 +714,7 @@ ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' :
 Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''}), Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal). For Protein, Carbs, and Fat, estimate their values from the raw ingredient weights using standard USDA values and print them as "Xg (Y kcal)". At the bottom of the table, include a "Total" row summing the total calculated calories, protein, carbs, and fat for the meal (e.g. Total calories, and macro sums formatted as "Total_grams g (Total_kcal kcal)").
 `).join('\n')}
 
-Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals (and include the global Olive Oil calories) to prove it hits your configured target. For each day, you MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
+Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals to prove it hits your configured target. For each day, you MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
 
 ---
 
@@ -1537,36 +1526,6 @@ prep method: airfryer 200c, 10min"]
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Total Olive Oil (g)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={config.global.totalOliveOil === undefined ? 18 : config.global.totalOliveOil}
-                      onChange={e => updateGlobal('totalOliveOil', e.target.value === '' ? 0 : parseInt(e.target.value))}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Olive Oil for Subji (%)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="5"
-                        value={config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent}
-                        onChange={e => updateGlobal('oliveOilSplitPercent', parseInt(e.target.value))}
-                        style={{ flex: 1, accentColor: 'var(--accent-purple)' }}
-                      />
-                      <span style={{ fontSize: '0.85rem', width: '40px' }}>{config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent}%</span>
-                    </div>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                      Remaining {(100 - (config.global.oliveOilSplitPercent === undefined ? 50 : config.global.oliveOilSplitPercent))}% goes to chicken
-                    </p>
-                  </div>
-                </div>
-
-                <div className="input-row" style={{ marginTop: '1.25rem' }}>
-                  <div className="form-group">
                     <label className="form-label">Min Ideal Na:K Ratio</label>
                     <input
                       type="number"
@@ -1586,7 +1545,6 @@ prep method: airfryer 200c, 10min"]
                       onChange={e => updateGlobal('idealSodiumPotassiumRatioMax', parseFloat(e.target.value) || 0)}
                     />
                   </div>
-                  <div className="form-group" style={{ visibility: 'hidden' }}></div>
                 </div>
 
                 <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
