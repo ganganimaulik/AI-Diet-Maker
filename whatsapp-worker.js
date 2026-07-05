@@ -217,6 +217,7 @@ const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 // -------------------------------------------------------------
 let client;
 let store;
+let isClientReady = false;
 console.log('Connecting to MongoDB...');
 mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   console.log('Connected to MongoDB successfully.');
@@ -314,8 +315,6 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       console.error('Failed to generate QR data URL:', err);
     }
   });
-
-  let isClientReady = false;
 
   client.on('ready', async () => {
     if (isClientReady) {
@@ -1509,12 +1508,15 @@ async function handleShutdown(signal) {
   }
 
   try {
-    if (typeof client !== 'undefined' && client) {
+    if (typeof client !== 'undefined' && client && isClientReady) {
       if (client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
         console.log('Saving final WhatsApp session to MongoDB before destroying client...');
         await client.authStrategy.storeRemoteSession();
         console.log('Final WhatsApp session saved successfully.');
       }
+    } else {
+      console.log('WhatsApp client is not ready/authenticated. Skipping session save on shutdown.');
+    }
       
       console.log('Closing WhatsApp browser connection to release file locks...');
       await client.destroy();
