@@ -47,6 +47,7 @@ export async function POST() {
     // 2. Clear MongoDB GridFS session storage
     const db = mongoose.connection.db;
     if (db) {
+      // Clear legacy whatsapp-session
       try {
         const bucket = new mongoose.mongo.GridFSBucket(db, {
           bucketName: 'whatsapp-session'
@@ -55,15 +56,31 @@ export async function POST() {
         for (const doc of documents) {
           await bucket.delete(doc._id);
         }
-        console.log('Successfully cleared GridFS session storage.');
+        console.log('Successfully cleared GridFS session storage (session.zip).');
       } catch (err) {
-        console.error('Failed to delete GridFS files:', err);
+        console.error('Failed to delete GridFS files for session:', err);
+      }
+
+      // Clear active whatsapp-RemoteAuth
+      try {
+        const bucket = new mongoose.mongo.GridFSBucket(db, {
+          bucketName: 'whatsapp-RemoteAuth'
+        });
+        const documents = await bucket.find({ filename: 'RemoteAuth.zip' }).toArray();
+        for (const doc of documents) {
+          await bucket.delete(doc._id);
+        }
+        console.log('Successfully cleared GridFS session storage (RemoteAuth.zip).');
+      } catch (err) {
+        console.error('Failed to delete GridFS files for RemoteAuth:', err);
       }
 
       // Also clean up files/chunks manually just in case
       try {
         await db.collection('whatsapp-session.files').deleteMany({});
         await db.collection('whatsapp-session.chunks').deleteMany({});
+        await db.collection('whatsapp-RemoteAuth.files').deleteMany({});
+        await db.collection('whatsapp-RemoteAuth.chunks').deleteMany({});
       } catch {
         // Collections might not exist or already be dropped, ignore
       }

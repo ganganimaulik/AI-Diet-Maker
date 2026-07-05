@@ -61,8 +61,21 @@ class CustomMongoStore {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+
+    // Find all files with this name, sort by uploadDate descending to get the latest
+    const documents = await bucket.find({
+      filename: `${options.session}.zip`
+    }).sort({ uploadDate: -1 }).toArray();
+
+    if (documents.length === 0) {
+      throw new Error(`Session file not found: ${options.session}.zip`);
+    }
+
+    const latestFileId = documents[0]._id;
+    console.log(`Extracting latest WhatsApp session file: ${latestFileId} uploaded on ${documents[0].uploadDate}`);
+
     return new Promise((resolve, reject) => {
-      bucket.openDownloadStreamByName(`${options.session}.zip`)
+      bucket.openDownloadStream(latestFileId)
         .pipe(fs.createWriteStream(options.path))
         .on('error', err => reject(err))
         .on('close', () => resolve());
@@ -85,10 +98,18 @@ class CustomMongoStore {
   async deletePrevious(options) {
     const documents = await options.bucket.find({
       filename: `${options.session}.zip`
-    }).toArray();
+    }).sort({ uploadDate: -1 }).toArray();
+    
+    // If there are multiple files, keep only the latest one (index 0) and delete all old ones
     if (documents.length > 1) {
-      const oldSession = documents.reduce((a, b) => a.uploadDate < b.uploadDate ? a : b);
-      await options.bucket.delete(oldSession._id);   
+      for (let i = 1; i < documents.length; i++) {
+        try {
+          await options.bucket.delete(documents[i]._id);
+          console.log(`Deleted old WhatsApp session file: ${documents[i]._id} uploaded on ${documents[i].uploadDate}`);
+        } catch (err) {
+          console.error(`Failed to delete old WhatsApp session file ${documents[i]._id}:`, err);
+        }
+      }
     }
   }
 }
@@ -98,6 +119,7 @@ async function resetWhatsAppSession() {
   try {
     if (store) {
       await store.delete({ session: 'session' });
+      await store.delete({ session: 'RemoteAuth' });
       console.log('Deleted remote WhatsApp session from GridFS.');
     }
   } catch (err) {
