@@ -852,7 +852,7 @@ function compilePromptTextForDay(c, dayName) {
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
 ${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
-${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
+${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
 `).join('\n');
 
   const getDayVariantName = (ingredients) => {

@@ -660,7 +660,7 @@ export default function Home() {
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
 ${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
-${meal.prepMethod ? `- prep method: ${meal.prepMethod}` : ''}
+${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
 `).join('\n');
 
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
@@ -1726,12 +1726,13 @@ prep method: airfryer 200c, 10min"]
 
                   <div className="form-group">
                     <label className="form-label">Preparation Method & Cooking Instructions</label>
-                    <input
-                      type="text"
+                    <textarea
                       className="form-input"
                       value={selectedMeal.prepMethod}
                       onChange={e => updateMeal(selectedMeal.id, 'prepMethod', e.target.value)}
                       placeholder="e.g. Cook in airfryer 200c for 10 min"
+                      rows={3}
+                      style={{ resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }}
                     />
                   </div>
                 </div>
