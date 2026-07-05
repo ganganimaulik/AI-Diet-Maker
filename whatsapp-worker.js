@@ -1508,15 +1508,14 @@ async function handleShutdown(signal) {
   }
 
   try {
-    if (typeof client !== 'undefined' && client && isClientReady) {
-      if (client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+    if (typeof client !== 'undefined' && client) {
+      if (isClientReady && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
         console.log('Saving final WhatsApp session to MongoDB before destroying client...');
         await client.authStrategy.storeRemoteSession();
         console.log('Final WhatsApp session saved successfully.');
+      } else {
+        console.log('WhatsApp client is not ready/authenticated. Skipping session save on shutdown.');
       }
-    } else {
-      console.log('WhatsApp client is not ready/authenticated. Skipping session save on shutdown.');
-    }
       
       console.log('Closing WhatsApp browser connection to release file locks...');
       await client.destroy();
