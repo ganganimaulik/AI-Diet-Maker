@@ -1797,7 +1797,7 @@ prep method: airfryer 200c, 10min"]
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
                     <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr auto 1.2fr 1.2fr 2.2fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr auto 1.2fr 1.2fr 1.8fr 1.5fr auto', alignItems: 'center', gap: '0.75rem' }}>
                         <input
                           type="text"
                           className="form-input"
@@ -1836,20 +1836,19 @@ prep method: airfryer 200c, 10min"]
                           AUTO
                         </label>
 
-                        {ing.isAuto && !ing.disabled && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
-                            <input
-                              type="number"
-                              className="form-input"
-                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '70px' }}
-                              placeholder="g"
-                              value={ing.maxGrams || ''}
-                              onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
-                            />
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '70px' }}
+                            placeholder="g"
+                            disabled={ing.disabled || !ing.isAuto}
+                            value={ing.maxGrams || ''}
+                            onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
+                          />
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                        </div>
 
                         <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
                           <input
