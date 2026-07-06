@@ -870,7 +870,7 @@ function compilePromptTextForDay(c, dayName) {
 
   const mealsDetailsText = mealsList
     .map((meal, idx) => `
-[MEAL ${idx + 1} WEIGHTS: ${meal.name} (FOR 1 MEAL)]
+[MEAL ${idx + 1} WEIGHTS: ${meal.name} (WHOLE DAY TOTAL — divide by ${meal.mealsPerDay} for per-meal weight)]
 ${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
@@ -918,7 +918,7 @@ ${dailyVariablesText}
 INSTRUCTIONS FOR THE CALCULATOR:
 1. Estimate the raw/uncooked calorie density (kcal per 1g) for each ingredient using standard USDA nutritional values (e.g. Raw Rice ≈ 3.6 kcal/g, Raw Chicken Breast ≈ 1.2 kcal/g, Olive Oil ≈ 8.75 kcal/g, Eggs ≈ 1.43 kcal/g, Butter ≈ 7.17 kcal/g, Pasta ≈ 3.55 kcal/g, Raw Oats ≈ 3.89 kcal/g, Whey Protein Isolate ≈ 3.7 kcal/g, Almonds ≈ 5.79 kcal/g, Cashews ≈ 5.53 kcal/g, Walnuts ≈ 6.54 kcal/g, Banana ≈ 0.89 kcal/g, Tomato ≈ 0.18 kcal/g, Potato (Raw) ≈ 0.77 kcal/g, Cluster Beans ≈ 0.16 kcal/g, Bottle Gourd ≈ 0.15 kcal/g, Brinjal ≈ 0.25 kcal/g, etc.).
 2. For the selected day (${dayName}), sum the calculated calories of all strictly defined weights across all meals and daily variables:
-   - Daily calories from meals = Sum over all meals of: (sum of calories of all ingredients in that meal) x (meals per day for that meal)
+   - Daily calories from meals = Sum of calories of all ingredient weights listed under each meal (these weights are already WHOLE DAY TOTALS, do NOT multiply by meals per day)
    - Daily variables calories = sum of calories of all variables for that day
 3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
