@@ -244,15 +244,15 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
   
   // Determine puppeteer executable path
+  // On Linux (Docker): if PUPPETEER_EXECUTABLE_PATH is not explicitly set, leave
+  // executablePath undefined so puppeteer uses its own downloaded Chrome for Testing.
+  // This guarantees version compatibility (puppeteer 24.38 needs Chrome 146, but
+  // Debian's system chromium may be a different/incompatible version like 150).
   let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (!executablePath) {
-    if (process.platform === 'linux') {
-      executablePath = '/usr/bin/chromium';
-    } else if (process.platform === 'darwin') {
-      const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-      if (fs.existsSync(macChromePath)) {
-        executablePath = macChromePath;
-      }
+  if (!executablePath && process.platform === 'darwin') {
+    const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (fs.existsSync(macChromePath)) {
+      executablePath = macChromePath;
     }
   }
   
