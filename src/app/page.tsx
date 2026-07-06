@@ -11,6 +11,7 @@ interface Ingredient {
   personalOnly?: boolean;
   split?: string;
   maxGrams?: string;
+  minGrams?: string;
 }
 
 interface CustomSplit {
@@ -687,7 +688,14 @@ ${splitsText}
 ${activeDays.map(day => {
   const ingredients = (c.dailyVariables[day] || []).filter(ing => !ing.disabled);
   const variant = getDayVariantName(ingredients);
-  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? (ing.maxGrams ? `[AUTO, max ${ing.maxGrams}g]` : '[AUTO]') : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = ingredients.map(ing => {
+    if (!ing.isAuto) return `${ing.name}: ${ing.weight}g${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+    const constraints: string[] = [];
+    if (ing.minGrams) constraints.push(`min ${ing.minGrams}g`);
+    if (ing.maxGrams) constraints.push(`max ${ing.maxGrams}g`);
+    const autoLabel = constraints.length > 0 ? `[AUTO, ${constraints.join(', ')}]` : '[AUTO]';
+    return `${ing.name}: ${autoLabel}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+  }).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
 }).join('\n')}
 
@@ -706,7 +714,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
    - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
-   - **MAX GRAM CAP**: If any \`[AUTO]\` ingredient has a \`max\` gram constraint (shown as \`[AUTO, max Xg]\`), its calculated weight MUST NOT exceed X grams. If the unconstrained calculation would exceed the cap, set that ingredient to exactly X grams and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If all \`[AUTO]\` ingredients are capped and total calories still fall short of the target, flag the configuration as having a calorie shortfall.
+   - **MIN/MAX GRAM CONSTRAINTS**: If any \`[AUTO]\` ingredient has a \`min\` gram constraint (e.g. \`[AUTO, min Xg]\`), its calculated weight MUST NOT be less than X grams. If it has a \`max\` gram constraint (e.g. \`[AUTO, max Yg]\`), its calculated weight MUST NOT exceed Y grams. If the initial calculation violates any constraint, enforce the boundary value (e.g. set the weight to exactly X or Y grams) and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If the configuration becomes mathematically impossible or causes all ingredients to hit their boundaries while falling short or exceeding the target, flag it as impossible.
    - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
    - Perform any calorie split or math calculations privately in your thinking process. Do NOT include any step-by-step math, solved weights strategies, or calculation details in the final output text of Part 1 or Part 2.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
@@ -908,10 +916,10 @@ prep method: airfryer 200c, 10min"]
       if (field === 'isAuto') {
         item.isAuto = value;
         if (value) item.weight = '';
-        if (!value) item.maxGrams = '';
+        if (!value) { item.maxGrams = ''; item.minGrams = ''; }
       } else if (field === 'weight') {
         item.weight = value;
-        if (value) { item.isAuto = false; item.maxGrams = ''; }
+        if (value) { item.isAuto = false; item.maxGrams = ''; item.minGrams = ''; }
       } else if (field === 'disabled') {
         item.disabled = value;
       } else {
@@ -1797,7 +1805,7 @@ prep method: airfryer 200c, 10min"]
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
                     <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr auto 1.2fr 1.2fr 1.8fr 1.5fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
                         <input
                           type="text"
                           className="form-input"
@@ -1836,18 +1844,33 @@ prep method: airfryer 200c, 10min"]
                           AUTO
                         </label>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
-                          <input
-                            type="number"
-                            className="form-input"
-                            style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '70px' }}
-                            placeholder="g"
-                            disabled={ing.disabled || !ing.isAuto}
-                            value={ing.maxGrams || ''}
-                            onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
-                          />
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Min</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
+                              placeholder="g"
+                              disabled={ing.disabled || !ing.isAuto}
+                              value={ing.minGrams || ''}
+                              onChange={e => updateIngredient('daily', idx, 'minGrams', e.target.value, activeDay)}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
+                              placeholder="g"
+                              disabled={ing.disabled || !ing.isAuto}
+                              value={ing.maxGrams || ''}
+                              onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
                         </div>
 
                         <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>

@@ -886,7 +886,14 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) 
   };
 
   const variant = getDayVariantName(todayIngredients);
-  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? (ing.maxGrams ? `[AUTO, max ${ing.maxGrams}g]` : '[AUTO]') : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = todayIngredients.map(ing => {
+    if (!ing.isAuto) return `${ing.name}: ${ing.weight}g${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+    const constraints = [];
+    if (ing.minGrams) constraints.push(`min ${ing.minGrams}g`);
+    if (ing.maxGrams) constraints.push(`max ${ing.maxGrams}g`);
+    const autoLabel = constraints.length > 0 ? `[AUTO, ${constraints.join(', ')}]` : '[AUTO]';
+    return `${ing.name}: ${autoLabel}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+  }).join(', ');
   const dailyVariablesText = `- ${dayName} (${variant}): ${itemsText}`;
 
   return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
@@ -926,8 +933,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
    - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
-   - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
-   - **MAX GRAM CAP**: If any \`[AUTO]\` ingredient has a \`max\` gram constraint (shown as \`[AUTO, max Xg]\`), its calculated weight MUST NOT exceed X grams. If the unconstrained calculation would exceed the cap, set that ingredient to exactly X grams and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If all \`[AUTO]\` ingredients are capped and total calories still fall short of the target, flag the configuration as having a calorie shortfall.
+   - **MIN/MAX GRAM CONSTRAINTS**: If any \`[AUTO]\` ingredient has a \`min\` gram constraint (e.g. \`[AUTO, min Xg]\`), its calculated weight MUST NOT be less than X grams. If it has a \`max\` gram constraint (e.g. \`[AUTO, max Yg]\`), its calculated weight MUST NOT exceed Y grams. If the initial calculation violates any constraint, enforce the boundary value (e.g. set the weight to exactly X or Y grams) and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If the configuration becomes mathematically impossible or causes all ingredients to hit their boundaries while falling short or exceeding the target, flag it as impossible.
    - Perform any calorie split or math calculations privately in your thinking process. Do NOT include any step-by-step math, solved weights strategies, or calculation details in the final output text of Part 1 or Part 2.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
 7. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.

@@ -55,6 +55,7 @@ export interface IIngredient {
   personalOnly?: boolean;
   split?: string;
   maxGrams?: string;
+  minGrams?: string;
 }
 
 export interface ICustomSplit {
@@ -115,7 +116,8 @@ const IngredientSchema = new Schema({
   disabled: { type: Boolean, default: false },
   personalOnly: { type: Boolean, default: false },
   split: { type: String, default: '' },
-  maxGrams: { type: String, default: '' }
+  maxGrams: { type: String, default: '' },
+  minGrams: { type: String, default: '' }
 }, { _id: false });
 
 const CustomSplitSchema = new Schema({
