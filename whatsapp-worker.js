@@ -886,7 +886,7 @@ ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) 
   };
 
   const variant = getDayVariantName(todayIngredients);
-  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = todayIngredients.map(ing => `${ing.name}: ${ing.isAuto ? (ing.maxGrams ? `[AUTO, max ${ing.maxGrams}g]` : '[AUTO]') : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   const dailyVariablesText = `- ${dayName} (${variant}): ${itemsText}`;
 
   return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
@@ -927,6 +927,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
    - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
    - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
+   - **MAX GRAM CAP**: If any \`[AUTO]\` ingredient has a \`max\` gram constraint (shown as \`[AUTO, max Xg]\`), its calculated weight MUST NOT exceed X grams. If the unconstrained calculation would exceed the cap, set that ingredient to exactly X grams and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If all \`[AUTO]\` ingredients are capped and total calories still fall short of the target, flag the configuration as having a calorie shortfall.
    - Perform any calorie split or math calculations privately in your thinking process. Do NOT include any step-by-step math, solved weights strategies, or calculation details in the final output text of Part 1 or Part 2.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
 7. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.

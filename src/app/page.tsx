@@ -10,6 +10,7 @@ interface Ingredient {
   disabled?: boolean;
   personalOnly?: boolean;
   split?: string;
+  maxGrams?: string;
 }
 
 interface CustomSplit {
@@ -686,7 +687,7 @@ ${splitsText}
 ${activeDays.map(day => {
   const ingredients = (c.dailyVariables[day] || []).filter(ing => !ing.disabled);
   const variant = getDayVariantName(ingredients);
-  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
+  const itemsText = ingredients.map(ing => `${ing.name}: ${ing.isAuto ? (ing.maxGrams ? `[AUTO, max ${ing.maxGrams}g]` : '[AUTO]') : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
 }).join('\n')}
 
@@ -705,6 +706,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
    - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
+   - **MAX GRAM CAP**: If any \`[AUTO]\` ingredient has a \`max\` gram constraint (shown as \`[AUTO, max Xg]\`), its calculated weight MUST NOT exceed X grams. If the unconstrained calculation would exceed the cap, set that ingredient to exactly X grams and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If all \`[AUTO]\` ingredients are capped and total calories still fall short of the target, flag the configuration as having a calorie shortfall.
    - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
    - Perform any calorie split or math calculations privately in your thinking process. Do NOT include any step-by-step math, solved weights strategies, or calculation details in the final output text of Part 1 or Part 2.
 6. For each meal, divide its daily baseline weights and any daily variable weights by the meal's daily frequency to find the per-meal weight.
@@ -906,9 +908,10 @@ prep method: airfryer 200c, 10min"]
       if (field === 'isAuto') {
         item.isAuto = value;
         if (value) item.weight = '';
+        if (!value) item.maxGrams = '';
       } else if (field === 'weight') {
         item.weight = value;
-        if (value) item.isAuto = false;
+        if (value) { item.isAuto = false; item.maxGrams = ''; }
       } else if (field === 'disabled') {
         item.disabled = value;
       } else {
@@ -1832,6 +1835,21 @@ prep method: airfryer 200c, 10min"]
                           />
                           AUTO
                         </label>
+
+                        {ing.isAuto && !ing.disabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '70px' }}
+                              placeholder="g"
+                              value={ing.maxGrams || ''}
+                              onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
+                            />
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
+                        )}
 
                         <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
                           <input
