@@ -218,6 +218,7 @@ const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 let client;
 let store;
 let isClientReady = false;
+let isShuttingDown = false;
 console.log('Connecting to MongoDB...');
 mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   console.log('Connected to MongoDB successfully.');
@@ -359,16 +360,29 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   client.on('disconnected', async (reason) => {
     console.log('WhatsApp Client disconnected. Reason:', reason);
     isClientReady = false;
-    await resetWhatsAppSession();
+
+    // During graceful shutdown (SIGTERM from HF Spaces redeploy), do NOT wipe the
+    // MongoDB session. The shutdown handler has already saved it. Only wipe on
+    // genuine disconnections (e.g., user logged out from phone).
+    if (isShuttingDown) {
+      console.log('Shutdown in progress — preserving WhatsApp session in MongoDB.');
+    } else {
+      await resetWhatsAppSession();
+    }
+
     await WhatsAppState.findOneAndUpdate(
       {},
       { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
       { upsert: true }
     );
-    console.log('Exiting worker process to restart and generate new QR code...');
-    setTimeout(() => {
-      process.exit(1);
-    }, 2000);
+
+    // Only exit if this is NOT a managed shutdown (the shutdown handler manages its own exit)
+    if (!isShuttingDown) {
+      console.log('Exiting worker process to restart and generate new QR code...');
+      setTimeout(() => {
+        process.exit(1);
+      }, 2000);
+    }
   });
 
   client.on('auth_failure', async (msg) => {
@@ -1495,16 +1509,43 @@ server.listen(PORT, '0.0.0.0', () => {
 // -------------------------------------------------------------
 // GRACEFUL SHUTDOWN HANDLERS
 // -------------------------------------------------------------
-let isShuttingDown = false;
-
 async function handleShutdown(signal) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log(`Received ${signal}. Gracefully shutting down WhatsApp client...`);
-  
+
+  // Step 1: Save the WhatsApp session to MongoDB BEFORE destroying the client.
+  // This is critical — client.destroy() triggers the 'disconnected' event, and
+  // we must have the session safely stored before that happens.
+  try {
+    if (typeof client !== 'undefined' && client) {
+      if (isClientReady && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+        console.log('Saving final WhatsApp session to MongoDB before destroying client...');
+        await client.authStrategy.storeRemoteSession();
+        console.log('Final WhatsApp session saved successfully.');
+      } else {
+        console.log('WhatsApp client is not ready/authenticated. Skipping session save on shutdown.');
+      }
+    }
+  } catch (err) {
+    console.error('Failed to save WhatsApp session during shutdown:', err);
+  }
+
+  // Step 2: Destroy the client (this triggers 'disconnected', but isShuttingDown
+  // prevents the handler from wiping the session we just saved).
+  try {
+    if (typeof client !== 'undefined' && client) {
+      console.log('Closing WhatsApp browser connection to release file locks...');
+      await client.destroy();
+      console.log('WhatsApp client destroyed.');
+    }
+  } catch (err) {
+    console.error('Error during graceful shutdown of WhatsApp client:', err);
+  }
+
+  // Step 3: Update DB state and close the MongoDB connection.
   try {
     if (mongoose.connection.readyState !== 0) {
-      // Reset status in database to disconnected on graceful shutdown
       await WhatsAppState.findOneAndUpdate(
         {},
         { status: 'disconnected', qr: '' }
@@ -1515,32 +1556,15 @@ async function handleShutdown(signal) {
   }
 
   try {
-    if (typeof client !== 'undefined' && client) {
-      if (isClientReady && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
-        console.log('Saving final WhatsApp session to MongoDB before destroying client...');
-        await client.authStrategy.storeRemoteSession();
-        console.log('Final WhatsApp session saved successfully.');
-      } else {
-        console.log('WhatsApp client is not ready/authenticated. Skipping session save on shutdown.');
-      }
-      
-      console.log('Closing WhatsApp browser connection to release file locks...');
-      await client.destroy();
-      console.log('WhatsApp client destroyed.');
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+      console.log('MongoDB connection closed.');
     }
-  } catch (err) {
-    console.error('Error during graceful shutdown of WhatsApp client:', err);
-  } finally {
-    try {
-      if (mongoose.connection.readyState !== 0) {
-        await mongoose.disconnect();
-        console.log('MongoDB connection closed.');
-      }
-    } catch (dbErr) {
-      console.error('Error closing MongoDB connection:', dbErr);
-    }
-    process.exit(0);
+  } catch (dbErr) {
+    console.error('Error closing MongoDB connection:', dbErr);
   }
+
+  process.exit(0);
 }
 
 process.on('SIGTERM', () => handleShutdown('SIGTERM'));
