@@ -27,6 +27,7 @@ interface Meal {
   ingredients: Ingredient[];
   water: string;
   prepMethod: string;
+  cookQuantityMode?: 'daily' | 'per-meal';
   totalOliveOil?: number;
   oliveOilSplitPercent?: number;
 }
@@ -63,7 +64,6 @@ interface Config {
   dailySplits?: {
     [key: string]: CustomSplit[];
   };
-  cookQuantityMode: 'daily' | 'per-meal';
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -96,6 +96,7 @@ const DEFAULT_CONFIG: Config = {
       id: 'meal-oats',
       name: 'Oats Meal',
       mealsPerDay: 1,
+      cookQuantityMode: 'daily',
       ingredients: [
         { name: 'Oats (Raw)', weight: '30', isAuto: false },
         { name: 'Whey Protein Isolate', weight: '60', isAuto: false },
@@ -111,6 +112,7 @@ const DEFAULT_CONFIG: Config = {
       id: 'meal-chicken',
       name: 'Chicken Meal',
       mealsPerDay: 3,
+      cookQuantityMode: 'daily',
       ingredients: [
         { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false },
         { name: 'Olive oil', weight: '18', isAuto: false, split: '9g in subji, 9g in chicken' }
@@ -162,7 +164,6 @@ const DEFAULT_CONFIG: Config = {
     { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
   ],
   dailySplits: {},
-  cookQuantityMode: 'daily',
   generationRange: 'all',
   selectedGenerationDay: 'MONDAY'
 };
@@ -655,8 +656,12 @@ export default function Home() {
       }).join('\n');
     }
 
+    const perMealMeals = mealsList.filter(m => (m.cookQuantityMode || 'daily') === 'per-meal');
+    const hasPerMealMode = perMealMeals.length > 0;
+    const perMealMealNames = perMealMeals.map(m => m.name);
+
     const mealsTargetText = mealsList
-      .map((meal, idx) => `- Meal ${idx + 1} (${meal.name}): eaten ${meal.mealsPerDay} times per day`)
+      .map((meal, idx) => `- Meal ${idx + 1} (${meal.name}): eaten ${meal.mealsPerDay} times per day${(meal.cookQuantityMode || 'daily') === 'per-meal' ? ' [COOK QUANTITIES: PER MEAL]' : ''}`)
       .join('\n');
 
     const mealsDetailsText = mealsList
@@ -758,9 +763,11 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 ---
 
 PART 2: FOR MY COOK (Weekly Text Plan)
-Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated ${c.cookQuantityMode === 'per-meal' ? 'per-meal weights (daily total divided by the number of meals per day for that meal)' : 'total daily weights'} (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
-${c.cookQuantityMode === 'per-meal' ? `CRITICAL QUANTITY MODE: You MUST list **per-meal weights** (daily total ÷ mealsPerDay) for each ingredient under each meal in Part 2, NOT the whole-day total. For each meal heading, also note how many times it is eaten per day (e.g. "Chicken Meal (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
+${hasPerMealMode ? `CRITICAL QUANTITY MODE — PER-MEAL MEALS: The following meals are configured to show **per-meal weights** (daily total ÷ mealsPerDay) in Part 2, NOT the whole-day total. For these meal headings, also note how many times they are eaten per day (e.g. "Chicken Meal (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
+Per-meal quantity meals: ${perMealMealNames.join(', ')}
+All other meals should show their daily total weights as usual.
 
 ` : ''}CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
@@ -769,10 +776,10 @@ CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient
 Exact Output Template to Follow for Each Day:
 
 ### [DAY]: [Ingredient Variant Name]
-[For each meal, list its ingredients with ${c.cookQuantityMode === 'per-meal' ? 'per-meal weights (daily total ÷ mealsPerDay) in grams, and note the meal frequency (e.g. "x3 daily") next to the meal name' : 'daily total weights in grams'}. Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
-"Meal Name${c.cookQuantityMode === 'per-meal' ? ' (x3 daily)' : ''}:
-ingredient1 name ${c.cookQuantityMode === 'per-meal' ? '50g (per meal)' : '150g'}
-ingredient2 name ${c.cookQuantityMode === 'per-meal' ? '33g (per meal)' : '100g'}
+[For each meal, list its ingredients with ${hasPerMealMode ? 'per-meal weights (daily total ÷ mealsPerDay) if that meal is marked [COOK QUANTITIES: PER MEAL] above, or daily total weights otherwise' : 'daily total weights in grams'}. Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
+"Meal Name${hasPerMealMode ? ' (x3 daily)' : ''}:
+ingredient1 name ${hasPerMealMode ? '50g (per meal)' : '150g'}
+ingredient2 name ${hasPerMealMode ? '33g (per meal)' : '100g'}
 liquids: 190g water
 prep method: airfryer 200c, 10min"]
 [List all custom splits and cooking instructions for each day here, again with no hyphen prefix]
@@ -803,6 +810,7 @@ prep method: airfryer 200c, 10min"]
       id: `meal-${Date.now()}`,
       name: 'New Meal',
       mealsPerDay: 1,
+      cookQuantityMode: 'daily' as const,
       ingredients: [
         { name: 'Ingredient 1', weight: '0', isAuto: false }
       ],
@@ -1657,6 +1665,34 @@ prep method: airfryer 200c, 10min"]
                         onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
                       />
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">Cook Quantity Mode</label>
+                      <div style={{ display: 'flex', gap: '1rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            name={`cookQty-${selectedMeal.id}`}
+                            checked={(selectedMeal.cookQuantityMode || 'daily') === 'daily'}
+                            onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'daily')}
+                          />
+                          Whole Day Total
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            name={`cookQty-${selectedMeal.id}`}
+                            checked={(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'}
+                            onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'per-meal')}
+                          />
+                          Per Meal
+                        </label>
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', margin: '0.25rem 0 0 0' }}>
+                        {(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'
+                          ? `Cook message will show per-meal quantities (daily total ÷ ${selectedMeal.mealsPerDay}).`
+                          : 'Cook message will show the entire day\'s total for this meal.'}
+                      </p>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -2048,35 +2084,6 @@ prep method: airfryer 200c, 10min"]
                   </select>
                 </div>
               )}
-            </div>
-
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
-              <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.8rem' }}>Cook Message Quantities</label>
-              <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.25rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="cookQuantityMode"
-                    checked={config.cookQuantityMode === 'daily'}
-                    onChange={() => setConfig(prev => ({ ...prev, cookQuantityMode: 'daily' }))}
-                  />
-                  Whole Day Total
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="cookQuantityMode"
-                    checked={config.cookQuantityMode === 'per-meal'}
-                    onChange={() => setConfig(prev => ({ ...prev, cookQuantityMode: 'per-meal' }))}
-                  />
-                  Per Meal
-                </label>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', margin: 0 }}>
-                {config.cookQuantityMode === 'per-meal'
-                  ? 'Cook message will show per-meal quantities (e.g. 142g chicken per meal × 3).'
-                  : 'Cook message will show the entire day\'s total (e.g. 425g chicken for the day).'}
-              </p>
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>

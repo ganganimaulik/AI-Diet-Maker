@@ -71,6 +71,7 @@ export interface IMeal {
   ingredients: IIngredient[];
   water: string;
   prepMethod: string;
+  cookQuantityMode?: 'daily' | 'per-meal';
   totalOliveOil?: number;
   oliveOilSplitPercent?: number;
 }
@@ -102,7 +103,6 @@ export interface IConfig {
   dailySplits?: {
     [key: string]: ICustomSplit[];
   };
-  cookQuantityMode?: 'daily' | 'per-meal';
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -134,6 +134,7 @@ const MealSchema = new Schema({
   ingredients: [IngredientSchema],
   water: { type: String, default: '' },
   prepMethod: { type: String, default: '' },
+  cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
   totalOliveOil: { type: Number, default: 0 },
   oliveOilSplitPercent: { type: Number, default: 50 }
 }, { _id: false });
@@ -169,7 +170,6 @@ const ConfigSchema = new Schema<IConfig>({
     of: [CustomSplitSchema],
     default: {}
   },
-  cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
   generationRange: { type: String, enum: ['all', 'single'], default: 'all' },
   selectedGenerationDay: { type: String, default: 'MONDAY' },
   huggingFaceToken: { type: String, default: '' },
