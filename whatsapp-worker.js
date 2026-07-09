@@ -861,7 +861,7 @@ function compilePromptTextForDay(c, dayName) {
   const dynamicIngredientSplits = [];
   mealsList.forEach(meal => {
     (meal.ingredients || []).forEach(ing => {
-      if (ing.split && ing.split.trim()) {
+      if (!ing.disabled && ing.split && ing.split.trim()) {
         dynamicIngredientSplits.push(`${meal.name} Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}"`);
       }
     });
@@ -886,12 +886,22 @@ function compilePromptTextForDay(c, dayName) {
     .join('\n');
 
   const mealsDetailsText = mealsList
-    .map((meal, idx) => `
+    .map((meal, idx) => {
+      const activeIngs = meal.ingredients.filter(ing => !ing.disabled);
+      return `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (WHOLE DAY TOTAL — divide by ${meal.mealsPerDay} for per-meal weight)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
+${activeIngs.map(ing => {
+  if (!ing.isAuto) return `- ${ing.name}: ${ing.weight}g${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+  const constraints = [];
+  if (ing.minGrams) constraints.push(`min ${ing.minGrams}g`);
+  if (ing.maxGrams) constraints.push(`max ${ing.maxGrams}g`);
+  const autoLabel = constraints.length > 0 ? `[AUTO, ${constraints.join(', ')}]` : '[AUTO]';
+  return `- ${ing.name}: ${autoLabel}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+}).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
-`).join('\n');
+`;
+    }).join('\n');
 
   const getDayVariantName = (ingredients) => {
     const nonStapleNames = ingredients
