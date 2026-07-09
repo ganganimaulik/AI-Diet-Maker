@@ -102,6 +102,7 @@ export interface IConfig {
   dailySplits?: {
     [key: string]: ICustomSplit[];
   };
+  cookQuantityMode?: 'daily' | 'per-meal';
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -168,6 +169,7 @@ const ConfigSchema = new Schema<IConfig>({
     of: [CustomSplitSchema],
     default: {}
   },
+  cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
   generationRange: { type: String, enum: ['all', 'single'], default: 'all' },
   selectedGenerationDay: { type: String, default: 'MONDAY' },
   huggingFaceToken: { type: String, default: '' },

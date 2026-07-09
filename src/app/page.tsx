@@ -63,6 +63,7 @@ interface Config {
   dailySplits?: {
     [key: string]: CustomSplit[];
   };
+  cookQuantityMode: 'daily' | 'per-meal';
   generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
@@ -161,6 +162,7 @@ const DEFAULT_CONFIG: Config = {
     { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
   ],
   dailySplits: {},
+  cookQuantityMode: 'daily',
   generationRange: 'all',
   selectedGenerationDay: 'MONDAY'
 };
@@ -756,19 +758,21 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 ---
 
 PART 2: FOR MY COOK (Weekly Text Plan)
-Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated total daily weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${c.selectedGenerationDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated ${c.cookQuantityMode === 'per-meal' ? 'per-meal weights (daily total divided by the number of meals per day for that meal)' : 'total daily weights'} (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
-CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
+${c.cookQuantityMode === 'per-meal' ? `CRITICAL QUANTITY MODE: You MUST list **per-meal weights** (daily total ÷ mealsPerDay) for each ingredient under each meal in Part 2, NOT the whole-day total. For each meal heading, also note how many times it is eaten per day (e.g. "Chicken Meal (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
+
+` : ''}CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
 CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details in the splits/cooking instructions section.
 
 Exact Output Template to Follow for Each Day:
 
 ### [DAY]: [Ingredient Variant Name]
-[For each meal, list its ingredients with daily total weights in grams. Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
-"Meal Name:
-ingredient1 name 150g
-ingredient2 name 100g
+[For each meal, list its ingredients with ${c.cookQuantityMode === 'per-meal' ? 'per-meal weights (daily total ÷ mealsPerDay) in grams, and note the meal frequency (e.g. "x3 daily") next to the meal name' : 'daily total weights in grams'}. Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
+"Meal Name${c.cookQuantityMode === 'per-meal' ? ' (x3 daily)' : ''}:
+ingredient1 name ${c.cookQuantityMode === 'per-meal' ? '50g (per meal)' : '150g'}
+ingredient2 name ${c.cookQuantityMode === 'per-meal' ? '33g (per meal)' : '100g'}
 liquids: 190g water
 prep method: airfryer 200c, 10min"]
 [List all custom splits and cooking instructions for each day here, again with no hyphen prefix]
@@ -2044,6 +2048,35 @@ prep method: airfryer 200c, 10min"]
                   </select>
                 </div>
               )}
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
+              <label className="form-label" style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.8rem' }}>Cook Message Quantities</label>
+              <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="cookQuantityMode"
+                    checked={config.cookQuantityMode === 'daily'}
+                    onChange={() => setConfig(prev => ({ ...prev, cookQuantityMode: 'daily' }))}
+                  />
+                  Whole Day Total
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="cookQuantityMode"
+                    checked={config.cookQuantityMode === 'per-meal'}
+                    onChange={() => setConfig(prev => ({ ...prev, cookQuantityMode: 'per-meal' }))}
+                  />
+                  Per Meal
+                </label>
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', margin: 0 }}>
+                {config.cookQuantityMode === 'per-meal'
+                  ? 'Cook message will show per-meal quantities (e.g. 142g chicken per meal × 3).'
+                  : 'Cook message will show the entire day\'s total (e.g. 425g chicken for the day).'}
+              </p>
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>
