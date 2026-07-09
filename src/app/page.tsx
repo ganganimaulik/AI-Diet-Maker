@@ -626,7 +626,7 @@ export default function Home() {
       const dynamicIngredientSplits: string[] = [];
       mealsList.forEach(meal => {
         (meal.ingredients || []).forEach(ing => {
-          if (ing.split && ing.split.trim()) {
+          if (!ing.disabled && ing.split && ing.split.trim()) {
             dynamicIngredientSplits.push(`${meal.name} Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}"`);
           }
         });
@@ -665,12 +665,22 @@ export default function Home() {
       .join('\n');
 
     const mealsDetailsText = mealsList
-      .map((meal, idx) => `
+      .map((meal, idx) => {
+        const activeIngs = meal.ingredients.filter(ing => !ing.disabled);
+        return `
 [MEAL ${idx + 1} WEIGHTS: ${meal.name} (WHOLE DAY TOTAL — divide by ${meal.mealsPerDay} for per-meal weight)]
-${meal.ingredients.map(ing => `- ${ing.name}: ${ing.isAuto ? '[AUTO]' : `${ing.weight}g`}${ing.split ? ` (split instruction: ${ing.split})` : ''}`).join('\n')}
+${activeIngs.map(ing => {
+  if (!ing.isAuto) return `- ${ing.name}: ${ing.weight}g${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+  const constraints: string[] = [];
+  if (ing.minGrams) constraints.push(`min ${ing.minGrams}g`);
+  if (ing.maxGrams) constraints.push(`max ${ing.maxGrams}g`);
+  const autoLabel = constraints.length > 0 ? `[AUTO, ${constraints.join(', ')}]` : '[AUTO]';
+  return `- ${ing.name}: ${autoLabel}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
+}).join('\n')}
 ${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
-`).join('\n');
+`;
+      }).join('\n');
 
     return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions. 
 
@@ -872,9 +882,12 @@ prep method: airfryer 200c, 10min"]
           if (field === 'isAuto') {
             item.isAuto = value;
             if (value) item.weight = '';
+            if (!value) { item.maxGrams = ''; item.minGrams = ''; }
           } else if (field === 'weight') {
             item.weight = value;
-            if (value) item.isAuto = false;
+            if (value) { item.isAuto = false; item.maxGrams = ''; item.minGrams = ''; }
+          } else if (field === 'disabled') {
+            item.disabled = value;
           } else {
             (item as any)[field] = value;
           }
@@ -1710,13 +1723,14 @@ prep method: airfryer 200c, 10min"]
 
                   <div className="ingredients-list">
                     {selectedMeal.ingredients.map((ing, idx) => (
-                      <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                      <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
                           <input
                             type="text"
                             className="form-input"
-                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
                             value={ing.name}
+                            disabled={ing.disabled}
                             onChange={e => updateMealIngredient(selectedMeal.id, idx, 'name', e.target.value)}
                           />
                           <input
@@ -1724,25 +1738,77 @@ prep method: airfryer 200c, 10min"]
                             className="form-input"
                             style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                             placeholder="g"
-                            disabled={ing.isAuto}
+                            disabled={ing.isAuto || ing.disabled}
                             value={ing.weight}
                             onChange={e => updateMealIngredient(selectedMeal.id, idx, 'weight', e.target.value)}
                           />
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
-                          <label className="auto-checkbox-container" style={{ margin: 0 }}>
+                          
+                          <label className="auto-checkbox-container">
                             <input
                               type="checkbox"
+                              checked={!ing.disabled}
+                              onChange={e => updateMealIngredient(selectedMeal.id, idx, 'disabled', !e.target.checked)}
+                            />
+                            Active
+                          </label>
+
+                          <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                            <input
+                              type="checkbox"
+                              disabled={ing.disabled}
                               checked={ing.isAuto}
                               onChange={e => updateMealIngredient(selectedMeal.id, idx, 'isAuto', e.target.checked)}
                             />
                             AUTO
                           </label>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Min</span>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
+                                placeholder="g"
+                                disabled={ing.disabled || !ing.isAuto}
+                                value={ing.minGrams || ''}
+                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'minGrams', e.target.value)}
+                              />
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
+                                placeholder="g"
+                                disabled={ing.disabled || !ing.isAuto}
+                                value={ing.maxGrams || ''}
+                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'maxGrams', e.target.value)}
+                              />
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
+                            </div>
+                          </div>
+
+                          <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
+                            <input
+                              type="checkbox"
+                              disabled={ing.disabled}
+                              checked={!!ing.personalOnly}
+                              onChange={e => updateMealIngredient(selectedMeal.id, idx, 'personalOnly', e.target.checked)}
+                            />
+                            Personal
+                          </label>
+
                           <button className="btn-remove" onClick={() => removeMealIngredient(selectedMeal.id, idx)} style={{ padding: '0.25rem' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                             </svg>
                           </button>
                         </div>
+                        {!ing.disabled && (
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.15rem' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px' }}>Split:</span>
                           <input 
@@ -1754,6 +1820,7 @@ prep method: airfryer 200c, 10min"]
                             onChange={e => updateMealIngredient(selectedMeal.id, idx, 'split', e.target.value)}
                           />
                         </div>
+                        )}
                       </div>
                     ))}
                   </div>
