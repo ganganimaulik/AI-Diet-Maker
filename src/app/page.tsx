@@ -13,6 +13,7 @@ interface Ingredient {
   split?: string;
   maxGrams?: string;
   minGrams?: string;
+  mealId?: string;
 }
 
 interface CustomSplit {
@@ -124,40 +125,40 @@ const DEFAULT_CONFIG: Config = {
   ],
   dailyVariables: {
     MONDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Tomato', weight: '180', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '180', isAuto: false, mealId: 'meal-chicken' }
     ],
     TUESDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Potato (Raw)', weight: '150', isAuto: false },
-      { name: 'Tomato', weight: '80', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Potato (Raw)', weight: '150', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
     ],
     WEDNESDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Cluster Beans', weight: '185', isAuto: false },
-      { name: 'Tomato', weight: '80', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Cluster Beans', weight: '185', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
     ],
     THURSDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Bottle Gourd', weight: '185', isAuto: false },
-      { name: 'Tomato', weight: '80', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Bottle Gourd', weight: '185', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
     ],
     FRIDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Potato (Raw)', weight: '', isAuto: true },
-      { name: 'Cluster Beans', weight: '180', isAuto: false },
-      { name: 'Tomato', weight: '80', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Cluster Beans', weight: '180', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
     ],
     SATURDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Potato (Raw)', weight: '150', isAuto: false },
-      { name: 'Bottle Gourd', weight: '185', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Potato (Raw)', weight: '150', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Bottle Gourd', weight: '185', isAuto: false, mealId: 'meal-chicken' }
     ],
     SUNDAY: [
-      { name: 'Rice', weight: '', isAuto: true },
-      { name: 'Potato (Raw)', weight: '', isAuto: true },
-      { name: 'Brinjal', weight: '180', isAuto: false },
-      { name: 'Tomato', weight: '80', isAuto: false }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken' },
+      { name: 'Brinjal', weight: '180', isAuto: false, mealId: 'meal-chicken' },
+      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
     ]
   },
   customSplits: [
@@ -175,7 +176,21 @@ const normalizeConfig = (loaded: any): Config => {
   const normalized = { ...DEFAULT_CONFIG, ...loaded };
   normalized.global = { ...DEFAULT_CONFIG.global, ...(loaded.global || {}) };
   normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0 ? loaded.meals : DEFAULT_CONFIG.meals;
-  normalized.dailyVariables = loaded.dailyVariables || DEFAULT_CONFIG.dailyVariables;
+  
+  // Ensure dailyVariables has mealId populated, defaulting to 'meal-chicken'
+  if (loaded.dailyVariables) {
+    const updatedVars: { [key: string]: Ingredient[] } = {};
+    for (const day of Object.keys(loaded.dailyVariables)) {
+      updatedVars[day] = (loaded.dailyVariables[day] || []).map((ing: any) => ({
+        ...ing,
+        mealId: ing.mealId || 'meal-chicken'
+      }));
+    }
+    normalized.dailyVariables = updatedVars;
+  } else {
+    normalized.dailyVariables = DEFAULT_CONFIG.dailyVariables;
+  }
+  
   normalized.dailySplits = loaded.dailySplits || {};
 
   // Migrate old splits or populate customSplits if empty
@@ -700,14 +715,23 @@ export default function Home() {
 
   // Ingredients Lists manipulators (for Daily variables)
   const addIngredient = (target: 'daily', dayKey: string) => {
-    const defaultIng: Ingredient = { name: 'New Item', weight: '0', isAuto: false, personalOnly: false };
-    setConfig(prev => ({
-      ...prev,
-      dailyVariables: {
-        ...prev.dailyVariables,
-        [dayKey]: [...(prev.dailyVariables[dayKey] || []), defaultIng]
-      }
-    }));
+    setConfig(prev => {
+      const defaultMealId = prev.meals[0]?.id || '';
+      const defaultIng: Ingredient = {
+        name: 'New Item',
+        weight: '0',
+        isAuto: false,
+        personalOnly: false,
+        mealId: defaultMealId
+      };
+      return {
+        ...prev,
+        dailyVariables: {
+          ...prev.dailyVariables,
+          [dayKey]: [...(prev.dailyVariables[dayKey] || []), defaultIng]
+        }
+      };
+    });
   };
 
   const updateIngredient = (
@@ -1694,7 +1718,7 @@ export default function Home() {
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
                     <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
                         <input
                           type="text"
                           className="form-input"
@@ -1703,6 +1727,18 @@ export default function Home() {
                           disabled={ing.disabled}
                           onChange={e => updateIngredient('daily', idx, 'name', e.target.value, activeDay)}
                         />
+                        <select
+                          className="form-input"
+                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)' }}
+                          value={ing.mealId || ''}
+                          disabled={ing.disabled}
+                          onChange={e => updateIngredient('daily', idx, 'mealId', e.target.value, activeDay)}
+                        >
+                          <option value="" disabled>Select Meal...</option>
+                          {config.meals.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
                         <input
                           type="number"
                           className="form-input"

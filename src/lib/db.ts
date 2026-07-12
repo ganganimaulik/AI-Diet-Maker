@@ -56,6 +56,7 @@ export interface IIngredient {
   split?: string;
   maxGrams?: string;
   minGrams?: string;
+  mealId?: string;
 }
 
 export interface ICustomSplit {
@@ -118,7 +119,8 @@ const IngredientSchema = new Schema({
   personalOnly: { type: Boolean, default: false },
   split: { type: String, default: '' },
   maxGrams: { type: String, default: '' },
-  minGrams: { type: String, default: '' }
+  minGrams: { type: String, default: '' },
+  mealId: { type: String, default: '' }
 }, { _id: false });
 
 const CustomSplitSchema = new Schema({
