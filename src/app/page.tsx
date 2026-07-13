@@ -320,7 +320,7 @@ export default function Home() {
   // WhatsApp Poll Utilities
   const fetchWhatsAppStatus = async () => {
     try {
-      const res = await fetch(`/api/whatsapp/status?t=${Date.now()}`);
+      const res = await fetch('/api/whatsapp/status');
       if (res.ok) {
         const data = await res.json();
         if (data.state) setWhatsappState(data.state);

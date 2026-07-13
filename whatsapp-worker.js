@@ -92,12 +92,7 @@ class CustomMongoStore {
     }).toArray();
 
     for (const doc of documents) {
-      try {
-        await bucket.delete(doc._id);
-      } catch (err) {
-        // Ignore if the file was already deleted (e.g. concurrently by RemoteAuth's own logout flow)
-        console.log(`Note: WhatsApp session file ${doc._id} deletion skipped or already deleted: ${err.message}`);
-      }
+      await bucket.delete(doc._id);
     }
   }
 
