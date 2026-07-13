@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { dbConnect, WhatsAppState, Scheduler, Config } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     if (!(await isAuthenticated())) {
@@ -114,7 +116,16 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ state, scheduler, hfSpaceStatus, hfSpaceDetails });
+    return NextResponse.json(
+      { state, scheduler, hfSpaceStatus, hfSpaceDetails },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
+      }
+    );
   } catch (error) {
     console.error('Error fetching WhatsApp status:', error);
     return NextResponse.json(
