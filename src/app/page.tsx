@@ -223,6 +223,10 @@ export default function Home() {
   const [draggedDay, setDraggedDay] = useState<string | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   
+  // Drag and drop states for meal reorder
+  const [draggedMealId, setDraggedMealId] = useState<string | null>(null);
+  const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
+  
   // Custom prompt override state
   const [customPrompt, setCustomPrompt] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -648,6 +652,23 @@ export default function Home() {
         return m;
       });
       return { ...prev, meals: updated };
+    });
+  };
+
+  const reorderMeals = (draggedId: string, targetId: string) => {
+    setConfig(prev => {
+      const meals = [...(prev.meals || [])];
+      const draggedIndex = meals.findIndex(m => m.id === draggedId);
+      const targetIndex = meals.findIndex(m => m.id === targetId);
+      if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return prev;
+      
+      const [draggedMeal] = meals.splice(draggedIndex, 1);
+      meals.splice(targetIndex, 0, draggedMeal);
+      
+      return {
+        ...prev,
+        meals
+      };
     });
   };
 
@@ -1359,8 +1380,35 @@ export default function Home() {
               {(config.meals || []).map(meal => (
                 <button
                   key={meal.id}
-                  className={`section-tab-btn ${activeTab === meal.id ? 'active' : ''}`}
+                  draggable
+                  className={`section-tab-btn ${activeTab === meal.id ? 'active' : ''} ${dragOverMealId === meal.id ? 'drag-over' : ''}`}
                   onClick={() => setActiveTab(meal.id)}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', meal.id);
+                    setDraggedMealId(meal.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedMealId(null);
+                    setDragOverMealId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedMealId && draggedMealId !== meal.id) {
+                      setDragOverMealId(meal.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    setDragOverMealId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const sourceMealId = e.dataTransfer.getData('text/plain') || draggedMealId;
+                    if (sourceMealId && sourceMealId !== meal.id) {
+                      reorderMeals(sourceMealId, meal.id);
+                    }
+                    setDraggedMealId(null);
+                    setDragOverMealId(null);
+                  }}
                 >
                   🍲 {meal.name}
                 </button>
@@ -1697,7 +1745,7 @@ export default function Home() {
                       onDrop={(e) => {
                         e.preventDefault();
                         const sourceDay = e.dataTransfer.getData('text/plain') || draggedDay;
-                        if (sourceDay && sourceDay !== day) {
+                        if (draggedDay && sourceDay && sourceDay !== day) {
                           swapDayVariables(sourceDay, day);
                         }
                         setDraggedDay(null);

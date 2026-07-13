@@ -231,11 +231,27 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.section-tab-btn[draggable="true"] {
+  cursor: grab;
+}
+
+.section-tab-btn[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .section-tab-btn.active {
   background: var(--accent-purple);
   color: #fff;
   box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
 }
+
+.section-tab-btn.drag-over {
+  border: 1px dashed var(--accent-purple) !important;
+  background: rgba(168, 85, 247, 0.15) !important;
+  color: #fff !important;
+  transform: scale(1.05);
+}
+
 
 /* Ingredients Editor list */
 .ingredients-list {
@@ -340,11 +356,15 @@ body {
   color: var(--text-secondary);
   padding: 0.6rem 0.25rem;
   border-radius: 8px;
-  cursor: pointer;
+  cursor: grab;
   font-size: 0.75rem;
   font-weight: 700;
   text-align: center;
   transition: all var(--transition-fast);
+}
+
+.day-btn:active {
+  cursor: grabbing;
 }
 
 .day-btn:hover {
