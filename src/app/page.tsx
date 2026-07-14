@@ -212,8 +212,20 @@ const normalizeConfig = (loaded: any): Config => {
   return normalized;
 };
 
+const stableStringify = (obj: any): string => {
+  if (obj === null || typeof obj !== 'object') {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(stableStringify).join(',') + ']';
+  }
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',') + '}';
+};
+
 export default function Home() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
+  const [savedConfig, setSavedConfig] = useState<Config | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [currentView, setCurrentView] = useState<'planner' | 'connections'>('planner');
   const [activeTab, setActiveTab] = useState<string>('global');
@@ -251,9 +263,11 @@ export default function Home() {
   const [isAuthenticatedState, setIsAuthenticatedState] = useState<boolean | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const isInitialLoaded = useRef(false);
+
+  const hasUnsavedChanges = savedConfig
+    ? stableStringify(config) !== stableStringify(savedConfig)
+    : false;
 
   // WhatsApp bot states
   const [whatsappState, setWhatsappState] = useState({
@@ -313,7 +327,7 @@ export default function Home() {
       if (!res.ok) {
         throw new Error('Failed to save configuration.');
       }
-      setHasUnsavedChanges(false);
+      setSavedConfig(configToSave);
       // Refresh cache status — config hash may have changed, invalidating cached responses
       fetchCacheStatus();
     } catch (e) {
@@ -429,7 +443,9 @@ export default function Home() {
           const configData = await configRes.json();
           
           if (configData.config) {
-            setConfig(normalizeConfig(configData.config));
+            const normalized = normalizeConfig(configData.config);
+            setConfig(normalized);
+            setSavedConfig(normalized);
           } else {
             // First time setup, save default config to DB
             await fetch('/api/config', {
@@ -438,8 +454,8 @@ export default function Home() {
               body: JSON.stringify(DEFAULT_CONFIG)
             });
             setConfig(DEFAULT_CONFIG);
+            setSavedConfig(DEFAULT_CONFIG);
           }
-          isInitialLoaded.current = true;
           fetchWhatsAppStatus();
           fetchContacts();
         } else {
@@ -455,13 +471,6 @@ export default function Home() {
     
     checkAuthAndLoad();
   }, []);
-
-  // Sync configuration updates
-  useEffect(() => {
-    if (isInitialLoaded.current) {
-      setHasUnsavedChanges(true);
-    }
-  }, [config]);
 
   // WhatsApp Poll Loop
   useEffect(() => {
@@ -495,7 +504,9 @@ export default function Home() {
         const configData = await configRes.json();
         
         if (configData.config) {
-          setConfig(normalizeConfig(configData.config));
+          const normalized = normalizeConfig(configData.config);
+          setConfig(normalized);
+          setSavedConfig(normalized);
         } else {
           await fetch('/api/config', {
             method: 'POST',
@@ -503,8 +514,8 @@ export default function Home() {
             body: JSON.stringify(DEFAULT_CONFIG)
           });
           setConfig(DEFAULT_CONFIG);
+          setSavedConfig(DEFAULT_CONFIG);
         }
-        isInitialLoaded.current = true;
         fetchWhatsAppStatus();
         fetchContacts();
       } else {
@@ -520,7 +531,7 @@ export default function Home() {
     try {
       await fetch('/api/auth/login', { method: 'DELETE' });
       setIsAuthenticatedState(false);
-      isInitialLoaded.current = false;
+      setSavedConfig(null);
     } catch (e) {
       console.error('Logout error:', e);
     }
@@ -814,7 +825,6 @@ export default function Home() {
       dailySplits[dayA] = splitsB;
       dailySplits[dayB] = splitsA;
       
-      setHasUnsavedChanges(true);
       return {
         ...prev,
         dailyVariables: {
@@ -839,7 +849,6 @@ export default function Home() {
           dailySplits[day] = dailySplits[day].map(s => s.id === id ? { ...s, name: val } : s);
         }
       }
-      setHasUnsavedChanges(true);
       return { ...prev, customSplits: updated, dailySplits };
     });
   };
@@ -862,7 +871,6 @@ export default function Home() {
       for (const day in dailySplits) {
         dailySplits[day] = dailySplits[day].filter(s => s.id !== id);
       }
-      setHasUnsavedChanges(true);
       return {
         ...prev,
         customSplits: (prev.customSplits || []).filter(s => s.id !== id),
@@ -887,7 +895,6 @@ export default function Home() {
       }
       
       dailySplits[dayKey] = daySplits;
-      setHasUnsavedChanges(true);
       return { ...prev, dailySplits };
     });
   };
@@ -901,7 +908,6 @@ export default function Home() {
           delete dailySplits[dayKey];
         }
       }
-      setHasUnsavedChanges(true);
       return { ...prev, dailySplits };
     });
   };
@@ -2668,7 +2674,6 @@ export default function Home() {
                   onChange={e => {
                     const val = e.target.value;
                     setConfig(prev => ({ ...prev, huggingFaceSpace: val }));
-                    setHasUnsavedChanges(true);
                   }}
                 />
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
@@ -2687,7 +2692,6 @@ export default function Home() {
                     onChange={e => {
                       const val = e.target.value;
                       setConfig(prev => ({ ...prev, huggingFaceToken: val }));
-                      setHasUnsavedChanges(true);
                     }}
                   />
                   <button type="button" className="btn-secondary" onClick={() => setShowHfToken(!showHfToken)}>
