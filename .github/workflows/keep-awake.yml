@@ -2,15 +2,29 @@ name: Keep HF Space Awake
 
 on:
   schedule:
-    # Trigger the workflow every 3 hours
+    # Trigger every 3 hours to keep the Space warm
     - cron: '0 */3 * * *'
+    # Trigger checks right before and during the sending window (1:30 PM, 1:45 PM, 2:00 PM, 2:15 PM, 2:30 PM IST)
+    - cron: '0,15,30,45 8 * * *'
+    - cron: '0 9 * * *'
   workflow_dispatch: # Allows manually running the workflow from the GitHub Actions UI
 
 jobs:
   keep-awake:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for random interval
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade huggingface_hub
+
+      - name: Wait for random interval (Only on general keep-awake crons)
+        # Avoid random delay during the critical 1:30 PM - 2:30 PM IST window
+        if: github.event.schedule != '0,15,30,45 8 * * *' && github.event.schedule != '0 9 * * *'
         run: |
           # Generate a random delay between 0 and 7200 seconds (0 to 2 hours)
           # This guarantees that pings are randomized and occur once every 2 to 5 hours apart.
@@ -22,20 +36,58 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # The URL of your Hugging Face Space diagnostic endpoint.
-          # Update this URL if your space is named differently.
           URL="https://ganganimaulik-diet-maker-worker.hf.space/diag"
-          
           echo "Sending HTTP GET request to: $URL"
           RESPONSE=$(curl -s -H "Authorization: Bearer $HF_TOKEN" -w "\nHTTP_STATUS:%{http_code}" "$URL")
-          
           echo "Response received:"
           echo "$RESPONSE"
           
-          # Check if the HTTP status indicates success (2xx)
           HTTP_STATUS=$(echo "$RESPONSE" | tr -d '\r' | tail -n 1 | cut -d':' -f2)
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "Success: Space is awake and healthy (HTTP $HTTP_STATUS)."
           else
             echo "Warning: Received HTTP $HTTP_STATUS status. The space might be starting up or sleeping, curl will trigger a wake-up."
           fi
+
+      - name: Auto-Heal Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        shell: python
+        run: |
+          import sys
+          import os
+          from huggingface_hub import HfApi
+
+          token = os.getenv("HF_TOKEN")
+          if not token:
+              print("HF_TOKEN is missing. Skipping auto-heal check.")
+              sys.exit(0)
+
+          repo_id = "ganganimaulik/diet-maker-worker"
+          api = HfApi(token=token)
+
+          try:
+              print(f"Fetching runtime info for Space: {repo_id}")
+              runtime = api.get_space_runtime(repo_id=repo_id)
+              stage = runtime.stage
+              error_message = runtime.raw.get("errorMessage", "")
+              print(f"Space Stage: {stage}")
+              print(f"Error Message: {error_message}")
+
+              should_reboot = False
+              if stage in ["RUNTIME_ERROR", "BUILD_ERROR"]:
+                  print("Space is in error state.")
+                  should_reboot = True
+              elif error_message and "unable to schedule" in error_message.lower():
+                  print("Space scheduling failure detected.")
+                  should_reboot = True
+
+              if should_reboot:
+                  print("Triggering factory reboot to recover Space...")
+                  api.restart_space(repo_id=repo_id, factory_reboot=True)
+                  print("Factory reboot successfully triggered!")
+              else:
+                  print("Space is healthy or starting up normally. No action needed.")
+
+          except Exception as e:
+              print(f"Error during Space health check: {e}")
