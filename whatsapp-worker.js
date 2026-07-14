@@ -22,6 +22,7 @@ const qrcode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const { compilePromptText } = require('./src/lib/compile-prompt.js');
+const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 
 class CustomMongoStore {
   constructor({ mongoose, dataPath } = {}) {
@@ -212,6 +213,17 @@ const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppS
 const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
 const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', SchedulerSchema);
 const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
+
+// Cached Response Schema (AI diet plan cache per day)
+const CachedResponseSchema = new mongoose.Schema({
+  day: { type: String, required: true, index: true },
+  configHash: { type: String, required: true },
+  responseText: { type: String, default: '' },
+  thinkingText: { type: String, default: '' },
+  generatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+CachedResponseSchema.index({ day: 1 }, { unique: true });
+const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
 
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
@@ -681,9 +693,40 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     console.log(`Compiling diet prompt for ${isTomorrow ? 'tomorrow' : 'today'} (${targetDayName})...`);
     const prompt = compilePromptText(configDoc, { mode: 'single', selectedDay: targetDayName });
 
-    // 4. Call Gemini API
-    console.log('Generating diet plan from Gemini...');
-    const generatedText = await callGeminiAPI(configDoc, prompt);
+    // 4. Check cache before calling Gemini API
+    let generatedText;
+    const currentHash = computeConfigHash(configDoc);
+    const cachedEntry = await CachedResponse.findOne({ day: targetDayName });
+
+    if (cachedEntry && cachedEntry.configHash === currentHash && cachedEntry.responseText) {
+      console.log(`Using cached diet plan for ${targetDayName} (generated at ${cachedEntry.generatedAt.toISOString()}).`);
+      generatedText = cachedEntry.responseText;
+    } else {
+      if (cachedEntry && cachedEntry.configHash !== currentHash) {
+        console.log(`Cache for ${targetDayName} is stale (config changed). Regenerating...`);
+      }
+      console.log('Generating diet plan from Gemini...');
+      generatedText = await callGeminiAPI(configDoc, prompt);
+
+      // Save to cache after successful generation
+      try {
+        await CachedResponse.findOneAndUpdate(
+          { day: targetDayName },
+          {
+            $set: {
+              configHash: currentHash,
+              responseText: generatedText,
+              thinkingText: '',
+              generatedAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+        console.log(`Cached diet plan for ${targetDayName}.`);
+      } catch (cacheErr) {
+        console.error('Failed to save to cache (non-fatal):', cacheErr);
+      }
+    }
     
     // 5. Extract Part 1 (Myself) and Part 2 (Cook instructions)
     const userMessageToSend = extractMyselfInstructions(generatedText, targetDayName);

@@ -242,6 +242,11 @@ export default function Home() {
   const [outputTab, setOutputTab] = useState<'user' | 'cook' | 'thoughts'>('user');
   const [copiedStatus, setCopiedStatus] = useState(false);
 
+  // Cache states
+  const [cacheStatus, setCacheStatus] = useState<Record<string, { generatedAt: string; isValid: boolean }>>({});
+  const [isCachedResponse, setIsCachedResponse] = useState(false);
+  const [isCacheLoading, setIsCacheLoading] = useState(false);
+
   // Authentication and Save states
   const [isAuthenticatedState, setIsAuthenticatedState] = useState<boolean | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
@@ -309,6 +314,8 @@ export default function Home() {
         throw new Error('Failed to save configuration.');
       }
       setHasUnsavedChanges(false);
+      // Refresh cache status — config hash may have changed, invalidating cached responses
+      fetchCacheStatus();
     } catch (e) {
       console.error('Error saving config:', e);
       alert('Failed to save configuration to database.');
@@ -902,7 +909,90 @@ export default function Home() {
 
 
   // Run AI Generation
-  const handleGenerate = async () => {
+  // Fetch cache status for all days
+  const fetchCacheStatus = async () => {
+    try {
+      const res = await fetch('/api/cache');
+      if (res.ok) {
+        const data = await res.json();
+        const statusMap: Record<string, { generatedAt: string; isValid: boolean }> = {};
+        for (const entry of data.entries || []) {
+          statusMap[entry.day] = { generatedAt: entry.generatedAt, isValid: entry.isValid };
+        }
+        setCacheStatus(statusMap);
+      }
+    } catch (e) {
+      console.error('Error fetching cache status:', e);
+    }
+  };
+
+  // Check cache for a specific day; returns { responseText, thinkingText } or null
+  const checkCache = async (day: string): Promise<{ responseText: string; thinkingText: string } | null> => {
+    try {
+      const res = await fetch(`/api/cache?day=${day}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.cached && data.cached.isValid && data.cached.responseText) {
+          return { responseText: data.cached.responseText, thinkingText: data.cached.thinkingText || '' };
+        }
+      }
+    } catch (e) {
+      console.error('Error checking cache:', e);
+    }
+    return null;
+  };
+
+  // Save a response to cache
+  const saveToCache = async (day: string, responseText: string, thinkingText: string) => {
+    try {
+      await fetch('/api/cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day, responseText, thinkingText })
+      });
+      fetchCacheStatus();
+    } catch (e) {
+      console.error('Error saving to cache:', e);
+    }
+  };
+
+  // Clear cache for a specific day or all days
+  const clearCache = async (day?: string) => {
+    try {
+      const url = day ? `/api/cache?day=${day}` : '/api/cache';
+      await fetch(url, { method: 'DELETE' });
+      setCacheStatus(prev => {
+        if (day) {
+          const next = { ...prev };
+          delete next[day];
+          return next;
+        }
+        return {};
+      });
+      setIsCachedResponse(false);
+    } catch (e) {
+      console.error('Error clearing cache:', e);
+    }
+  };
+
+  // Fetch cache status on mount & after config saves
+  useEffect(() => {
+    if (isAuthenticatedState) {
+      fetchCacheStatus();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticatedState]);
+
+  // Get the cache key for the current generation scope
+  const getCurrentCacheDay = (): string => {
+    if (config.generationRange === 'single') {
+      return config.selectedGenerationDay || 'MONDAY';
+    }
+    return 'ALL_DAYS';
+  };
+
+  // Run AI Generation
+  const handleGenerate = async (forceRegenerate = false) => {
     if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
         setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
@@ -927,10 +1017,28 @@ export default function Home() {
       }
     }
 
+    const cacheDay = getCurrentCacheDay();
+
+    // Check cache first (unless forcing regeneration)
+    if (!forceRegenerate && !isCustomMode) {
+      setIsCacheLoading(true);
+      const cached = await checkCache(cacheDay);
+      setIsCacheLoading(false);
+      if (cached) {
+        setOutputText(cached.responseText);
+        setThinkingText(cached.thinkingText);
+        setIsCachedResponse(true);
+        setErrorMsg('');
+        setOutputTab('user');
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setErrorMsg('');
     setOutputText('');
     setThinkingText('');
+    setIsCachedResponse(false);
 
     try {
       const selectedModel = config.model === 'custom' ? config.customModel : config.model;
@@ -1041,6 +1149,11 @@ export default function Home() {
             }
           }
         } catch (err) {}
+      }
+
+      // Save to cache after successful generation (only for non-custom prompts)
+      if (currentText && !isCustomMode) {
+        saveToCache(cacheDay, currentText, currentThought);
       }
 
     } catch (e: any) {
@@ -2020,25 +2133,92 @@ export default function Home() {
             </div>
 
             <div style={{ marginTop: '1.5rem' }}>
-              <button
-                className="btn-primary"
-                disabled={isGenerating}
-                onClick={handleGenerate}
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#fff', boxShadow: 'none' }}></div>
-                    Calculating & Generating...
-                  </>
-                ) : (
-                  <>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+              {/* Cache status indicator */}
+              {(() => {
+                const cacheDay = getCurrentCacheDay();
+                const cached = cacheStatus[cacheDay];
+                if (cached) {
+                  const timeAgo = (() => {
+                    const diff = Date.now() - new Date(cached.generatedAt).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    if (mins < 1) return 'just now';
+                    if (mins < 60) return `${mins}m ago`;
+                    const hrs = Math.floor(mins / 60);
+                    if (hrs < 24) return `${hrs}h ago`;
+                    const days = Math.floor(hrs / 24);
+                    return `${days}d ago`;
+                  })();
+                  return (
+                    <div className={`cache-status-bar ${cached.isValid ? 'cache-valid' : 'cache-stale'}`}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                        <span style={{ fontSize: '0.9rem' }}>{cached.isValid ? '✅' : '⚠️'}</span>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                            {cached.isValid ? 'Cached response available' : 'Cache stale — config changed'}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', opacity: 0.7, marginLeft: '0.5rem' }}>Generated {timeAgo}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button
+                          className="cache-action-btn cache-clear-btn"
+                          onClick={() => clearCache(cacheDay)}
+                          title="Delete cached response"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
+                          </svg>
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={isGenerating || isCacheLoading}
+                  onClick={() => handleGenerate(false)}
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#fff', boxShadow: 'none' }}></div>
+                      Calculating &amp; Generating...
+                    </>
+                  ) : isCacheLoading ? (
+                    <>
+                      <div className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#fff', boxShadow: 'none' }}></div>
+                      Checking cache...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                      </svg>
+                      Generate Diet Plan
+                    </>
+                  )}
+                </button>
+
+                {cacheStatus[getCurrentCacheDay()] && (
+                  <button
+                    className="btn-regenerate"
+                    disabled={isGenerating || isCacheLoading}
+                    onClick={() => handleGenerate(true)}
+                    title="Skip cache and regenerate fresh"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M1 4v6h6M23 20v-6h-6"/>
+                      <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
                     </svg>
-                    Generate Diet Plan
-                  </>
+                    Regenerate
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
           </section>
 
@@ -2071,6 +2251,15 @@ export default function Home() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>
                   <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', boxShadow: 'none', margin: 0 }}></div>
                   <span style={{ opacity: 0.9 }}>Streaming...</span>
+                </div>
+              )}
+              {isCachedResponse && !isGenerating && outputText && (
+                <div className="cache-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                    <path d="M22 4L12 14.01l-3-3"/>
+                  </svg>
+                  Cached
                 </div>
               )}
             </div>

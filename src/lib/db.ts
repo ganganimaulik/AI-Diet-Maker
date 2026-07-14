@@ -250,8 +250,30 @@ const SchedulerSchema = new Schema<IScheduler>({
   triggerMyselfTest: { type: Boolean, default: false }
 }, { timestamps: true });
 
+// 5. Cached Response Schema (AI diet plan cache per day)
+export interface ICachedResponse {
+  day: string; // MONDAY, TUESDAY, etc.
+  configHash: string; // SHA-256 hash of diet-relevant config
+  responseText: string; // The generated AI response
+  thinkingText: string; // The AI thinking output
+  generatedAt: Date;
+  updatedAt: Date;
+}
+
+const CachedResponseSchema = new Schema<ICachedResponse>({
+  day: { type: String, required: true, index: true },
+  configHash: { type: String, required: true },
+  responseText: { type: String, default: '' },
+  thinkingText: { type: String, default: '' },
+  generatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Ensure one cached response per day
+CachedResponseSchema.index({ day: 1 }, { unique: true });
+
 // Compile models
 export const Config = mongoose.models.Config || mongoose.model<IConfig>('Config', ConfigSchema);
 export const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model<IWhatsAppState>('WhatsAppState', WhatsAppStateSchema);
 export const Contact = mongoose.models.Contact || mongoose.model<IContact>('Contact', ContactSchema);
 export const Scheduler = mongoose.models.Scheduler || mongoose.model<IScheduler>('Scheduler', SchedulerSchema);
+export const CachedResponse = mongoose.models.CachedResponse || mongoose.model<ICachedResponse>('CachedResponse', CachedResponseSchema);
