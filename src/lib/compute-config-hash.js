@@ -66,7 +66,17 @@ function computeConfigHash(config) {
     thinkingBudget: config.thinkingBudget || 0,
   };
 
-  const jsonStr = JSON.stringify(hashableFields, Object.keys(hashableFields).sort());
+  const jsonStr = JSON.stringify(hashableFields, (key, value) => {
+    // Sort object keys at every level for deterministic serialization
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const sorted = {};
+      for (const k of Object.keys(value).sort()) {
+        sorted[k] = value[k];
+      }
+      return sorted;
+    }
+    return value;
+  });
   return createHash('sha256').update(jsonStr).digest('hex');
 }
 
