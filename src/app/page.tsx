@@ -1699,8 +1699,8 @@ export default function Home() {
                       />
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div className="form-group" style={{ flex: '1 1 120px', margin: 0 }}>
-                        <label className="form-label">Meals Per Day (Frequency)</label>
+                      <div className="form-group" style={{ flex: '1.2 1 220px', margin: 0 }}>
+                        <label className="form-label" style={{ whiteSpace: 'nowrap' }}>Meals Per Day (Frequency)</label>
                         <input
                           type="number"
                           className="form-input"
