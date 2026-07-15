@@ -299,7 +299,6 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       type: 'local',
     },
     authTimeoutMs: 180000, // 3 mins — matches protocolTimeout; prevents spurious "auth timeout" on slow containers
-    qrMaxRetries: 10, // Give up after 10 QR refreshes instead of looping forever
     takeoverOnConflict: true, // Take over session if another browser (e.g. old container) is still connected
     takeoverTimeoutMs: 30000, // Wait 30s before taking over
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
