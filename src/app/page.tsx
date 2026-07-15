@@ -32,6 +32,7 @@ interface Meal {
   cookQuantityMode?: 'daily' | 'per-meal';
   totalOliveOil?: number;
   oliveOilSplitPercent?: number;
+  disabled?: boolean;
 }
 
 interface Config {
@@ -175,7 +176,9 @@ const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'S
 const normalizeConfig = (loaded: any): Config => {
   const normalized = { ...DEFAULT_CONFIG, ...loaded };
   normalized.global = { ...DEFAULT_CONFIG.global, ...(loaded.global || {}) };
-  normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0 ? loaded.meals : DEFAULT_CONFIG.meals;
+  normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0 
+    ? loaded.meals.map((m: any) => ({ ...m, disabled: !!m.disabled })) 
+    : DEFAULT_CONFIG.meals;
   
   // Ensure dailyVariables has mealId populated, defaulting to 'meal-chicken'
   if (loaded.dailyVariables) {
@@ -1500,7 +1503,7 @@ export default function Home() {
                 <button
                   key={meal.id}
                   draggable
-                  className={`section-tab-btn ${activeTab === meal.id ? 'active' : ''} ${dragOverMealId === meal.id ? 'drag-over' : ''}`}
+                  className={`section-tab-btn ${activeTab === meal.id ? 'active' : ''} ${dragOverMealId === meal.id ? 'drag-over' : ''} ${meal.disabled ? 'disabled' : ''}`}
                   onClick={() => setActiveTab(meal.id)}
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/plain', meal.id);
@@ -1529,7 +1532,7 @@ export default function Home() {
                     setDragOverMealId(null);
                   }}
                 >
-                  🍲 {meal.name}
+                  🍲 {meal.name}{meal.disabled ? ' (disabled)' : ''}
                 </button>
               ))}
               <button 
@@ -1650,6 +1653,18 @@ export default function Home() {
                         value={selectedMeal.mealsPerDay}
                         onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
                       />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Status</label>
+                      <label className="auto-checkbox-container" style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', height: '38px' }}>
+                        <input
+                          type="checkbox"
+                          style={{ cursor: 'pointer' }}
+                          checked={!selectedMeal.disabled}
+                          onChange={e => updateMeal(selectedMeal.id, 'disabled', !e.target.checked)}
+                        />
+                        Active / Include in Prompt
+                      </label>
                     </div>
                     <div className="form-group">
                       <label className="form-label">Cook Quantity Mode</label>
@@ -1878,7 +1893,7 @@ export default function Home() {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h4 style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 700 }}>
-                    Ingredients for {activeDay} ({getDayVariantName(config.dailyVariables[activeDay] || [])})
+                    Ingredients for {activeDay} ({getDayVariantName(config.dailyVariables[activeDay] || [], config.meals.filter(m => !m.disabled))})
                   </h4>
                 </div>
 
@@ -2126,7 +2141,7 @@ export default function Home() {
                   >
                     {DAYS_OF_WEEK.map(day => {
                       const ingredients = config.dailyVariables[day] || [];
-                      const variant = getDayVariantName(ingredients);
+                      const variant = getDayVariantName(ingredients, config.meals.filter(m => !m.disabled));
                       return (
                         <option key={day} value={day}>
                           {day} ({variant})

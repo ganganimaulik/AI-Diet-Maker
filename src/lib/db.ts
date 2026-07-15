@@ -75,6 +75,7 @@ export interface IMeal {
   cookQuantityMode?: 'daily' | 'per-meal';
   totalOliveOil?: number;
   oliveOilSplitPercent?: number;
+  disabled?: boolean;
 }
 
 export interface IConfig {
@@ -138,7 +139,8 @@ const MealSchema = new Schema({
   prepMethod: { type: String, default: '' },
   cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
   totalOliveOil: { type: Number, default: 0 },
-  oliveOilSplitPercent: { type: Number, default: 50 }
+  oliveOilSplitPercent: { type: Number, default: 50 },
+  disabled: { type: Boolean, default: false }
 }, { _id: false });
 
 const ConfigSchema = new Schema<IConfig>({

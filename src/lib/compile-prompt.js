@@ -23,9 +23,17 @@ function mapGet(mapOrObj, key) {
 /**
  * Derive a human-readable variant name from a day's ingredient list.
  */
-function getDayVariantName(ingredients) {
+function getDayVariantName(ingredients, mealsList) {
+  const activeMeals = mealsList || [];
   const nonStapleNames = (ingredients || [])
-    .filter(ing => !ing.disabled && !ing.personalOnly)
+    .filter(ing => {
+      if (ing.disabled || ing.personalOnly) return false;
+      if (activeMeals.length > 0) {
+        const mealId = ing.mealId || 'meal-chicken';
+        return activeMeals.some(m => m.id === mealId);
+      }
+      return true;
+    })
     .map(ing => ing.name);
   if (nonStapleNames.length === 0) return 'Staples Only';
   if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
@@ -68,7 +76,7 @@ function compilePromptText(c, options) {
   const activeDays = isSingle ? [selectedDay] : daysOfWeek;
   const dayRefLabel = isSingle ? 'the day' : 'each day';
 
-  const mealsList = c.meals || [];
+  const mealsList = (c.meals || []).filter(m => !m.disabled);
   let splitsList = c.customSplits || [];
   if (splitsList.length === 0) {
     if (c.splits) {
@@ -105,7 +113,9 @@ function compilePromptText(c, options) {
 
     const dayVars = (mapGet(c.dailyVariables, day) || []);
     dayVars.forEach(ing => {
-      if (!ing.disabled && ing.split && ing.split.trim()) {
+      const mealId = ing.mealId || 'meal-chicken';
+      const meal = mealsList.find(m => m.id === mealId);
+      if (meal && !ing.disabled && ing.split && ing.split.trim()) {
         dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}"`);
       }
     });
@@ -174,8 +184,12 @@ ${splitsText}
 [DAILY VARIABLE INGREDIENT WEIGHTS (WHOLE DAY)]
 * Note: Use [AUTO] for any ingredient you want the calculator to dynamically scale to hit your exact Daily Calorie Target.
 ${activeDays.map(day => {
-  const ingredients = (mapGet(c.dailyVariables, day) || []).filter(ing => !ing.disabled);
-  const variant = getDayVariantName(ingredients);
+  const ingredients = (mapGet(c.dailyVariables, day) || []).filter(ing => {
+    if (ing.disabled) return false;
+    const mealId = ing.mealId || 'meal-chicken';
+    return mealsList.some(m => m.id === mealId);
+  });
+  const variant = getDayVariantName(ingredients, mealsList);
   const itemsText = ingredients.map(ing => formatIngredientEntry(ing, mealsList)).join(', ');
   return `- ${day} (${variant}): ${itemsText}`;
 }).join('\n')}

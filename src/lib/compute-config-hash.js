@@ -35,6 +35,7 @@ function computeConfigHash(config) {
       id: meal.id,
       name: meal.name,
       mealsPerDay: meal.mealsPerDay,
+      disabled: !!meal.disabled,
       ingredients: (meal.ingredients || []).map((ing) => ({
         name: ing.name,
         weight: ing.weight,
