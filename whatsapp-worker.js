@@ -272,12 +272,12 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   console.log(`Initializing WhatsApp Client (Chrome Path: ${executablePath || 'default'})...`);
 
   // Build puppeteer args dynamically based on platform
+  // Note: --disable-blink-features=AutomationControlled is added automatically by wwebjs Client.js
   const puppeteerArgs = [
     '--no-sandbox', 
     '--disable-setuid-sandbox', 
     '--disable-dev-shm-usage',
     '--disable-gpu',
-    '--disable-blink-features=AutomationControlled',
     '--disable-features=IsolateOrigins,site-per-process',
     '--disable-web-security',
     '--no-first-run',
@@ -296,17 +296,19 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
     webVersionCache: {
-      type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
-      strict: false
+      type: 'local',
     },
+    authTimeoutMs: 180000, // 3 mins — matches protocolTimeout; prevents spurious "auth timeout" on slow containers
+    qrMaxRetries: 10, // Give up after 10 QR refreshes instead of looping forever
+    takeoverOnConflict: true, // Take over session if another browser (e.g. old container) is still connected
+    takeoverTimeoutMs: 30000, // Wait 30s before taking over
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     puppeteer: {
       executablePath: executablePath,
       headless: true,
       args: puppeteerArgs,
       protocolTimeout: 180000, // Wait up to 3 mins for Puppeteer protocol calls
       timeout: 180000, // Page navigation timeout: 3 mins (default 30s is too short for HF Spaces)
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     }
   });
 
