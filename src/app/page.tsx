@@ -1384,7 +1384,7 @@ export default function Home() {
 
   return (
     <div className="app-container">
-      <header className="header" style={{ paddingBottom: '1.25rem', marginBottom: '1rem' }}>
+      <header className="header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div className="header-title-container">
             <h1 className="header-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1393,7 +1393,7 @@ export default function Home() {
             <p className="header-subtitle">Strict meal prep calculator, solved via Gemini Thinking Models</p>
           </div>
 
-          <nav className="header-nav" style={{ marginLeft: '1.5rem' }}>
+          <nav className="header-nav">
             <button 
               className={`header-nav-btn ${currentView === 'planner' ? 'active' : ''}`}
               onClick={() => {
@@ -1428,10 +1428,10 @@ export default function Home() {
             title="Configure WhatsApp connection"
           >
             <span className={`whatsapp-status-badge ${whatsappState.status}`}>
-              {whatsappState.status === 'ready' && '🟢 WhatsApp Ready'}
-              {whatsappState.status === 'connecting' && '🔵 WhatsApp Connecting'}
-              {whatsappState.status === 'qr_code' && '🟡 WhatsApp Scan QR'}
-              {whatsappState.status === 'disconnected' && '🔴 WhatsApp Offline'}
+              {whatsappState.status === 'ready' && 'WhatsApp Ready'}
+              {whatsappState.status === 'connecting' && 'WhatsApp Connecting'}
+              {whatsappState.status === 'qr_code' && 'WhatsApp Scan QR'}
+              {whatsappState.status === 'disconnected' && 'WhatsApp Offline'}
             </span>
           </div>
 
@@ -1495,7 +1495,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="section-tabs" style={{ overflowX: 'auto', whiteSpace: 'nowrap', display: 'flex', gap: '0.5rem', scrollbarWidth: 'none' }}>
+            <div className="section-tabs">
               <button className={`section-tab-btn ${activeTab === 'global' ? 'active' : ''}`} onClick={() => setActiveTab('global')}>
                 🎯 Targets & Splits
               </button>
@@ -1538,7 +1538,7 @@ export default function Home() {
               <button 
                 className="section-tab-btn" 
                 onClick={addNewMeal}
-                style={{ border: '1px dashed var(--accent-purple)', color: 'var(--accent-purple)', flex: 'none', minWidth: '110px' }}
+                style={{ border: '1px dashed var(--accent-purple)', color: 'var(--accent-purple)' }}
               >
                 ➕ Add Meal
               </button>
@@ -1711,26 +1711,28 @@ export default function Home() {
 
                   <div className="ingredients-list">
                     {selectedMeal.ingredients.map((ing, idx) => (
-                      <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                      <div key={idx} className={`ingredient-card ${ing.disabled ? 'is-disabled' : ''}`}>
+                        <div className="ingredient-row-main">
                           <input
                             type="text"
                             className="form-input"
-                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
+                            style={{ flex: 3, textDecoration: ing.disabled ? 'line-through' : 'none' }}
                             value={ing.name}
                             disabled={ing.disabled}
                             onChange={e => updateMealIngredient(selectedMeal.id, idx, 'name', e.target.value)}
+                            placeholder="Ingredient Name"
                           />
-                          <input
-                            type="number"
-                            className="form-input"
-                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                            placeholder="g"
-                            disabled={ing.isAuto || ing.disabled}
-                            value={ing.weight}
-                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'weight', e.target.value)}
-                          />
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: 1.2 }}>
+                            <input
+                              type="number"
+                              className="form-input"
+                              placeholder="Weight"
+                              disabled={ing.isAuto || ing.disabled}
+                              value={ing.weight}
+                              onChange={e => updateMealIngredient(selectedMeal.id, idx, 'weight', e.target.value)}
+                            />
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
                           
                           <label className="auto-checkbox-container">
                             <input
@@ -1751,35 +1753,6 @@ export default function Home() {
                             AUTO
                           </label>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Min</span>
-                              <input
-                                type="number"
-                                className="form-input"
-                                style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
-                                placeholder="g"
-                                disabled={ing.disabled || !ing.isAuto}
-                                value={ing.minGrams || ''}
-                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'minGrams', e.target.value)}
-                              />
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
-                              <input
-                                type="number"
-                                className="form-input"
-                                style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
-                                placeholder="g"
-                                disabled={ing.disabled || !ing.isAuto}
-                                value={ing.maxGrams || ''}
-                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'maxGrams', e.target.value)}
-                              />
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
-                            </div>
-                          </div>
-
                           <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
                             <input
                               type="checkbox"
@@ -1790,24 +1763,57 @@ export default function Home() {
                             Personal
                           </label>
 
-                          <button className="btn-remove" onClick={() => removeMealIngredient(selectedMeal.id, idx)} style={{ padding: '0.25rem' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <button className="btn-remove" onClick={() => removeMealIngredient(selectedMeal.id, idx)} title="Delete Ingredient">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                               <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                             </svg>
                           </button>
                         </div>
+
+                        {ing.isAuto && !ing.disabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.35rem 0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px', width: 'fit-content', marginLeft: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>AUTO RANGE:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Min</span>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                                placeholder="Min g"
+                                disabled={ing.disabled || !ing.isAuto}
+                                value={ing.minGrams || ''}
+                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'minGrams', e.target.value)}
+                              />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>g</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Max</span>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                                placeholder="Max g"
+                                disabled={ing.disabled || !ing.isAuto}
+                                value={ing.maxGrams || ''}
+                                onChange={e => updateMealIngredient(selectedMeal.id, idx, 'maxGrams', e.target.value)}
+                              />
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>g</span>
+                            </div>
+                          </div>
+                        )}
+
                         {!ing.disabled && (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.15rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px' }}>Split:</span>
-                          <input 
-                            type="text" 
-                            className="form-input" 
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.1)' }} 
-                            placeholder="Optional (e.g. 50% in subji, remaining in chicken)"
-                            value={ing.split || ''}
-                            onChange={e => updateMealIngredient(selectedMeal.id, idx, 'split', e.target.value)}
-                          />
-                        </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', paddingLeft: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px', fontWeight: 600 }}>Split:</span>
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.15)' }} 
+                              placeholder="Optional split instruction (e.g. 50% in subji, remaining in chicken)"
+                              value={ing.split || ''}
+                              onChange={e => updateMealIngredient(selectedMeal.id, idx, 'split', e.target.value)}
+                            />
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1899,19 +1905,20 @@ export default function Home() {
 
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
-                    <div key={idx} className={ing.disabled ? 'is-disabled' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', padding: '0.6rem 0.75rem', borderRadius: '8px', opacity: ing.disabled ? 0.4 : 1 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr auto 1fr 1fr 2.8fr 1.1fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                    <div key={idx} className={`ingredient-card ${ing.disabled ? 'is-disabled' : ''}`}>
+                      <div className="ingredient-row-main">
                         <input
                           type="text"
                           className="form-input"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', textDecoration: ing.disabled ? 'line-through' : 'none' }}
+                          style={{ flex: 2, textDecoration: ing.disabled ? 'line-through' : 'none' }}
                           value={ing.name}
                           disabled={ing.disabled}
                           onChange={e => updateIngredient('daily', idx, 'name', e.target.value, activeDay)}
+                          placeholder="Ingredient Name"
                         />
                         <select
                           className="form-input"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)' }}
+                          style={{ flex: 1.5, background: 'rgba(0,0,0,0.15)' }}
                           value={ing.mealId || ''}
                           disabled={ing.disabled}
                           onChange={e => updateIngredient('daily', idx, 'mealId', e.target.value, activeDay)}
@@ -1921,16 +1928,17 @@ export default function Home() {
                             <option key={m.id} value={m.id}>{m.name}</option>
                           ))}
                         </select>
-                        <input
-                          type="number"
-                          className="form-input"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                          placeholder="g"
-                          disabled={ing.isAuto || ing.disabled}
-                          value={ing.weight}
-                          onChange={e => updateIngredient('daily', idx, 'weight', e.target.value, activeDay)}
-                        />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '40px' }}>grams</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: 1 }}>
+                          <input
+                            type="number"
+                            className="form-input"
+                            placeholder="Weight"
+                            disabled={ing.isAuto || ing.disabled}
+                            value={ing.weight}
+                            onChange={e => updateIngredient('daily', idx, 'weight', e.target.value, activeDay)}
+                          />
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>g</span>
+                        </div>
                         
                         <label className="auto-checkbox-container">
                           <input
@@ -1951,35 +1959,6 @@ export default function Home() {
                           AUTO
                         </label>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', visibility: (ing.isAuto && !ing.disabled) ? 'visible' : 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Min</span>
-                            <input
-                              type="number"
-                              className="form-input"
-                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
-                              placeholder="g"
-                              disabled={ing.disabled || !ing.isAuto}
-                              value={ing.minGrams || ''}
-                              onChange={e => updateIngredient('daily', idx, 'minGrams', e.target.value, activeDay)}
-                            />
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max</span>
-                            <input
-                              type="number"
-                              className="form-input"
-                              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', width: '55px' }}
-                              placeholder="g"
-                              disabled={ing.disabled || !ing.isAuto}
-                              value={ing.maxGrams || ''}
-                              onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
-                            />
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>g</span>
-                          </div>
-                        </div>
-
                         <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }}>
                           <input
                             type="checkbox"
@@ -1990,20 +1969,53 @@ export default function Home() {
                           Personal
                         </label>
 
-                        <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)} style={{ padding: '0.25rem' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <button className="btn-remove" onClick={() => removeIngredient('daily', idx, activeDay)} title="Delete Ingredient">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                           </svg>
                         </button>
                       </div>
+
+                      {ing.isAuto && !ing.disabled && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.35rem 0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '6px', width: 'fit-content', marginLeft: '0.25rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>AUTO RANGE:</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Min</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                              placeholder="Min g"
+                              disabled={ing.disabled || !ing.isAuto}
+                              value={ing.minGrams || ''}
+                              onChange={e => updateIngredient('daily', idx, 'minGrams', e.target.value, activeDay)}
+                            />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Max</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                              placeholder="Max g"
+                              disabled={ing.disabled || !ing.isAuto}
+                              value={ing.maxGrams || ''}
+                              onChange={e => updateIngredient('daily', idx, 'maxGrams', e.target.value, activeDay)}
+                            />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>g</span>
+                          </div>
+                        </div>
+                      )}
+
                       {!ing.disabled && (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.15rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px' }}>Split:</span>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', paddingLeft: '0.25rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: '40px', fontWeight: 600 }}>Split:</span>
                           <input 
                             type="text" 
                             className="form-input" 
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.1)' }} 
-                            placeholder="Optional (e.g. 50% in subji, remaining in chicken)"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.15)' }} 
+                            placeholder="Optional split instruction (e.g. 50% in subji, remaining in chicken)"
                             value={ing.split || ''}
                             onChange={e => updateIngredient('daily', idx, 'split', e.target.value, activeDay)}
                           />
@@ -2670,12 +2682,12 @@ export default function Home() {
                   hfStatus === 'SLEEPING' ? 'disconnected' : 
                   (hfStatus === 'BUILDING' || hfStatus === 'STARTING') ? 'connecting' : 'qr_code'
                 }`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', marginLeft: 'auto' }}>
-                  {hfStatus === 'RUNNING' && '🟢 Running'}
-                  {hfStatus === 'SLEEPING' && '🔴 Sleeping'}
-                  {(hfStatus === 'BUILDING' || hfStatus === 'STARTING') && '🟡 Building...'}
-                  {hfStatus === 'UNAUTHORIZED' && '🔒 Unauthorized'}
-                  {hfStatus === 'NOT_CONFIGURED' && '⚪ Not Configured'}
-                  {hfStatus !== 'RUNNING' && hfStatus !== 'SLEEPING' && hfStatus !== 'BUILDING' && hfStatus !== 'STARTING' && hfStatus !== 'UNAUTHORIZED' && hfStatus !== 'NOT_CONFIGURED' && `⚠️ ${hfStatus}`}
+                  {hfStatus === 'RUNNING' && 'Running'}
+                  {hfStatus === 'SLEEPING' && 'Sleeping'}
+                  {(hfStatus === 'BUILDING' || hfStatus === 'STARTING') && 'Building...'}
+                  {hfStatus === 'UNAUTHORIZED' && 'Unauthorized'}
+                  {hfStatus === 'NOT_CONFIGURED' && 'Not Configured'}
+                  {hfStatus !== 'RUNNING' && hfStatus !== 'SLEEPING' && hfStatus !== 'BUILDING' && hfStatus !== 'STARTING' && hfStatus !== 'UNAUTHORIZED' && hfStatus !== 'NOT_CONFIGURED' && hfStatus}
                 </span>
               </h3>
 
@@ -3219,25 +3231,24 @@ function DayCopyButton({ text }: { text: string }) {
   
   return (
     <button 
-      className="btn-secondary" 
-      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} 
+      className={`cook-copy-btn ${copied ? 'copied' : ''}`} 
       onClick={handleCopy}
     >
       {copied ? (
-        <span style={{ color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
             <path d="M20 6L9 17l-5-5"/>
           </svg>
           Copied
-        </span>
+        </>
       ) : (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>
           Copy Day
-        </span>
+        </>
       )}
     </button>
   );
