@@ -254,7 +254,7 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 PART 2: FOR MY COOK (Weekly Text Plan)
 Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${selectedDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
-${hasPerMealMode ? `CRITICAL QUANTITY MODE — PER-MEAL MEALS: The following meals are configured to show **per-meal weights** (daily total ÷ mealsPerDay) in Part 2, NOT the whole-day total. For these meal headings, also note how many times they are eaten per day (e.g. "Chicken Meal (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
+${hasPerMealMode ? `CRITICAL QUANTITY MODE — PER-MEAL MEALS: The following meals are configured to show **per-meal weights** (daily total ÷ mealsPerDay) in Part 2, NOT the whole-day total. For these meal headings, also note how many times they are eaten per day (e.g. "Meal Name (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
 Per-meal quantity meals: ${perMealMealNames.join(', ')}
 All other meals should show their daily total weights followed by "(daily total)".
 
@@ -265,12 +265,23 @@ CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient
 Exact Output Template to Follow for Each Day:
 
 ### [DAY]: [Ingredient Variant Name]
-[For each meal, list its static ingredients and any daily variable ingredients that belong to this meal. If a meal is marked [COOK QUANTITIES: PER MEAL] above, show its ingredients (including daily variable ingredients) with per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)". Otherwise, show the ingredients with daily total weights followed by "(daily total)". Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix. E.g.
-"Meal Name${hasPerMealMode ? ' (x3 daily)' : ''}:
-ingredient1 name ${hasPerMealMode ? '50g (per meal)' : '150g (daily total)'}
-ingredient2 name ${hasPerMealMode ? '33g (per meal)' : '100g (daily total)'}
+[For each meal, list its static ingredients and any daily variable ingredients that belong to this meal. Ensure you use the correct quantity mode (per meal vs daily total) as specified below.
+- If a meal is marked [COOK QUANTITIES: PER MEAL] above, show its ingredients with per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)", and add the frequency suffix to the meal heading (e.g. "Meal Name (x3 daily):").
+- Otherwise (if NOT marked as [COOK QUANTITIES: PER MEAL]), show its ingredients with daily total weights followed by "(daily total)" and DO NOT add any frequency suffix to the meal heading (e.g. "Meal Name:").
+
+Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix.
+
+Example for a PER-MEAL mode meal:
+Meal Name (x3 daily):
+ingredient1 name 50g (per meal)
 liquids: 190g water
-prep method: airfryer 200c, 10min"]
+prep method: airfryer 200c, 10min
+
+Example for a DAILY TOTAL mode meal:
+Meal Name:
+ingredient1 name 150g (daily total)
+liquids: 190g water
+prep method: airfryer 200c, 10min]
 [List all custom splits and cooking instructions for each day here, again with no hyphen prefix]
 `;
 }
