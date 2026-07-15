@@ -296,7 +296,9 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
     webVersionCache: {
-      type: 'local',
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
+      strict: false
     },
     authTimeoutMs: 180000, // 3 mins — matches protocolTimeout; prevents spurious "auth timeout" on slow containers
     takeoverOnConflict: true, // Take over session if another browser (e.g. old container) is still connected
