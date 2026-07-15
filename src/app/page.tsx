@@ -1688,7 +1688,7 @@ export default function Home() {
               return (
                 <div>
                   <div className="input-row" style={{ marginBottom: '1.25rem' }}>
-                    <div className="form-group">
+                    <div className="form-group" style={{ flex: 2 }}>
                       <label className="form-label">Meal Name</label>
                       <input
                         type="text"
@@ -1698,7 +1698,7 @@ export default function Home() {
                         placeholder="e.g. Oats Meal, Pasta Meal"
                       />
                     </div>
-                    <div className="form-group">
+                    <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Meals Per Day (Frequency)</label>
                       <input
                         type="number"
@@ -1707,7 +1707,7 @@ export default function Home() {
                         onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
                       />
                     </div>
-                    <div className="form-group">
+                    <div className="form-group" style={{ flex: 1.2 }}>
                       <label className="form-label">Status</label>
                       <label className="auto-checkbox-container" style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', height: '38px' }}>
                         <input
@@ -1719,34 +1719,35 @@ export default function Home() {
                         Active / Include in Prompt
                       </label>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Cook Quantity Mode</label>
-                      <div style={{ display: 'flex', gap: '1rem' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                          <input
-                            type="radio"
-                            name={`cookQty-${selectedMeal.id}`}
-                            checked={(selectedMeal.cookQuantityMode || 'daily') === 'daily'}
-                            onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'daily')}
-                          />
-                          Whole Day Total
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                          <input
-                            type="radio"
-                            name={`cookQty-${selectedMeal.id}`}
-                            checked={(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'}
-                            onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'per-meal')}
-                          />
-                          Per Meal
-                        </label>
-                      </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', margin: '0.25rem 0 0 0' }}>
-                        {(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'
-                          ? `Cook message will show per-meal quantities (daily total ÷ ${selectedMeal.mealsPerDay}).`
-                          : 'Cook message will show the entire day\'s total for this meal.'}
-                      </p>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '550px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', padding: '0.85rem 1.15rem', borderRadius: '10px' }}>
+                    <label className="form-label" style={{ marginBottom: '0.35rem' }}>Cook Quantity Mode</label>
+                    <div style={{ display: 'flex', gap: '1.5rem', margin: '0.25rem 0' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name={`cookQty-${selectedMeal.id}`}
+                          checked={(selectedMeal.cookQuantityMode || 'daily') === 'daily'}
+                          onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'daily')}
+                        />
+                        Whole Day Total
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name={`cookQty-${selectedMeal.id}`}
+                          checked={(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'}
+                          onChange={() => updateMeal(selectedMeal.id, 'cookQuantityMode', 'per-meal')}
+                        />
+                        Per Meal
+                      </label>
                     </div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
+                      {(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'
+                        ? `Cook message will show per-meal quantities (daily total ÷ ${selectedMeal.mealsPerDay}).`
+                        : 'Cook message will show the entire day\'s total for this meal.'}
+                    </p>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -1961,7 +1962,7 @@ export default function Home() {
                 <div className="ingredients-list">
                   {(config.dailyVariables[activeDay] || []).map((ing, idx) => (
                     <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <div className={`ingredient-row-compact ${ing.disabled ? 'is-disabled' : ''}`} style={{ gridTemplateColumns: 'minmax(140px, 2fr) minmax(100px, 1.5fr) 95px auto auto auto auto' }}>
+                      <div className={`ingredient-row-compact ${ing.disabled ? 'is-disabled' : ''}`} style={{ gridTemplateColumns: 'minmax(140px, 2fr) minmax(100px, 1.5fr) 125px auto auto auto auto' }}>
                         <input
                           type="text"
                           className="form-input"
