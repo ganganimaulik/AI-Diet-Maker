@@ -31,6 +31,7 @@ RUN npm ci --only=production
 # Copy worker script
 COPY whatsapp-worker.js ./
 COPY src/lib/compile-prompt.js ./src/lib/
+COPY src/lib/compute-config-hash.js ./src/lib/
 
 # Expose Hugging Face Spaces port
 EXPOSE 7860
