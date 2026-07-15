@@ -1026,6 +1026,17 @@ export default function Home() {
       }
     }
 
+    // Auto-save config if there are unsaved changes so the config hash
+    // in the database reflects the current state before cache validation
+    if (hasUnsavedChanges) {
+      try {
+        await saveConfig(config);
+      } catch {
+        // saveConfig already shows an alert on failure; bail out
+        return;
+      }
+    }
+
     const cacheDay = getCurrentCacheDay();
 
     // Check cache first (unless forcing regeneration)
