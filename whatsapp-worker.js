@@ -499,7 +499,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 // -------------------------------------------------------------
 async function syncContacts(client) {
   // Wait for WWebJS bridge to be fully available in the browser context
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  await new Promise(resolve => setTimeout(resolve, 20000));
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
