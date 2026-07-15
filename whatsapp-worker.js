@@ -216,7 +216,7 @@ const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 
 // Cached Response Schema (AI diet plan cache per day)
 const CachedResponseSchema = new mongoose.Schema({
-  day: { type: String, required: true, index: true },
+  day: { type: String, required: true },
   configHash: { type: String, required: true },
   responseText: { type: String, default: '' },
   thinkingText: { type: String, default: '' },
@@ -291,6 +291,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client = new Client({
     authStrategy: new RemoteAuth({
+      clientId: 'session',
       store: store,
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
@@ -494,23 +495,33 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 // SYNC WHATSAPP CONTACTS TO MONGODB
 // -------------------------------------------------------------
 async function syncContacts(client) {
-  try {
-    console.log('Fetching WhatsApp chats to cache contacts...');
-    const chats = await client.getChats();
-    console.log(`Fetched ${chats.length} chats. Syncing to database...`);
-    
-    for (const chat of chats) {
-      if (chat.id && chat.name) {
-        await Contact.findOneAndUpdate(
-          { id: chat.id._serialized },
-          { name: chat.name, isGroup: chat.isGroup },
-          { upsert: true }
-        );
+  // Wait for WWebJS bridge to be fully available in the browser context
+  await new Promise(resolve => setTimeout(resolve, 10000));
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`Fetching WhatsApp chats to cache contacts (attempt ${attempt}/3)...`);
+      const chats = await client.getChats();
+      console.log(`Fetched ${chats.length} chats. Syncing to database...`);
+      
+      for (const chat of chats) {
+        if (chat.id && chat.name) {
+          await Contact.findOneAndUpdate(
+            { id: chat.id._serialized },
+            { name: chat.name, isGroup: chat.isGroup },
+            { upsert: true }
+          );
+        }
+      }
+      console.log('WhatsApp contacts synced successfully.');
+      return;
+    } catch (err) {
+      console.error(`Failed to sync contacts (attempt ${attempt}/3):`, err);
+      if (attempt < 3) {
+        console.log('Retrying contact sync in 5 seconds...');
+        await new Promise(r => setTimeout(r, 5000));
       }
     }
-    console.log('WhatsApp contacts synced successfully.');
-  } catch (err) {
-    console.error('Failed to sync contacts:', err);
   }
 }
 
