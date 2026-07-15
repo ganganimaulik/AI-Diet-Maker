@@ -899,22 +899,6 @@ input[type="radio"]:disabled {
   overflow: hidden;
 }
 
-.whatsapp-qr-container::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #a855f7, transparent);
-  animation: scanLine 2.5s ease-in-out infinite;
-}
-
-@keyframes scanLine {
-  0% { top: 0%; }
-  50% { top: 100%; }
-  100% { top: 0%; }
-}
 
 .whatsapp-qr-img {
   width: 200px;
