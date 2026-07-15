@@ -1687,8 +1687,8 @@ export default function Home() {
               if (!selectedMeal) return null;
               return (
                 <div>
-                  <div className="input-row" style={{ marginBottom: '1.25rem' }}>
-                    <div className="form-group" style={{ flex: 2 }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    <div className="form-group" style={{ flex: '2 1 240px', margin: 0 }}>
                       <label className="form-label">Meal Name</label>
                       <input
                         type="text"
@@ -1698,7 +1698,7 @@ export default function Home() {
                         placeholder="e.g. Oats Meal, Pasta Meal"
                       />
                     </div>
-                    <div className="form-group" style={{ flex: 1 }}>
+                    <div className="form-group" style={{ flex: '1 1 120px', margin: 0 }}>
                       <label className="form-label">Meals Per Day (Frequency)</label>
                       <input
                         type="number"
@@ -1707,17 +1707,19 @@ export default function Home() {
                         onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
                       />
                     </div>
-                    <div className="form-group" style={{ flex: 1.2 }}>
+                    <div className="form-group" style={{ flex: '1.5 1 220px', margin: 0 }}>
                       <label className="form-label">Status</label>
-                      <label className="auto-checkbox-container" style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', height: '38px' }}>
-                        <input
-                          type="checkbox"
-                          style={{ cursor: 'pointer' }}
-                          checked={!selectedMeal.disabled}
-                          onChange={e => updateMeal(selectedMeal.id, 'disabled', !e.target.checked)}
-                        />
-                        Active / Include in Prompt
-                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', minHeight: '44px' }}>
+                        <label className="auto-checkbox-container" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                          <input
+                            type="checkbox"
+                            style={{ cursor: 'pointer' }}
+                            checked={!selectedMeal.disabled}
+                            onChange={e => updateMeal(selectedMeal.id, 'disabled', !e.target.checked)}
+                          />
+                          Active / Include in Prompt
+                        </label>
+                      </div>
                     </div>
                   </div>
 
