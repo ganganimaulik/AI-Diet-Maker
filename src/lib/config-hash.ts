@@ -7,4 +7,4 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { computeConfigHash: _computeConfigHash } = require('./compute-config-hash.js');
 
-export const computeConfigHash: (config: any) => string = _computeConfigHash;
+export const computeConfigHash: (config: Record<string, unknown>) => string = _computeConfigHash;

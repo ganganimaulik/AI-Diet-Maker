@@ -13,10 +13,6 @@ interface GeminiCandidate {
   };
 }
 
-interface GeminiResponse {
-  candidates?: GeminiCandidate[];
-}
-
 interface GeminiPayload {
   contents: Array<{
     role: string;
@@ -54,7 +50,7 @@ async function* parseSSEResponse(response: Response) {
           try {
             const data = JSON.parse(dataStr);
             const candidate = data.candidates?.[0];
-            const parts = candidate?.content?.parts || [];
+            const parts: GeminiPart[] = candidate?.content?.parts || [];
 
             let text = '';
             let thought = '';
@@ -66,7 +62,7 @@ async function* parseSSEResponse(response: Response) {
               }
             }
             if (!text && !thought && parts.length > 0) {
-              text = parts.map((p: any) => p.text || '').join('');
+              text = parts.map((p) => p.text || '').join('');
             }
 
             if (text || thought) {
@@ -86,7 +82,7 @@ async function* parseSSEResponse(response: Response) {
         try {
           const data = JSON.parse(dataStr);
           const candidate = data.candidates?.[0];
-          const parts = candidate?.content?.parts || [];
+          const parts: GeminiPart[] = candidate?.content?.parts || [];
           let text = '';
           let thought = '';
           for (const part of parts) {
@@ -97,7 +93,7 @@ async function* parseSSEResponse(response: Response) {
             }
           }
           if (!text && !thought && parts.length > 0) {
-            text = parts.map((p: any) => p.text || '').join('');
+            text = parts.map((p) => p.text || '').join('');
           }
           if (text || thought) {
             yield { text, thought };
@@ -184,14 +180,15 @@ async function* getChunks(
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      let googleAuthOptions: any = undefined;
+      let googleAuthOptions: Record<string, unknown> | undefined = undefined;
       if (enterpriseAuthMethod === 'service-account') {
         try {
           googleAuthOptions = {
             credentials: JSON.parse(enterpriseServiceAccountJson)
           };
-        } catch (err: any) {
-          throw new Error(`Invalid Service Account JSON: ${err.message}`);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          throw new Error(`Invalid Service Account JSON: ${errMsg}`);
         }
       }
 
@@ -202,7 +199,7 @@ async function* getChunks(
         googleAuthOptions
       });
 
-      const configObj: any = {
+      const configObj: Record<string, unknown> = {
         temperature: 0.1,
       };
 
@@ -220,7 +217,7 @@ async function* getChunks(
 
       for await (const chunk of responseStream) {
         const candidate = chunk.candidates?.[0];
-        const parts = candidate?.content?.parts || [];
+        const parts: GeminiPart[] = candidate?.content?.parts as GeminiPart[] || [];
         let text = '';
         let thought = '';
 
@@ -233,7 +230,7 @@ async function* getChunks(
         }
 
         if (!text && !thought && parts.length > 0) {
-          text = parts.map((p: any) => p.text || '').join('');
+          text = parts.map((p) => p.text || '').join('');
         }
 
         if (text || thought) {
@@ -323,7 +320,7 @@ export async function POST(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        const sendEvent = (data: any) => {
+        const sendEvent = (data: unknown) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
@@ -345,7 +342,7 @@ export async function POST(req: Request) {
           for await (const chunk of generator) {
             sendEvent(chunk);
           }
-        } catch (error: any) {
+        } catch (error) {
           console.error('Streaming error in API route:', error);
           const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
           sendEvent({ error: errorMessage });

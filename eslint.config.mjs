@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "whatsapp-worker.js",
+    "src/lib/compile-prompt.js",
+    "src/lib/compute-config-hash.js",
+    ".wwebjs_auth/**",
   ]),
 ]);
 

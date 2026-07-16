@@ -197,7 +197,9 @@ const ConfigSchema = new mongoose.Schema({
   global: {
     dailyCalorieTarget: { type: Number, default: 1600 },
     totalOliveOil: { type: Number, default: 18 },
-    oliveOilSplitPercent: { type: Number, default: 50 }
+    oliveOilSplitPercent: { type: Number, default: 50 },
+    idealSodiumPotassiumRatioMin: { type: Number, default: 0.70 },
+    idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
   },
   meals: Array,
   customSplits: Array,
@@ -720,7 +722,9 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
         console.log(`Cache for ${targetDayName} is stale (config changed). Regenerating...`);
       }
       console.log('Generating diet plan from Gemini...');
-      generatedText = await callGeminiAPI(configDoc, prompt);
+      const geminiResult = await callGeminiAPI(configDoc, prompt);
+      generatedText = geminiResult.text;
+      const thinkingText = geminiResult.thinking;
 
       // Save to cache after successful generation
       try {
@@ -730,7 +734,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
             $set: {
               configHash: currentHash,
               responseText: generatedText,
-              thinkingText: '',
+              thinkingText: thinkingText || '',
               generatedAt: new Date()
             }
           },
@@ -914,8 +918,11 @@ async function callGeminiAPI(c, prompt) {
       const parts = candidate?.content?.parts || [];
 
       let text = '';
+      let thinking = '';
       for (const part of parts) {
-        if (!part.thought && part.text) {
+        if (part.thought === true || part.thought) {
+          thinking += part.text || '';
+        } else if (part.text) {
           text += part.text;
         }
       }
@@ -924,7 +931,7 @@ async function callGeminiAPI(c, prompt) {
         text = parts.map(p => p.text || '').join('');
       }
 
-      return text;
+      return { text, thinking };
 
     } else {
       // Service Account or ADC auth using @google/genai SDK
@@ -975,8 +982,11 @@ async function callGeminiAPI(c, prompt) {
       const parts = candidate?.content?.parts || [];
 
       let text = '';
+      let thinking = '';
       for (const part of parts) {
-        if (!part.thought && part.text) {
+        if (part.thought === true || part.thought) {
+          thinking += part.text || '';
+        } else if (part.text) {
           text += part.text;
         }
       }
@@ -985,7 +995,7 @@ async function callGeminiAPI(c, prompt) {
         text = parts.map(p => p.text || '').join('');
       }
 
-      return text;
+      return { text, thinking };
     }
   } else {
     // Default: Google AI Studio API
@@ -1033,8 +1043,11 @@ async function callGeminiAPI(c, prompt) {
     const parts = candidate?.content?.parts || [];
     
     let text = '';
+    let thinking = '';
     for (const part of parts) {
-      if (!part.thought && part.text) {
+      if (part.thought === true || part.thought) {
+        thinking += part.text || '';
+      } else if (part.text) {
         text += part.text;
       }
     }
@@ -1042,8 +1055,7 @@ async function callGeminiAPI(c, prompt) {
     if (!text && parts.length > 0) {
       text = parts.map(p => p.text || '').join('');
     }
-
-    return text;
+    return { text, thinking };
   }
 }
 
@@ -1252,6 +1264,7 @@ function checkTcp(host, port) {
     });
     
     socket.on('error', (err) => {
+      socket.destroy();
       resolve({ success: false, error: err.message });
     });
     
