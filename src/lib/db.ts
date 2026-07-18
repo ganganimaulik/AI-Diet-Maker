@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -8,7 +8,6 @@ interface MongooseCache {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var mongoose: MongooseCache | undefined;
 }
 
@@ -17,7 +16,7 @@ declare global {
  * in development. This prevents connections growing exponentially
  * during API Route usage.
  */
-let cached: MongooseCache = globalThis.mongoose || { conn: null, promise: null };
+const cached: MongooseCache = globalThis.mongoose || { conn: null, promise: null };
 
 if (!globalThis.mongoose) {
   globalThis.mongoose = cached;
@@ -53,10 +52,11 @@ export async function dbConnect() {
 }
 
 // -------------------------------------------------------------
-// SCHEMAS & INTERFACES
+// INTERFACES
+// The mongoose schemas themselves live in models.js so they can be
+// shared with whatsapp-worker.js via CommonJS require().
 // -------------------------------------------------------------
 
-// 1. Config Schema (Diet Maker Page settings)
 export interface IIngredient {
   name: string;
   weight: string;
@@ -122,75 +122,6 @@ export interface IConfig {
   updatedAt: Date;
 }
 
-const IngredientSchema = new Schema({
-  name: { type: String, required: true },
-  weight: { type: String, default: '' },
-  isAuto: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
-  personalOnly: { type: Boolean, default: false },
-  split: { type: String, default: '' },
-  maxGrams: { type: String, default: '' },
-  minGrams: { type: String, default: '' },
-  mealId: { type: String, default: '' }
-}, { _id: false });
-
-const CustomSplitSchema = new Schema({
-  id: { type: String, required: true },
-  name: { type: String, required: true },
-  value: { type: String, required: true }
-}, { _id: false });
-
-const MealSchema = new Schema({
-  id: { type: String, required: true },
-  name: { type: String, required: true },
-  mealsPerDay: { type: Number, default: 1 },
-  ingredients: [IngredientSchema],
-  water: { type: String, default: '' },
-  prepMethod: { type: String, default: '' },
-  cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
-  totalOliveOil: { type: Number, default: 0 },
-  oliveOilSplitPercent: { type: Number, default: 50 },
-  disabled: { type: Boolean, default: false }
-}, { _id: false });
-
-const ConfigSchema = new Schema<IConfig>({
-  apiKey: { type: String, default: '' },
-  provider: { type: String, default: 'google-ai-studio' },
-  enterpriseAuthMethod: { type: String, default: 'api-key' },
-  enterpriseApiKey: { type: String, default: '' },
-  enterpriseProjectId: { type: String, default: '' },
-  enterpriseLocation: { type: String, default: 'global' },
-  enterpriseServiceAccountJson: { type: String, default: '' },
-  model: { type: String, default: 'gemini-3.5-flash' },
-  customModel: { type: String, default: 'gemini-3.5-flash' },
-  thinkingEnabled: { type: Boolean, default: true },
-  thinkingBudget: { type: Number, default: 2048 },
-  global: {
-    dailyCalorieTarget: { type: Number, default: 1600 },
-    totalOliveOil: { type: Number, default: 18 },
-    oliveOilSplitPercent: { type: Number, default: 50 },
-    idealSodiumPotassiumRatioMin: { type: Number, default: 0.70 },
-    idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
-  },
-  meals: [MealSchema],
-  customSplits: [CustomSplitSchema],
-  dailyVariables: {
-    type: Map,
-    of: [IngredientSchema],
-    default: {}
-  },
-  dailySplits: {
-    type: Map,
-    of: [CustomSplitSchema],
-    default: {}
-  },
-  generationRange: { type: String, enum: ['all', 'single'], default: 'all' },
-  selectedGenerationDay: { type: String, default: 'MONDAY' },
-  huggingFaceToken: { type: String, default: '' },
-  huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }
-}, { timestamps: true });
-
-// 2. WhatsApp Client State Schema
 export interface IWhatsAppState {
   status: 'disconnected' | 'connecting' | 'qr_code' | 'ready';
   qr: string; // Base64 data URL
@@ -199,14 +130,6 @@ export interface IWhatsAppState {
   updatedAt: Date;
 }
 
-const WhatsAppStateSchema = new Schema<IWhatsAppState>({
-  status: { type: String, enum: ['disconnected', 'connecting', 'qr_code', 'ready'], default: 'disconnected' },
-  qr: { type: String, default: '' },
-  connectedPhone: { type: String, default: '' },
-  connectedName: { type: String, default: '' }
-}, { timestamps: true });
-
-// 3. Cached Contacts Schema
 export interface IContact {
   id: string; // e.g. "919876543210@c.us" or group ID
   name: string;
@@ -214,13 +137,6 @@ export interface IContact {
   updatedAt: Date;
 }
 
-const ContactSchema = new Schema<IContact>({
-  id: { type: String, required: true, unique: true },
-  name: { type: String, default: '' },
-  isGroup: { type: Boolean, default: false }
-}, { timestamps: true });
-
-// 4. Scheduler Schema
 export interface IScheduler {
   isEnabled: boolean;
   targetTime: string; // "14:00" (24h format HH:MM)
@@ -242,27 +158,6 @@ export interface IScheduler {
   updatedAt: Date;
 }
 
-const SchedulerSchema = new Schema<IScheduler>({
-  isEnabled: { type: Boolean, default: false },
-  targetTime: { type: String, default: '14:00' },
-  timezone: { type: String, default: 'Asia/Kolkata' },
-  recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
-  recipientId: { type: String, default: '' },
-  recipientName: { type: String, default: '' },
-  userRecipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
-  userRecipientId: { type: String, default: '' },
-  userRecipientName: { type: String, default: '' },
-  lastSentDate: { type: String, default: '' },
-  lastSentTime: { type: String, default: '' },
-  lastError: { type: String, default: '' },
-  retryCount: { type: Number, default: 0 },
-  nextRetryTime: { type: Number, default: 0 },
-  triggerTest: { type: Boolean, default: false },
-  triggerCookTest: { type: Boolean, default: false },
-  triggerMyselfTest: { type: Boolean, default: false }
-}, { timestamps: true });
-
-// 5. Cached Response Schema (AI diet plan cache per day)
 export interface ICachedResponse {
   day: string; // MONDAY, TUESDAY, etc.
   configHash: string; // SHA-256 hash of diet-relevant config
@@ -272,20 +167,11 @@ export interface ICachedResponse {
   updatedAt: Date;
 }
 
-const CachedResponseSchema = new Schema<ICachedResponse>({
-  day: { type: String, required: true, index: true },
-  configHash: { type: String, required: true },
-  responseText: { type: String, default: '' },
-  thinkingText: { type: String, default: '' },
-  generatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const models = require('./models.js');
 
-// Ensure one cached response per day
-CachedResponseSchema.index({ day: 1 }, { unique: true });
-
-// Compile models
-export const Config = mongoose.models.Config || mongoose.model<IConfig>('Config', ConfigSchema);
-export const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model<IWhatsAppState>('WhatsAppState', WhatsAppStateSchema);
-export const Contact = mongoose.models.Contact || mongoose.model<IContact>('Contact', ContactSchema);
-export const Scheduler = mongoose.models.Scheduler || mongoose.model<IScheduler>('Scheduler', SchedulerSchema);
-export const CachedResponse = mongoose.models.CachedResponse || mongoose.model<ICachedResponse>('CachedResponse', CachedResponseSchema);
+export const Config: Model<IConfig> = models.Config;
+export const WhatsAppState: Model<IWhatsAppState> = models.WhatsAppState;
+export const Contact: Model<IContact> = models.Contact;
+export const Scheduler: Model<IScheduler> = models.Scheduler;
+export const CachedResponse: Model<ICachedResponse> = models.CachedResponse;

@@ -7,4 +7,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { computeConfigHash: _computeConfigHash } = require('./compute-config-hash.js');
 
-export const computeConfigHash: (config: Record<string, unknown>) => string = _computeConfigHash;
+// Accepts plain config objects as well as hydrated mongoose documents.
+export const computeConfigHash: (config: object) => string = _computeConfigHash;

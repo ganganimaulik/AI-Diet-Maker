@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "whatsapp-worker.js",
     "src/lib/compile-prompt.js",
     "src/lib/compute-config-hash.js",
+    "src/lib/models.js",
+    "src/lib/gemini.js",
     ".wwebjs_auth/**",
   ]),
 ]);
