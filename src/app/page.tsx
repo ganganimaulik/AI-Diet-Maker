@@ -231,6 +231,7 @@ export default function Home() {
   const [savedConfig, setSavedConfig] = useState<Config | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [currentView, setCurrentView] = useState<'planner' | 'connections'>('planner');
+  const [layoutMode, setLayoutMode] = useState<'builder' | 'results' | 'split'>('split');
   const [activeTab, setActiveTab] = useState<string>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
   
@@ -1017,6 +1018,10 @@ export default function Home() {
 
   // Run AI Generation
   const handleGenerate = async (forceRegenerate = false) => {
+    if (layoutMode === 'builder') {
+      setLayoutMode('results');
+    }
+
     if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
         setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
@@ -1118,6 +1123,30 @@ export default function Home() {
       let hasSwitchedToThoughts = false;
       let hasSwitchedToUser = false;
 
+      // Throws on server-reported errors so they reach the outer catch
+      // and surface in the UI (must NOT be called inside a JSON-parse try).
+      const handleParsedEvent = (parsed: any) => {
+        if (parsed.error) {
+          throw new Error(parsed.error);
+        }
+        if (parsed.thought) {
+          currentThought += parsed.thought;
+          setThinkingText(currentThought);
+          if (!hasSwitchedToThoughts) {
+            hasSwitchedToThoughts = true;
+            setOutputTab('thoughts');
+          }
+        }
+        if (parsed.text) {
+          currentText += parsed.text;
+          setOutputText(currentText);
+          if (!hasSwitchedToUser) {
+            hasSwitchedToUser = true;
+            setOutputTab('user');
+          }
+        }
+      };
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -1131,30 +1160,14 @@ export default function Home() {
           if (!trimmed) continue;
           if (trimmed.startsWith('data:')) {
             const dataStr = trimmed.slice(5).trim();
+            let parsed;
             try {
-              const parsed = JSON.parse(dataStr);
-              if (parsed.error) {
-                throw new Error(parsed.error);
-              }
-              if (parsed.thought) {
-                currentThought += parsed.thought;
-                setThinkingText(currentThought);
-                if (!hasSwitchedToThoughts) {
-                  hasSwitchedToThoughts = true;
-                  setOutputTab('thoughts');
-                }
-              }
-              if (parsed.text) {
-                currentText += parsed.text;
-                setOutputText(currentText);
-                if (!hasSwitchedToUser) {
-                  hasSwitchedToUser = true;
-                  setOutputTab('user');
-                }
-              }
+              parsed = JSON.parse(dataStr);
             } catch (err) {
               console.error('Error parsing SSE line:', err);
+              continue;
             }
+            handleParsedEvent(parsed);
           }
         }
       }
@@ -1162,28 +1175,13 @@ export default function Home() {
       const trimmed = buffer.trim();
       if (trimmed.startsWith('data:')) {
         const dataStr = trimmed.slice(5).trim();
+        let parsed = null;
         try {
-          const parsed = JSON.parse(dataStr);
-          if (parsed.error) {
-            throw new Error(parsed.error);
-          }
-          if (parsed.thought) {
-            currentThought += parsed.thought;
-            setThinkingText(currentThought);
-            if (!hasSwitchedToThoughts) {
-              hasSwitchedToThoughts = true;
-              setOutputTab('thoughts');
-            }
-          }
-          if (parsed.text) {
-            currentText += parsed.text;
-            setOutputText(currentText);
-            if (!hasSwitchedToUser) {
-              hasSwitchedToUser = true;
-              setOutputTab('user');
-            }
-          }
-        } catch (err) {}
+          parsed = JSON.parse(dataStr);
+        } catch {}
+        if (parsed) {
+          handleParsedEvent(parsed);
+        }
       }
 
       // Save to cache after successful generation (only for non-custom prompts)
@@ -1493,9 +1491,53 @@ export default function Home() {
       </header>
 
       {currentView === 'planner' ? (
-        <main className="dashboard-grid">
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="layout-toggle-group">
+              <button 
+                className={`layout-toggle-btn ${layoutMode === 'builder' ? 'active' : ''}`}
+                onClick={() => setLayoutMode('builder')}
+                title="Show only the Diet Builder form"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 20h9M3 20h.01M3 16h.01M3 12h.01M3 8h.01M3 4h.01M7 4h14M7 9h14M7 14h14"/>
+                </svg>
+                Diet Builder Form
+              </button>
+              <button 
+                className={`layout-toggle-btn ${layoutMode === 'results' ? 'active' : ''}`}
+                onClick={() => setLayoutMode('results')}
+                title="Show only the Generated Diet Plan outputs"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Generated Plan
+                {outputText && (
+                  <span className="results-dot-indicator" style={{ marginLeft: '0.25rem' }}></span>
+                )}
+              </button>
+              <button 
+                className={`layout-toggle-btn ${layoutMode === 'split' ? 'active' : ''}`}
+                onClick={() => setLayoutMode('split')}
+                title="Show Builder and Generated Plan side-by-side"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="12" y1="3" x2="12" y2="21"/>
+                </svg>
+                Split Screen
+              </button>
+            </div>
+          </div>
+
+          <main className={`dashboard-grid layout-${layoutMode}`}>
           {/* Left Column: Configuration Panels */}
-          <section className="glass-panel">
+          <section className="glass-panel" style={{ display: layoutMode === 'results' ? 'none' : 'block' }}>
             <div className="panel-header">
               <h2 className="panel-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2374,7 +2416,7 @@ export default function Home() {
       </section>
 
           {/* Right Column: AI Outputs */}
-          <section className="glass-panel" style={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+          <section className="glass-panel" style={{ display: layoutMode === 'builder' ? 'none' : 'flex', minHeight: '500px', flexDirection: 'column' }}>
             <div className="output-header-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '1.5rem' }}>
                 {thinkingText && (
@@ -2506,6 +2548,7 @@ export default function Home() {
             </div>
           </section>
         </main>
+      </>
       ) : (
         <main className="settings-dashboard-grid animate-fadeIn">
           {/* Gemini API & Model Setup Panel */}
