@@ -12,6 +12,7 @@ interface OutputPanelProps {
   errorMsg: string;
   isGenerating: boolean;
   isCachedResponse: boolean;
+  hidden?: boolean;
 }
 
 function DayCopyButton({ text }: { text: string }) {
@@ -56,10 +57,11 @@ export default function OutputPanel({
   setOutputTab,
   errorMsg,
   isGenerating,
-  isCachedResponse
+  isCachedResponse,
+  hidden = false
 }: OutputPanelProps) {
   return (
-    <section className="glass-panel" style={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+    <section className="glass-panel" style={{ display: hidden ? 'none' : 'flex', minHeight: '500px', flexDirection: 'column' }}>
       <div className="output-header-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '1.5rem' }}>
           {thinkingText && (

@@ -15,6 +15,7 @@ import DailyVariablesTab from '@/components/planner/DailyVariablesTab';
 import PromptTab from '@/components/planner/PromptTab';
 import GenerationControls from '@/components/planner/GenerationControls';
 import OutputPanel, { OutputTab } from '@/components/planner/OutputPanel';
+import LayoutModeToggle, { LayoutMode } from '@/components/planner/LayoutModeToggle';
 import ApiSettingsCard from '@/components/connections/ApiSettingsCard';
 import WhatsAppConnectionCard from '@/components/connections/WhatsAppConnectionCard';
 import HuggingFaceCard from '@/components/connections/HuggingFaceCard';
@@ -26,6 +27,7 @@ export default function Home() {
   const [savedConfig, setSavedConfig] = useState<Config | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [currentView, setCurrentView] = useState<'planner' | 'connections'>('planner');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('split');
   const [activeTab, setActiveTab] = useState<string>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
 
@@ -199,6 +201,10 @@ export default function Home() {
 
   // Run AI Generation
   const handleGenerate = async (forceRegenerate = false) => {
+    if (layoutMode === 'builder') {
+      setLayoutMode('results');
+    }
+
     if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
         setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
@@ -323,15 +329,21 @@ export default function Home() {
         }
       };
 
+      // Parse-only errors are logged/ignored; errors thrown by applyEvent
+      // (server-reported errors) must propagate to the outer catch so they
+      // surface in the UI error banner.
       const processLine = (line: string, silent: boolean) => {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data:')) return;
         const dataStr = trimmed.slice(5).trim();
+        let parsed;
         try {
-          applyEvent(JSON.parse(dataStr));
+          parsed = JSON.parse(dataStr);
         } catch (err) {
           if (!silent) console.error('Error parsing SSE line:', err);
+          return;
         }
+        applyEvent(parsed);
       };
 
       while (true) {
@@ -401,9 +413,16 @@ export default function Home() {
       />
 
       {currentView === 'planner' ? (
-        <main className="dashboard-grid">
+        <>
+        <LayoutModeToggle
+          layoutMode={layoutMode}
+          setLayoutMode={setLayoutMode}
+          hasOutput={!!outputText}
+        />
+
+        <main className={`dashboard-grid layout-${layoutMode}`}>
           {/* Left Column: Configuration Panels */}
-          <section className="glass-panel">
+          <section className="glass-panel" style={{ display: layoutMode === 'results' ? 'none' : 'block' }}>
             <div className="panel-header">
               <h2 className="panel-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -494,8 +513,10 @@ export default function Home() {
             errorMsg={errorMsg}
             isGenerating={isGenerating}
             isCachedResponse={isCachedResponse}
+            hidden={layoutMode === 'builder'}
           />
         </main>
+        </>
       ) : (
         <main className="settings-dashboard-grid animate-fadeIn">
           <ApiSettingsCard
