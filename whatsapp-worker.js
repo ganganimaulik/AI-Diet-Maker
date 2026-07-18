@@ -23,6 +23,12 @@ const fs = require('fs');
 const path = require('path');
 const { compilePromptText } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
+const {
+  extractResponseText,
+  buildGenerationPayload,
+  buildStudioEndpoint,
+  buildEnterpriseEndpoint
+} = require('./src/lib/gemini.js');
 
 class CustomMongoStore {
   constructor({ mongoose, dataPath } = {}) {
@@ -147,85 +153,9 @@ if (!MONGODB_URI) {
 }
 
 // -------------------------------------------------------------
-// SCHEMAS DEFINITION
+// SCHEMAS & MODELS (shared with the Next.js app via src/lib/models.js)
 // -------------------------------------------------------------
-const WhatsAppStateSchema = new mongoose.Schema({
-  status: { type: String, enum: ['disconnected', 'connecting', 'qr_code', 'ready'], default: 'disconnected' },
-  qr: { type: String, default: '' },
-  connectedPhone: { type: String, default: '' },
-  connectedName: { type: String, default: '' }
-}, { timestamps: true });
-
-const ContactSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  name: { type: String, default: '' },
-  isGroup: { type: Boolean, default: false }
-}, { timestamps: true });
-
-const SchedulerSchema = new mongoose.Schema({
-  isEnabled: { type: Boolean, default: false },
-  targetTime: { type: String, default: '14:00' },
-  timezone: { type: String, default: 'Asia/Kolkata' },
-  recipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
-  recipientId: { type: String, default: '' },
-  recipientName: { type: String, default: '' },
-  userRecipientType: { type: String, enum: ['contact', 'group'], default: 'contact' },
-  userRecipientId: { type: String, default: '' },
-  userRecipientName: { type: String, default: '' },
-  lastSentDate: { type: String, default: '' },
-  lastSentTime: { type: String, default: '' },
-  lastError: { type: String, default: '' },
-  retryCount: { type: Number, default: 0 },
-  nextRetryTime: { type: Number, default: 0 },
-  triggerTest: { type: Boolean, default: false },
-  triggerCookTest: { type: Boolean, default: false },
-  triggerMyselfTest: { type: Boolean, default: false }
-}, { timestamps: true });
-
-const ConfigSchema = new mongoose.Schema({
-  apiKey: { type: String, default: '' },
-  provider: { type: String, default: 'google-ai-studio' },
-  enterpriseAuthMethod: { type: String, default: 'api-key' },
-  enterpriseApiKey: { type: String, default: '' },
-  enterpriseProjectId: { type: String, default: '' },
-  enterpriseLocation: { type: String, default: 'global' },
-  enterpriseServiceAccountJson: { type: String, default: '' },
-  model: { type: String, default: 'gemini-3.5-flash' },
-  customModel: { type: String, default: 'gemini-3.5-flash' },
-  thinkingEnabled: { type: Boolean, default: true },
-  thinkingBudget: { type: Number, default: 2048 },
-  global: {
-    dailyCalorieTarget: { type: Number, default: 1600 },
-    totalOliveOil: { type: Number, default: 18 },
-    oliveOilSplitPercent: { type: Number, default: 50 },
-    idealSodiumPotassiumRatioMin: { type: Number, default: 0.70 },
-    idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
-  },
-  meals: Array,
-  customSplits: Array,
-  dailyVariables: Map,
-  dailySplits: Map,
-  generationRange: { type: String, default: 'all' },
-  selectedGenerationDay: { type: String, default: 'MONDAY' },
-  huggingFaceToken: { type: String, default: '' },
-  huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }
-}, { timestamps: true });
-
-const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppState', WhatsAppStateSchema);
-const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
-const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', SchedulerSchema);
-const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
-
-// Cached Response Schema (AI diet plan cache per day)
-const CachedResponseSchema = new mongoose.Schema({
-  day: { type: String, required: true },
-  configHash: { type: String, required: true },
-  responseText: { type: String, default: '' },
-  thinkingText: { type: String, default: '' },
-  generatedAt: { type: Date, default: Date.now }
-}, { timestamps: true });
-CachedResponseSchema.index({ day: 1 }, { unique: true });
-const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
+const { WhatsAppState, Contact, Scheduler, Config, CachedResponse } = require('./src/lib/models.js');
 
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
@@ -863,10 +793,10 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
   }
 }
 
-// Helper: Call Google Gemini API
+// Helper: Call Google Gemini API (shared payload/endpoint/parsing logic lives in src/lib/gemini.js)
 async function callGeminiAPI(c, prompt) {
   const model = c.model === 'custom' ? c.customModel : c.model;
-  
+
   if (c.provider === 'gemini-enterprise') {
     if (c.enterpriseAuthMethod === 'api-key') {
       const enterpriseApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || c.enterpriseApiKey;
@@ -877,29 +807,9 @@ async function callGeminiAPI(c, prompt) {
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      // Build the request payload for Gemini Enterprise REST API
-      const payload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-        }
-      };
+      const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048);
+      const endpoint = buildEnterpriseEndpoint(c.enterpriseProjectId, c.enterpriseLocation, model, enterpriseApiKey);
 
-      if (c.thinkingEnabled) {
-        payload.generationConfig.thinkingConfig = {
-          thinkingBudget: c.thinkingBudget || 2048
-        };
-      }
-
-      const loc = c.enterpriseLocation || 'global';
-      const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
-      const endpoint = `https://${host}/v1/projects/${c.enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:generateContent?key=${enterpriseApiKey}`;
-      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -914,24 +824,8 @@ async function callGeminiAPI(c, prompt) {
       }
 
       const data = await response.json();
-      const candidate = data.candidates?.[0];
-      const parts = candidate?.content?.parts || [];
-
-      let text = '';
-      let thinking = '';
-      for (const part of parts) {
-        if (part.thought === true || part.thought) {
-          thinking += part.text || '';
-        } else if (part.text) {
-          text += part.text;
-        }
-      }
-
-      if (!text && parts.length > 0) {
-        text = parts.map(p => p.text || '').join('');
-      }
-
-      return { text, thinking };
+      const { text, thought } = extractResponseText(data);
+      return { text, thinking: thought };
 
     } else {
       // Service Account or ADC auth using @google/genai SDK
@@ -978,24 +872,8 @@ async function callGeminiAPI(c, prompt) {
         config: configObj
       });
 
-      const candidate = sdkResponse.candidates?.[0];
-      const parts = candidate?.content?.parts || [];
-
-      let text = '';
-      let thinking = '';
-      for (const part of parts) {
-        if (part.thought === true || part.thought) {
-          thinking += part.text || '';
-        } else if (part.text) {
-          text += part.text;
-        }
-      }
-
-      if (!text && parts.length > 0) {
-        text = parts.map(p => p.text || '').join('');
-      }
-
-      return { text, thinking };
+      const { text, thought } = extractResponseText(sdkResponse);
+      return { text, thinking: thought };
     }
   } else {
     // Default: Google AI Studio API
@@ -1004,34 +882,14 @@ async function callGeminiAPI(c, prompt) {
       throw new Error('Gemini API Key is missing.');
     }
 
-    const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.1,
-      }
-    };
-
-    if (c.thinkingEnabled) {
-      payload.generationConfig.thinkingConfig = {
-        thinkingBudget: c.thinkingBudget || 2048
-      };
-    }
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048);
+    const response = await fetch(buildStudioEndpoint(model, apiKey), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1039,23 +897,8 @@ async function callGeminiAPI(c, prompt) {
     }
 
     const data = await response.json();
-    const candidate = data.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    
-    let text = '';
-    let thinking = '';
-    for (const part of parts) {
-      if (part.thought === true || part.thought) {
-        thinking += part.text || '';
-      } else if (part.text) {
-        text += part.text;
-      }
-    }
-
-    if (!text && parts.length > 0) {
-      text = parts.map(p => p.text || '').join('');
-    }
-    return { text, thinking };
+    const { text, thought } = extractResponseText(data);
+    return { text, thinking: thought };
   }
 }
 

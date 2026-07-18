@@ -2,28 +2,30 @@ import { NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
 import { GoogleGenAI } from '@google/genai';
 
-interface GeminiPart {
-  text?: string;
-  thought?: boolean;
+import {
+  extractPartsText,
+  extractResponseText,
+  buildGenerationPayload,
+  buildStudioEndpoint,
+  buildEnterpriseEndpoint,
+  parseGeminiErrorText,
+  type GeminiPart
+} from '@/lib/gemini-helpers';
+
+interface GeminiChunk {
+  text: string;
+  thought: string;
 }
 
-interface GeminiCandidate {
-  content?: {
-    parts?: GeminiPart[];
-  };
-}
-
-interface GeminiPayload {
-  contents: Array<{
-    role: string;
-    parts: Array<{ text: string }>;
-  }>;
-  generationConfig: {
-    temperature: number;
-    thinkingConfig?: {
-      thinkingBudget: number;
-    };
-  };
+/** Parse one SSE `data:` payload into { text, thought }, or null if empty. */
+function parseSSEData(dataStr: string): GeminiChunk | null {
+  if (dataStr === '[DONE]') return null;
+  const data = JSON.parse(dataStr);
+  const { text, thought } = extractResponseText(data);
+  if (text || thought) {
+    return { text, thought };
+  }
+  return null;
 }
 
 async function* parseSSEResponse(response: Response) {
@@ -31,6 +33,17 @@ async function* parseSSEResponse(response: Response) {
   if (!reader) return;
   const decoder = new TextDecoder();
   let buffer = '';
+
+  const parseLine = (line: string): GeminiChunk | null => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return null;
+    try {
+      return parseSSEData(trimmed.slice(5).trim());
+    } catch (e) {
+      console.error('Error parsing SSE chunk:', trimmed, e);
+      return null;
+    }
+  };
 
   try {
     while (true) {
@@ -42,65 +55,13 @@ async function* parseSSEResponse(response: Response) {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        if (trimmed.startsWith('data:')) {
-          const dataStr = trimmed.slice(5).trim();
-          if (dataStr === '[DONE]') continue;
-          try {
-            const data = JSON.parse(dataStr);
-            const candidate = data.candidates?.[0];
-            const parts: GeminiPart[] = candidate?.content?.parts || [];
-
-            let text = '';
-            let thought = '';
-            for (const part of parts) {
-              if (part.thought === true || part.thought) {
-                thought += part.text || '';
-              } else if (part.text) {
-                text += part.text;
-              }
-            }
-            if (!text && !thought && parts.length > 0) {
-              text = parts.map((p) => p.text || '').join('');
-            }
-
-            if (text || thought) {
-              yield { text, thought };
-            }
-          } catch (e) {
-            console.error('Error parsing SSE chunk:', dataStr, e);
-          }
-        }
+        const chunk = parseLine(line);
+        if (chunk) yield chunk;
       }
     }
 
-    const trimmed = buffer.trim();
-    if (trimmed.startsWith('data:')) {
-      const dataStr = trimmed.slice(5).trim();
-      if (dataStr !== '[DONE]') {
-        try {
-          const data = JSON.parse(dataStr);
-          const candidate = data.candidates?.[0];
-          const parts: GeminiPart[] = candidate?.content?.parts || [];
-          let text = '';
-          let thought = '';
-          for (const part of parts) {
-            if (part.thought === true || part.thought) {
-              thought += part.text || '';
-            } else if (part.text) {
-              text += part.text;
-            }
-          }
-          if (!text && !thought && parts.length > 0) {
-            text = parts.map((p) => p.text || '').join('');
-          }
-          if (text || thought) {
-            yield { text, thought };
-          }
-        } catch (e) {}
-      }
-    }
+    const tailChunk = parseLine(buffer);
+    if (tailChunk) yield tailChunk;
   } finally {
     reader.releaseLock();
   }
@@ -129,27 +90,14 @@ async function* getChunks(
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      const payload: GeminiPayload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-        }
-      };
-
-      if (thinkingEnabled) {
-        payload.generationConfig.thinkingConfig = {
-          thinkingBudget: thinkingBudget
-        };
-      }
-
-      const loc = enterpriseLocation || 'global';
-      const host = loc === 'global' ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
-      const endpoint = `https://${host}/v1/projects/${enterpriseProjectId}/locations/${loc}/publishers/google/models/${model}:streamGenerateContent?key=${activeEnterpriseApiKey}&alt=sse`;
+      const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget);
+      const endpoint = buildEnterpriseEndpoint(
+        enterpriseProjectId,
+        enterpriseLocation,
+        model,
+        activeEnterpriseApiKey,
+        { stream: true }
+      );
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -161,14 +109,7 @@ async function* getChunks(
 
       if (!response.ok) {
         const errorText = await response.text();
-        let errorMessage = 'Failed to generate content from Gemini Enterprise API.';
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error?.message || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        throw new Error(errorMessage);
+        throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini Enterprise API.'));
       }
 
       yield* parseSSEResponse(response);
@@ -216,23 +157,8 @@ async function* getChunks(
       });
 
       for await (const chunk of responseStream) {
-        const candidate = chunk.candidates?.[0];
-        const parts: GeminiPart[] = candidate?.content?.parts as GeminiPart[] || [];
-        let text = '';
-        let thought = '';
-
-        for (const part of parts) {
-          if (part.thought === true || part.thought) {
-            thought += part.text || '';
-          } else if (part.text) {
-            text += part.text;
-          }
-        }
-
-        if (!text && !thought && parts.length > 0) {
-          text = parts.map((p) => p.text || '').join('');
-        }
-
+        const parts = (chunk.candidates?.[0]?.content?.parts as GeminiPart[]) || [];
+        const { text, thought } = extractPartsText(parts);
         if (text || thought) {
           yield { text, thought };
         }
@@ -243,45 +169,18 @@ async function* getChunks(
       throw new Error('Gemini API Key is required. Please set it in the configuration.');
     }
 
-    const payload: GeminiPayload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.1,
-      }
-    };
-
-    if (thinkingEnabled) {
-      payload.generationConfig.thinkingConfig = {
-        thinkingBudget: thinkingBudget
-      };
-    }
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget);
+    const response = await fetch(buildStudioEndpoint(model, apiKey, { stream: true }), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      let errorMessage = 'Failed to generate content from Gemini API.';
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorMessage;
-      } catch {
-        errorMessage = errorText || errorMessage;
-      }
-      throw new Error(errorMessage);
+      throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini API.'));
     }
 
     yield* parseSSEResponse(response);
@@ -295,10 +194,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { 
-      prompt, 
+    const {
+      prompt,
       model = 'gemini-3.5-flash',
-      thinkingEnabled = false, 
+      thinkingEnabled = false,
       thinkingBudget = 2048,
       provider = 'google-ai-studio',
       enterpriseAuthMethod = 'api-key',
@@ -307,12 +206,12 @@ export async function POST(req: Request) {
       enterpriseLocation = 'global',
       enterpriseServiceAccountJson = ''
     } = body;
-    
+
     const apiKey = req.headers.get('x-api-key') || body.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
 
     if (!prompt) {
       return NextResponse.json(
-        { error: 'Prompt is required.' }, 
+        { error: 'Prompt is required.' },
         { status: 400 }
       );
     }
@@ -364,7 +263,7 @@ export async function POST(req: Request) {
     console.error('Error in generate API route:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json(
-      { error: errorMessage }, 
+      { error: errorMessage },
       { status: 500 }
     );
   }
