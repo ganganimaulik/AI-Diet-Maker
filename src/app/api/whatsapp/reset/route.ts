@@ -94,7 +94,8 @@ export async function POST() {
           status: 'disconnected',
           qr: '',
           connectedPhone: '',
-          connectedName: ''
+          connectedName: '',
+          authFailureCount: 0
         }
       },
       { upsert: true }

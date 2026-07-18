@@ -30,6 +30,27 @@ const {
   buildEnterpriseEndpoint
 } = require('./src/lib/gemini.js');
 
+// RemoteAuth.disconnect() normally DELETES the session from the remote store,
+// and whatsapp-web.js calls it internally on any non-accepted connection state
+// (and on logout navigation via authStrategy.logout()). Those states occur
+// routinely while the old and new containers overlap during a redeploy, which
+// permanently logged us out on every deploy. Override it to clean up the local
+// profile only and leave MongoDB untouched — the worker decides explicitly
+// (consecutive-failure counter or manual reset) when the session is truly dead.
+class PreservingRemoteAuth extends RemoteAuth {
+  async disconnect() {
+    const pathExists = await this.isValidPath(this.userDataDir);
+    if (pathExists) {
+      await fs.promises.rm(this.userDataDir, {
+        recursive: true,
+        force: true,
+        maxRetries: this.rmMaxRetries
+      }).catch(() => {});
+    }
+    clearInterval(this.backupSync);
+  }
+}
+
 class CustomMongoStore {
   constructor({ mongoose, dataPath } = {}) {
     if (!mongoose) throw new Error('A valid Mongoose instance is required for CustomMongoStore.');
@@ -122,6 +143,18 @@ class CustomMongoStore {
   }
 }
 
+function clearLocalAuthDir() {
+  const localPath = path.resolve('./.wwebjs_auth');
+  if (fs.existsSync(localPath)) {
+    try {
+      fs.rmSync(localPath, { recursive: true, force: true });
+      console.log('Deleted local .wwebjs_auth directory.');
+    } catch (err) {
+      console.error('Failed to delete local .wwebjs_auth directory:', err);
+    }
+  }
+}
+
 async function resetWhatsAppSession() {
   console.log('Resetting WhatsApp session in DB & local cache...');
   try {
@@ -133,17 +166,44 @@ async function resetWhatsAppSession() {
   } catch (err) {
     console.error('Failed to delete remote WhatsApp session:', err);
   }
-  
-  // Clear local directory
-  const localPath = path.resolve('./.wwebjs_auth');
-  if (fs.existsSync(localPath)) {
-    try {
-      fs.rmSync(localPath, { recursive: true, force: true });
-      console.log('Deleted local .wwebjs_auth directory.');
-    } catch (err) {
-      console.error('Failed to delete local .wwebjs_auth directory:', err);
-    }
+
+  clearLocalAuthDir();
+}
+
+// A single "session invalid" signal (auth failure, LOGOUT/UNPAIRED disconnect)
+// is usually a deploy collision — the old container still holds the session —
+// NOT a dead session. Count consecutive signals in MongoDB (survives process
+// restarts) and wipe the stored session only after several in a row, so a
+// genuinely dead session still self-heals to a fresh QR code within a few
+// restart cycles. A successful 'ready' resets the counter.
+const MAX_CONSECUTIVE_AUTH_FAILURES = 3;
+
+// Returns true if the stored session was wiped.
+async function handleInvalidSessionSignal(source) {
+  let failureCount = 1;
+  try {
+    const stateDoc = await WhatsAppState.findOneAndUpdate(
+      {},
+      { $inc: { authFailureCount: 1 } },
+      { upsert: true, new: true }
+    );
+    failureCount = stateDoc.authFailureCount || 1;
+  } catch (err) {
+    console.error('Failed to update auth failure counter (preserving session):', err);
   }
+
+  if (failureCount >= MAX_CONSECUTIVE_AUTH_FAILURES) {
+    console.log(`${source}: ${failureCount} consecutive failures — wiping stored session to force a fresh QR code.`);
+    await resetWhatsAppSession();
+    try {
+      await WhatsAppState.findOneAndUpdate({}, { $set: { authFailureCount: 0 } });
+    } catch (_) {}
+    return true;
+  }
+
+  console.warn(`${source}: failure ${failureCount}/${MAX_CONSECUTIVE_AUTH_FAILURES} — retaining session in MongoDB, clearing local cache only.`);
+  clearLocalAuthDir();
+  return false;
 }
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -222,7 +282,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   }
 
   client = new Client({
-    authStrategy: new RemoteAuth({
+    authStrategy: new PreservingRemoteAuth({
       clientId: 'session',
       store: store,
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
@@ -278,7 +338,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     
     await WhatsAppState.findOneAndUpdate(
       {},
-      { status: 'ready', qr: '', connectedPhone: phone, connectedName: name },
+      { status: 'ready', qr: '', connectedPhone: phone, connectedName: name, authFailureCount: 0 },
       { upsert: true }
     );
 
@@ -310,13 +370,21 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     console.log('WhatsApp Client disconnected. Reason:', reason);
     isClientReady = false;
 
-    // During graceful shutdown (SIGTERM from HF Spaces redeploy), do NOT wipe the
-    // MongoDB session. The shutdown handler has already saved it. Only wipe on
-    // genuine disconnections (e.g., user logged out from phone).
+    // Never wipe the MongoDB session on a transient disconnect — CONFLICT,
+    // NAVIGATION, TIMEOUT, etc. happen routinely during HF Spaces redeploys
+    // while the old and new containers briefly fight over the same session.
+    // Even LOGOUT/UNPAIRED can be a deploy-race artifact, so those only count
+    // toward the consecutive-failure threshold instead of wiping immediately.
+    const reasonStr = String(reason);
+    const looksLoggedOut = ['LOGOUT', 'UNPAIRED', 'UNPAIRED_IDLE'].includes(reasonStr);
+
     if (isShuttingDown) {
       console.log('Shutdown in progress — preserving WhatsApp session in MongoDB.');
+    } else if (looksLoggedOut) {
+      await handleInvalidSessionSignal(`Disconnected (${reasonStr})`);
     } else {
-      await resetWhatsAppSession();
+      console.log(`Transient disconnect (${reasonStr}) — preserving WhatsApp session in MongoDB. Clearing local cache only.`);
+      clearLocalAuthDir();
     }
 
     await WhatsAppState.findOneAndUpdate(
@@ -336,17 +404,8 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client.on('auth_failure', async (msg) => {
     console.error('WhatsApp Authentication Failure:', msg);
-    
-    // If the process has been running for less than 3 minutes, do not delete the session.
-    // It's highly likely an overlapping deployment collision or temporary connectivity issue.
-    // Exiting will cause HF to restart the container, by which time the old container will be dead.
-    const processUptime = process.uptime();
-    if (processUptime < 180) {
-      console.warn(`Auth failure occurred during startup (uptime: ${Math.round(processUptime)}s). Retaining session in MongoDB and exiting to allow container restart.`);
-    } else {
-      console.log('Auth failure occurred after startup. Wiping session.');
-      await resetWhatsAppSession();
-    }
+
+    await handleInvalidSessionSignal('Authentication failure');
 
     await WhatsAppState.findOneAndUpdate(
       {},
@@ -1168,7 +1227,7 @@ const server = http.createServer(async (req, res) => {
         await resetWhatsAppSession();
         await WhatsAppState.findOneAndUpdate(
           {},
-          { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '' },
+          { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '', authFailureCount: 0 },
           { upsert: true }
         );
         if (client) {

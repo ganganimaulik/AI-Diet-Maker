@@ -86,7 +86,10 @@ const WhatsAppStateSchema = new Schema({
   status: { type: String, enum: ['disconnected', 'connecting', 'qr_code', 'ready'], default: 'disconnected' },
   qr: { type: String, default: '' },
   connectedPhone: { type: String, default: '' },
-  connectedName: { type: String, default: '' }
+  connectedName: { type: String, default: '' },
+  // Consecutive auth failures across worker restarts; the stored session is
+  // wiped only after several in a row (a single failure is usually a deploy race)
+  authFailureCount: { type: Number, default: 0 }
 }, { timestamps: true });
 
 // 3. Cached Contacts Schema
