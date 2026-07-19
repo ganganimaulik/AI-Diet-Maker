@@ -14,7 +14,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 2;
+const PROMPT_TEMPLATE_VERSION = 4;
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -118,7 +118,12 @@ function compilePromptText(c, options) {
         const override = dayOverrides.find(o => o.id === globalSplit.id);
         const name = (globalSplit.name || '').trim();
         const value = ((override ? override.value : globalSplit.value) || '').trim();
-        const ownerMeal = globalSplit.mealId ? mealsList.find(m => m.id === globalSplit.mealId) : null;
+        // Every split is owned by a meal; legacy splits with a missing/unknown
+        // mealId fall back to the default meal (same rule as normalizeConfig).
+        const ownerMeal = (globalSplit.mealId && mealsList.find(m => m.id === globalSplit.mealId))
+          || mealsList.find(m => m.id === 'meal-chicken')
+          || mealsList[0]
+          || null;
         return {
           name: name === PLACEHOLDER_SPLIT_NAME ? '' : name,
           value,
@@ -131,7 +136,7 @@ function compilePromptText(c, options) {
     mealsList.forEach(meal => {
       (meal.ingredients || []).forEach(ing => {
         if (!ing.disabled && ing.split && ing.split.trim()) {
-          dynamicIngredientSplits.push(`${meal.name} Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}"`);
+          dynamicIngredientSplits.push(`Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}" (belongs to ${meal.name})`);
         }
       });
     });
@@ -141,7 +146,7 @@ function compilePromptText(c, options) {
       const mealId = ing.mealId || 'meal-chicken';
       const meal = mealsList.find(m => m.id === mealId);
       if (meal && !ing.disabled && ing.split && ing.split.trim()) {
-        dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}"`);
+        dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}" (belongs to ${meal.name})`);
       }
     });
 
@@ -233,7 +238,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Daily variables calories = sum of calories of all variables for that day
 3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
-5. Each daily variable ingredient is marked with a "(belongs to [Meal Name])" suffix specifying which meal it belongs to. When constructing the meal breakdowns in PART 1 and copy-pasteable meal plans in PART 2, you MUST add each daily variable ingredient to its designated meal. Do NOT add any daily variable ingredient under any meal other than the one specified in its belongs-to suffix.
+5. Each daily variable ingredient is marked with a "(belongs to [Meal Name])" suffix specifying which meal it belongs to. When constructing the meal breakdowns in PART 1 and copy-pasteable meal plans in PART 2, you MUST add each daily variable ingredient to its designated meal. Do NOT add any daily variable ingredient under any meal other than the one specified in its belongs-to suffix. The same ownership rule applies to splits: every entry under [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] is marked with a "(belongs to [Meal Name])" suffix — in PART 2 you MUST print each entry inside its owning meal's block (after the meal's ingredient lines) WITHOUT the "(belongs to ...)" suffix. PART 2 must NOT contain any separate or trailing "Splits & Cooking Instructions" section; if an entry somehow lacks a belongs-to suffix, print it at the end of that day's plan without any section heading.
 6. If a day contains multiple \`[AUTO]\` ingredients:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
@@ -258,7 +263,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
 10. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights and variables) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
-11. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1 and Part 2. Ensure the sum of split weights matches the total ingredient weight exactly.
+11. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1, and in Part 2 inside the owning meal's block (as marked by the entry's belongs-to suffix). Ensure the sum of split weights matches the total ingredient weight exactly.
 
 ---
 
@@ -290,7 +295,7 @@ All other meals should show their daily total weights followed by "(daily total)
 
 ` : 'All meals should show their daily total weights followed by "(daily total)".\n\n'}CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
-CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details in the splits/cooking instructions section.
+CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details printed under their owning meal's block (as marked by the belongs-to suffix).
 
 Exact Output Template to Follow for Each Day:
 
@@ -299,20 +304,24 @@ Exact Output Template to Follow for Each Day:
 - If a meal is marked [COOK QUANTITIES: PER MEAL] above, show its ingredients with per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)", and add the frequency suffix to the meal heading (e.g. "Meal Name (x3 daily):").
 - Otherwise (if NOT marked as [COOK QUANTITIES: PER MEAL]), show its ingredients with daily total weights followed by "(daily total)" and DO NOT add any frequency suffix to the meal heading (e.g. "Meal Name:").
 
+After the meal's ingredient lines, print ALL splits/cooking instructions from [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] that are marked "(belongs to [this meal's name])" for that day — custom splits verbatim, and ingredient split instructions as their computed exact gram amounts (per calculator instruction 11) — WITHOUT the "(belongs to ...)" suffix.
+
 Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix.
 
 Example for a PER-MEAL mode meal:
 Meal Name (x3 daily):
 ingredient1 name 50g (per meal)
+[splits/instructions belonging to this meal, if any, without the "(belongs to ...)" suffix]
 liquids: 190g water
 prep method: airfryer 200c, 10min
 
 Example for a DAILY TOTAL mode meal:
 Meal Name:
 ingredient1 name 150g (daily total)
+[splits/instructions belonging to this meal, if any, without the "(belongs to ...)" suffix]
 liquids: 190g water
 prep method: airfryer 200c, 10min]
-[List all custom splits and cooking instructions for each day here, again with no hyphen prefix]
+[Do NOT output any separate "Splits & Cooking Instructions" section or trailing splits list — every split/cooking instruction must already be printed under its owning meal's block above.]
 `;
 }
 
