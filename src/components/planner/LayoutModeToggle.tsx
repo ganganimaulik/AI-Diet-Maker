@@ -40,7 +40,7 @@ export default function LayoutModeToggle({ layoutMode, setLayoutMode, hasOutput 
           )}
         </button>
         <button
-          className={`layout-toggle-btn ${layoutMode === 'split' ? 'active' : ''}`}
+          className={`layout-toggle-btn btn-split-mode ${layoutMode === 'split' ? 'active' : ''}`}
           onClick={() => setLayoutMode('split')}
           title="Show Builder and Generated Plan side-by-side"
         >

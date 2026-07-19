@@ -27,7 +27,7 @@ export default function Home() {
   const [savedConfig, setSavedConfig] = useState<Config | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [currentView, setCurrentView] = useState<'planner' | 'connections'>('planner');
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('split');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('builder');
   const [activeTab, setActiveTab] = useState<string>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
 
@@ -145,6 +145,10 @@ export default function Home() {
     };
 
     checkAuthAndLoad();
+
+    if (window.innerWidth > 1024) {
+      setLayoutMode('split');
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
