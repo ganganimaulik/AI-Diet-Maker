@@ -9,6 +9,7 @@
  */
 
 const { createHash } = require('crypto');
+const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
 
 /**
  * Compute a SHA-256 hash of the diet-relevant configuration fields.
@@ -21,6 +22,7 @@ const { createHash } = require('crypto');
  *   - dailyVariables (per-day ingredient overrides)
  *   - dailySplits (per-day split overrides)
  *   - model, customModel, thinkingEnabled, thinkingBudget
+ *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
  *
  * Excluded fields (changes do NOT invalidate cache):
  *   - apiKey, provider, enterpriseApiKey, etc. (API routing config)
@@ -65,6 +67,7 @@ function computeConfigHash(config) {
     customModel: config.customModel || '',
     thinkingEnabled: !!config.thinkingEnabled,
     thinkingBudget: config.thinkingBudget || 0,
+    promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
   };
 
   const jsonStr = JSON.stringify(hashableFields, (key, value) => {
