@@ -57,6 +57,7 @@ function computeConfigHash(config) {
       id: s.id,
       name: s.name,
       value: s.value,
+      mealId: s.mealId,
     })),
     dailyVariables: normalizeDailyMap(config.dailyVariables),
     dailySplits: normalizeDailySplitsMap(config.dailySplits),

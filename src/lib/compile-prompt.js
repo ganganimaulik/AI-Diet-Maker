@@ -92,15 +92,33 @@ function compilePromptText(c, options) {
     }
   }
 
+  // Splits are attached to meals; drop those whose meal is disabled.
+  // Splits with no/unknown mealId (legacy configs) are kept.
+  const allMeals = c.meals || [];
+  splitsList = splitsList.filter(s => {
+    if (!s.mealId) return true;
+    const ownerMeal = allMeals.find(m => m.id === s.mealId);
+    return !ownerMeal || !ownerMeal.disabled;
+  });
+
+  // Defaults a newly added split used to carry before being filled in;
+  // never meaningful, so they are kept out of the prompt.
+  const PLACEHOLDER_SPLIT_NAME = 'New Split/Instruction';
+  const PLACEHOLDER_SPLIT_VALUE = 'Enter instructions here';
+
   const getSplitsForDayText = (day, prefix = '') => {
     const dayOverrides = mapGet(c.dailySplits, day) || [];
-    const daySplits = splitsList.map(globalSplit => {
-      const override = dayOverrides.find(o => o.id === globalSplit.id);
-      return {
-        name: globalSplit.name,
-        value: override ? override.value : globalSplit.value
-      };
-    });
+    const daySplits = splitsList
+      .map(globalSplit => {
+        const override = dayOverrides.find(o => o.id === globalSplit.id);
+        const name = (globalSplit.name || '').trim();
+        const value = ((override ? override.value : globalSplit.value) || '').trim();
+        return {
+          name: name === PLACEHOLDER_SPLIT_NAME ? '' : name,
+          value
+        };
+      })
+      .filter(s => s.value && s.value !== PLACEHOLDER_SPLIT_VALUE);
 
     const dynamicIngredientSplits = [];
     mealsList.forEach(meal => {
@@ -122,7 +140,7 @@ function compilePromptText(c, options) {
 
     const allSplits = [
       ...dynamicIngredientSplits,
-      ...daySplits.map(s => `${s.name}: ${s.value}`)
+      ...daySplits.map(s => s.name ? `${s.name}: ${s.value}` : s.value)
     ];
 
     return allSplits.map(s => `${prefix}- ${s}`).join('\n');

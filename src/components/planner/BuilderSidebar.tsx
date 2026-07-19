@@ -27,7 +27,7 @@ export default function BuilderSidebar({ meals, activeTab, setActiveTab, onAddMe
             <circle cx="12" cy="12" r="6"/>
             <circle cx="12" cy="12" r="2"/>
           </svg>
-          Targets &amp; Splits
+          Global Targets
         </span>
       </button>
 

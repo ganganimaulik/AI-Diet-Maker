@@ -96,11 +96,19 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
           const override = daySplits.find(s => s.id === globalSplit.id);
           const currentValue = override ? override.value : globalSplit.value;
           const isCustomized = !!override;
+          const ownerMeal = (config.meals || []).find(m => m.id === globalSplit.mealId);
 
           return (
             <div key={globalSplit.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{globalSplit.name}</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                  {globalSplit.name}
+                  {ownerMeal && (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.72rem', marginLeft: '0.4rem' }}>
+                      · {ownerMeal.name}
+                    </span>
+                  )}
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{
                     fontSize: '0.7rem',

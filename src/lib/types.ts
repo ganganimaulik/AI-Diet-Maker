@@ -16,6 +16,7 @@ export interface CustomSplit {
   id: string;
   name: string;
   value: string;
+  mealId?: string;
 }
 
 export interface Meal {
@@ -191,8 +192,8 @@ export const DEFAULT_CONFIG: Config = {
     ]
   },
   customSplits: [
-    { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-    { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
+    { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste', mealId: 'meal-chicken' },
+    { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min', mealId: 'meal-chicken' }
   ],
   dailySplits: {},
   generationRange: 'all',
@@ -239,6 +240,15 @@ export const normalizeConfig = (loaded: any): Config => {
   } else {
     normalized.customSplits = loaded.customSplits;
   }
+
+  // Ensure every split is attached to a meal so it shows up in that meal's editor
+  const splitFallbackMealId = normalized.meals.some((m: Meal) => m.id === 'meal-chicken')
+    ? 'meal-chicken'
+    : normalized.meals[0]?.id;
+  normalized.customSplits = (normalized.customSplits || []).map((s: CustomSplit) => ({
+    ...s,
+    mealId: s.mealId && normalized.meals.some((m: Meal) => m.id === s.mealId) ? s.mealId : splitFallbackMealId
+  }));
   return normalized;
 };
 

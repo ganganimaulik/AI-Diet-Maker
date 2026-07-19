@@ -25,10 +25,13 @@ const IngredientSchema = new Schema({
   mealId: { type: String, default: '' }
 }, { _id: false });
 
+// name/value intentionally not required: a freshly added split starts empty
+// (the prompt compiler skips splits with an empty value).
 const CustomSplitSchema = new Schema({
   id: { type: String, required: true },
-  name: { type: String, required: true },
-  value: { type: String, required: true }
+  name: { type: String, default: '' },
+  value: { type: String, default: '' },
+  mealId: { type: String, default: '' }
 }, { _id: false });
 
 const MealSchema = new Schema({

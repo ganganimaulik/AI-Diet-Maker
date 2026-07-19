@@ -41,7 +41,21 @@ export function useConfigActions(
   const deleteMeal = (id: string) => {
     setConfig(prev => {
       const remainingMeals = (prev.meals || []).filter(m => m.id !== id);
-      return { ...prev, meals: remainingMeals };
+
+      // Remove the meal's cook splits and any per-day overrides of them
+      const removedSplitIds = (prev.customSplits || []).filter(s => s.mealId === id).map(s => s.id);
+      const customSplits = (prev.customSplits || []).filter(s => s.mealId !== id);
+      const dailySplits = { ...(prev.dailySplits || {}) };
+      if (removedSplitIds.length > 0) {
+        for (const day in dailySplits) {
+          dailySplits[day] = dailySplits[day].filter(s => !removedSplitIds.includes(s.id));
+          if (dailySplits[day].length === 0) {
+            delete dailySplits[day];
+          }
+        }
+      }
+
+      return { ...prev, meals: remainingMeals, customSplits, dailySplits };
     });
     setActiveTab('global');
   };
@@ -238,11 +252,14 @@ export function useConfigActions(
     });
   };
 
-  const addCustomSplit = () => {
+  const addCustomSplit = (mealId: string) => {
+    // Empty name/value: the inputs show placeholder hints, and the prompt
+    // compiler skips splits until a real value is entered.
     const newSplit = {
       id: Date.now().toString(),
-      name: 'New Split/Instruction',
-      value: 'Enter instructions here'
+      name: '',
+      value: '',
+      mealId
     };
     setConfig(prev => ({
       ...prev,

@@ -73,6 +73,7 @@ export interface ICustomSplit {
   id: string;
   name: string;
   value: string;
+  mealId?: string;
 }
 
 export interface IMeal {
