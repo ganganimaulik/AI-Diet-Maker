@@ -28,10 +28,12 @@ COPY package.json package-lock.json* ./
 # Install production dependencies (puppeteer will download Chrome for Testing here)
 RUN npm ci --only=production
 
-# Copy worker script
+# Copy worker script and the .js lib files it require()s at runtime.
+# Use a wildcard so new require()s don't silently break the image — the worker
+# pulls in compile-prompt, compute-config-hash, gemini and models. The .ts
+# files in src/lib belong to the Next.js app and are intentionally excluded.
 COPY whatsapp-worker.js ./
-COPY src/lib/compile-prompt.js ./src/lib/
-COPY src/lib/compute-config-hash.js ./src/lib/
+COPY src/lib/*.js ./src/lib/
 
 # Expose Hugging Face Spaces port
 EXPOSE 7860
