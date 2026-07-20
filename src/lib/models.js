@@ -125,7 +125,7 @@ const SchedulerSchema = new Schema({
 
 // 5. Cached Response Schema (AI diet plan cache per day)
 const CachedResponseSchema = new Schema({
-  day: { type: String, required: true, index: true },
+  day: { type: String, required: true },
   configHash: { type: String, required: true },
   responseText: { type: String, default: '' },
   thinkingText: { type: String, default: '' },
