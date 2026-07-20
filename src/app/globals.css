@@ -1530,16 +1530,6 @@ input[type="radio"]:disabled {
   grid-template-columns: 1fr;
 }
 
-.dashboard-grid.layout-split {
-  grid-template-columns: 1.22fr 0.78fr;
-}
-
-@media (max-width: 1100px) {
-  .dashboard-grid.layout-split {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ==========================================
    Premium Responsive Design Additions
    ========================================== */
@@ -1640,12 +1630,7 @@ input[type="radio"]:disabled {
   }
 }
 
-/* Layout switcher styles - hide split mode on mobile */
-@media (max-width: 1024px) {
-  .btn-split-mode {
-    display: none !important;
-  }
-}
+
 
 /* Builder layout sidebar converted to horizontal tabs list */
 @media (max-width: 950px) {

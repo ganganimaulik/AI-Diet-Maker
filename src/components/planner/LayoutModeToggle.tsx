@@ -1,6 +1,6 @@
 'use client';
 
-export type LayoutMode = 'builder' | 'results' | 'split';
+export type LayoutMode = 'builder' | 'results';
 
 interface LayoutModeToggleProps {
   layoutMode: LayoutMode;
@@ -38,17 +38,6 @@ export default function LayoutModeToggle({ layoutMode, setLayoutMode, hasOutput 
           {hasOutput && (
             <span className="results-dot-indicator" style={{ marginLeft: '0.25rem' }}></span>
           )}
-        </button>
-        <button
-          className={`layout-toggle-btn btn-split-mode ${layoutMode === 'split' ? 'active' : ''}`}
-          onClick={() => setLayoutMode('split')}
-          title="Show Builder and Generated Plan side-by-side"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="12" y1="3" x2="12" y2="21"/>
-          </svg>
-          Split Screen
         </button>
       </div>
     </div>

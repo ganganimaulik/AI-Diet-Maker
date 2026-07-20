@@ -145,10 +145,6 @@ export default function Home() {
     };
 
     checkAuthAndLoad();
-
-    if (window.innerWidth > 1024) {
-      setLayoutMode('split');
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
