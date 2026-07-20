@@ -34,9 +34,14 @@ RUN npm ci --only=production
 # files in src/lib belong to the Next.js app and are intentionally excluded.
 COPY whatsapp-worker.js ./
 COPY src/lib/*.js ./src/lib/
+COPY docker-entrypoint.sh ./
 
 # Expose Hugging Face Spaces port
 EXPOSE 7860
+
+# Entrypoint points /etc/resolv.conf at Cloudflare/Google DNS (override via
+# DNS_SERVERS env var) before starting the worker, then execs CMD.
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
 
 # Run worker
 CMD ["node", "whatsapp-worker.js"]
