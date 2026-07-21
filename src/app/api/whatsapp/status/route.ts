@@ -41,12 +41,13 @@ export async function GET() {
     }
 
     // Check the WhatsApp worker health. The worker was migrated off Hugging Face
-    // Spaces to a GCP Compute Engine VM; we ping its health endpoint directly.
-    // Field names (hfSpaceStatus/hfSpaceDetails) are kept for call-site compat.
+    // Spaces to an Oracle Cloud Always-Free VM (Docker); we ping its health
+    // endpoint directly. Field names (hfSpaceStatus/hfSpaceDetails) are kept
+    // for call-site compat.
     let hfSpaceStatus = 'UNREACHABLE';
     let hfSpaceDetails: { hardware: string; sdk: string } | null = null;
 
-    const workerUrl = process.env.WORKER_URL || 'http://136.116.192.159:7860';
+    const workerUrl = process.env.WORKER_URL || 'http://158.101.23.222:7860';
     try {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 4000); // 4s timeout
@@ -57,7 +58,7 @@ export async function GET() {
       if (workerRes.ok) {
         const workerData = await workerRes.json();
         hfSpaceStatus = workerData?.status === 'online' ? 'RUNNING' : 'DOWN';
-        hfSpaceDetails = { hardware: 'GCP e2-micro · us-central1', sdk: 'Node 20 + PM2' };
+        hfSpaceDetails = { hardware: 'Oracle Cloud Always-Free · Phoenix', sdk: 'Docker' };
       } else {
         hfSpaceStatus = `HTTP_ERROR_${workerRes.status}`;
       }

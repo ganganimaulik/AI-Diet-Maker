@@ -1,19 +1,10 @@
 name: Deploy worker to GCP VM
 
-# Deploys the WhatsApp worker to the Compute Engine instance (PM2) on every
-# push to main. The VM holds a git clone at ~/app; this pulls, installs deps
-# only when package-lock.json changed, and reloads the PM2 process.
+# Superseded by deploy-oracle.yml: the worker moved to the Oracle Always-Free
+# VM since the GCP e2-micro isn't actually free on this account. Kept as a
+# manual-only rollback path until the GCP VM is decommissioned.
 
 on:
-  push:
-    branches: [main]
-    # Only redeploy the worker when worker-relevant files change, so frontend /
-    # dashboard-only pushes (Vercel's concern) don't needlessly restart it.
-    paths:
-      - 'whatsapp-worker.js'
-      - 'src/lib/**'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch:
 
 concurrency:

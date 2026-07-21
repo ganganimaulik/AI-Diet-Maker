@@ -1,0 +1,57 @@
+name: Deploy worker to Oracle Cloud VM
+
+# Deploys the WhatsApp worker to the Oracle Always-Free VM (Docker) on every
+# push to main that touches worker-relevant files. The VM holds a git clone
+# at ~/app; this pulls, rebuilds the image (Docker layer cache skips npm ci
+# when package-lock.json is unchanged), and replaces the running container.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'whatsapp-worker.js'
+      - 'src/lib/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-oracle
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          HOST: ${{ secrets.ORACLE_HOST }}
+          USER_NAME: ${{ secrets.ORACLE_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$USER_NAME@$HOST" 'bash -s' <<'REMOTE'
+          set -e
+          cd ~/app
+          git fetch --depth 1 origin main
+          git reset --hard origin/main
+          echo "Now at: $(git rev-parse --short HEAD) - $(git log -1 --pretty=%s)"
+          sudo docker build -t diet-worker-img .
+          sudo docker stop diet-worker || true
+          sudo docker rm diet-worker || true
+          sudo docker run -d \
+            --name diet-worker \
+            --restart unless-stopped \
+            -p 7860:7860 \
+            --env-file ~/worker.env \
+            -e PORT=7860 \
+            --memory=850m --memory-swap=2.8g \
+            diet-worker-img
+          sleep 5
+          sudo docker ps --filter name=diet-worker
+          REMOTE

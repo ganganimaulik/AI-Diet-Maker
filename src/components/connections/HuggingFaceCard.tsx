@@ -3,10 +3,11 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Config } from '@/lib/types';
 
-// The worker was migrated off Hugging Face Spaces to a GCP Compute Engine VM.
-// This card now reflects that worker's health; /api/whatsapp/status pings the
-// worker's own health endpoint. The prop shape is kept (config/setConfig/onSave/
-// onWakeUp/etc.) so the call site in page.tsx does not need to change.
+// The worker was migrated off Hugging Face Spaces to an Oracle Cloud
+// Always-Free VM (Docker). This card now reflects that worker's health;
+// /api/whatsapp/status pings the worker's own health endpoint. The prop shape
+// is kept (config/setConfig/onSave/onWakeUp/etc.) so the call site in
+// page.tsx does not need to change.
 interface HuggingFaceCardProps {
   config: Config;
   setConfig: Dispatch<SetStateAction<Config>>;
@@ -40,15 +41,16 @@ export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCard
           <line x1="6" y1="6" x2="6.01" y2="6" />
           <line x1="6" y1="18" x2="6.01" y2="18" />
         </svg>
-        <span>WhatsApp Worker (GCP VM)</span>
+        <span>WhatsApp Worker (Oracle VM)</span>
         <span className={`whatsapp-status-badge ${badgeClass}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', marginLeft: 'auto' }}>
           {badgeLabel}
         </span>
       </h3>
 
       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-        The worker runs 24/7 on a Google Cloud VM under PM2. It auto-restarts on
-        crash or reboot and reconnects to WhatsApp and MongoDB automatically.
+        The worker runs 24/7 in Docker on an Oracle Cloud Always-Free VM. It
+        auto-restarts on crash or reboot and reconnects to WhatsApp and
+        MongoDB automatically.
       </div>
 
       {hfDetails && (
@@ -70,7 +72,7 @@ export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCard
       )}
 
       <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '1rem', lineHeight: '1.4' }}>
-        ℹ️ Deploys automatically on every push to <code>main</code> (GitHub Actions → GCP VM). No keep-alive needed — the VM never sleeps.
+        ℹ️ Deploys automatically on every push to <code>main</code> (GitHub Actions → Oracle VM). No keep-alive needed — the VM never sleeps.
       </p>
     </section>
   );
