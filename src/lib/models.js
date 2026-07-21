@@ -55,8 +55,8 @@ const ConfigSchema = new Schema({
   enterpriseProjectId: { type: String, default: '' },
   enterpriseLocation: { type: String, default: 'global' },
   enterpriseServiceAccountJson: { type: String, default: '' },
-  model: { type: String, default: 'gemini-3.5-flash' },
-  customModel: { type: String, default: 'gemini-3.5-flash' },
+  model: { type: String, default: 'gemini-3.6-flash' },
+  customModel: { type: String, default: 'gemini-3.6-flash' },
   thinkingEnabled: { type: Boolean, default: true },
   thinkingBudget: { type: Number, default: 2048 },
   global: {
