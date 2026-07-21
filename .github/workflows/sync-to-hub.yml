@@ -1,9 +1,9 @@
 name: Sync to Hugging Face Spaces
 
 on:
-  push:
-    branches: [main]
-  # Allows manually running this workflow from the GitHub Actions tab
+  # Auto-sync to Hugging Face disabled after migrating the worker to the GCP VM
+  # (prevents double-deploys fighting over the shared WhatsApp session).
+  # Kept for manual use only: Actions tab -> Run workflow.
   workflow_dispatch:
 
 jobs:

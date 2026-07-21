@@ -1,12 +1,8 @@
 name: Keep HF Space Awake
 
 on:
-  schedule:
-    # Trigger every 3 hours to keep the Space warm
-    - cron: '0 */3 * * *'
-    # Trigger checks right before and during the sending window (1:30 PM, 1:45 PM, 2:00 PM, 2:15 PM, 2:30 PM IST)
-    - cron: '0,15,30,45 8 * * *'
-    - cron: '0 9 * * *'
+  # HF Space keep-warm/auto-heal disabled after migrating to the always-on GCP VM
+  # (the VM never sleeps, so no pinging needed). Kept for manual use only.
   workflow_dispatch: # Allows manually running the workflow from the GitHub Actions UI
 
 jobs:

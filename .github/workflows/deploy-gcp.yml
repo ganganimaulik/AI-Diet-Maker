@@ -1,0 +1,47 @@
+name: Deploy worker to GCP VM
+
+# Deploys the WhatsApp worker to the Compute Engine instance (PM2) on every
+# push to main. The VM holds a git clone at ~/app; this pulls, installs deps
+# only when package-lock.json changed, and reloads the PM2 process.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gcp
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.GCP_SSH_KEY }}
+          HOST: ${{ secrets.GCP_HOST }}
+          USER_NAME: ${{ secrets.GCP_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$USER_NAME@$HOST" 'bash -s' <<'REMOTE'
+          set -e
+          cd ~/app
+          LOCK_BEFORE=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+          git fetch --depth 1 origin main
+          git reset --hard origin/main
+          LOCK_AFTER=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+          echo "Now at: $(git rev-parse --short HEAD) - $(git log -1 --pretty=%s)"
+          if [ ! -d node_modules/whatsapp-web.js ] || [ "$LOCK_BEFORE" != "$LOCK_AFTER" ]; then
+            echo "Dependencies changed -> npm ci"
+            npm ci --omit=dev --no-audit --no-fund
+          else
+            echo "No dependency changes -> skipping npm ci"
+          fi
+          pm2 startOrReload ~/ecosystem.config.js --update-env
+          pm2 save
+          pm2 status
+          REMOTE
