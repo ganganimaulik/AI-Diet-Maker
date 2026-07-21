@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbConnect, WhatsAppState, Scheduler, Config } from '@/lib/db';
+import { dbConnect, WhatsAppState, Scheduler } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     }
 
     await dbConnect();
-    
+
     let state = await WhatsAppState.findOne();
     if (!state) {
       state = await WhatsAppState.create({
@@ -40,78 +40,31 @@ export async function GET() {
       });
     }
 
-    // Check Hugging Face Space runtime status
-    let hfSpaceStatus = 'NOT_CONFIGURED';
-    let hfSpaceDetails = null;
+    // Check the WhatsApp worker health. The worker was migrated off Hugging Face
+    // Spaces to a GCP Compute Engine VM; we ping its health endpoint directly.
+    // Field names (hfSpaceStatus/hfSpaceDetails) are kept for call-site compat.
+    let hfSpaceStatus = 'UNREACHABLE';
+    let hfSpaceDetails: { hardware: string; sdk: string } | null = null;
 
-    const config = await Config.findOne();
-    if (config && config.huggingFaceSpace) {
-      try {
-        const headers: Record<string, string> = {};
-        if (config.huggingFaceToken) {
-          headers['Authorization'] = `Bearer ${config.huggingFaceToken}`;
-        }
-        
-        // Query Hugging Face Space API
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 3500); // 3.5s timeout
-        
-        const hfRes = await fetch(`https://huggingface.co/api/spaces/${config.huggingFaceSpace}`, {
-          headers,
-          signal: controller.signal
-        });
-        clearTimeout(id);
+    const workerUrl = process.env.WORKER_URL || 'http://136.116.192.159:7860';
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 4000); // 4s timeout
 
-        if (hfRes.ok) {
-          const hfData = await hfRes.json();
-          if (hfData.runtime && hfData.runtime.stage) {
-            const stage = hfData.runtime.stage.toUpperCase();
-            hfSpaceStatus = stage;
-            let hardwareStr = '';
-            if (hfData.runtime.hardware) {
-              if (typeof hfData.runtime.hardware === 'string') {
-                hardwareStr = hfData.runtime.hardware;
-              } else if (typeof hfData.runtime.hardware === 'object') {
-                hardwareStr = hfData.runtime.hardware.current || hfData.runtime.hardware.requested || '';
-              }
-            }
+      const workerRes = await fetch(`${workerUrl}/`, { signal: controller.signal });
+      clearTimeout(id);
 
-            let sdkStr = '';
-            if (hfData.runtime.sdk) {
-              if (typeof hfData.runtime.sdk === 'string') {
-                sdkStr = hfData.runtime.sdk;
-              } else if (typeof hfData.runtime.sdk === 'object') {
-                sdkStr = hfData.runtime.sdk.current || '';
-              }
-            }
-
-            hfSpaceDetails = {
-              stage,
-              hardware: hardwareStr,
-              sdk: sdkStr
-            };
-
-            // If the space is sleeping, send a background request to wake it up
-            if (stage === 'SLEEPING') {
-              const normalized = config.huggingFaceSpace.replace(/[\/_.]/g, '-').toLowerCase();
-              const spaceUrl = `https://${normalized}.hf.space/`;
-              
-              // Fire-and-forget wake up request
-              fetch(spaceUrl, { headers }).catch(err => {
-                console.error('Background HF wake up request failed:', err);
-              });
-            }
-          }
-        } else if (hfRes.status === 401 || hfRes.status === 404) {
-          hfSpaceStatus = 'UNAUTHORIZED';
-        } else {
-          hfSpaceStatus = `HTTP_ERROR_${hfRes.status}`;
-        }
-      } catch (err) {
-        console.error('Error fetching Hugging Face status:', err);
-        const isAbort = err instanceof Error && err.name === 'AbortError';
-        hfSpaceStatus = isAbort ? 'TIMEOUT' : 'ERROR';
+      if (workerRes.ok) {
+        const workerData = await workerRes.json();
+        hfSpaceStatus = workerData?.status === 'online' ? 'RUNNING' : 'DOWN';
+        hfSpaceDetails = { hardware: 'GCP e2-micro · us-central1', sdk: 'Node 20 + PM2' };
+      } else {
+        hfSpaceStatus = `HTTP_ERROR_${workerRes.status}`;
       }
+    } catch (err) {
+      console.error('Error fetching worker status:', err);
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      hfSpaceStatus = isAbort ? 'TIMEOUT' : 'UNREACHABLE';
     }
 
     return NextResponse.json({ state, scheduler, hfSpaceStatus, hfSpaceDetails });
@@ -130,12 +83,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { 
-      isEnabled, 
-      targetTime, 
-      timezone, 
-      recipientType, 
-      recipientId, 
+    const {
+      isEnabled,
+      targetTime,
+      timezone,
+      recipientType,
+      recipientId,
       recipientName,
       userRecipientType,
       userRecipientId,

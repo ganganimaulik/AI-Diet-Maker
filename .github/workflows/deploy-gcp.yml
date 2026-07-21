@@ -7,6 +7,13 @@ name: Deploy worker to GCP VM
 on:
   push:
     branches: [main]
+    # Only redeploy the worker when worker-relevant files change, so frontend /
+    # dashboard-only pushes (Vercel's concern) don't needlessly restart it.
+    paths:
+      - 'whatsapp-worker.js'
+      - 'src/lib/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 concurrency:
