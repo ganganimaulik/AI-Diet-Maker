@@ -1,17 +1,26 @@
 'use client';
 import { useState } from 'react';
+import { DAYS_OF_WEEK } from '@/lib/types';
+import { CacheEntryStatus } from '@/hooks/useDietCache';
 import { renderMarkdown, getCookPlanOnly, parseCookPlanDays } from '@/lib/markdown';
 
 export type OutputTab = 'user' | 'cook' | 'thoughts';
 
 interface OutputPanelProps {
+  selectedDay: string;
+  onSelectDay: (day: string) => void;
+  cacheStatus: Record<string, CacheEntryStatus>;
   outputText: string;
   thinkingText: string;
   outputTab: OutputTab;
   setOutputTab: (tab: OutputTab) => void;
   errorMsg: string;
   isGenerating: boolean;
+  isBatchGenerating: boolean;
+  batchProgress: Record<string, 'pending' | 'generating' | 'done' | 'error'>;
   isCachedResponse: boolean;
+  onGenerate: (forceRegenerate?: boolean) => void;
+  onGenerateAllDays: () => void;
   hidden?: boolean;
 }
 
@@ -51,17 +60,106 @@ function DayCopyButton({ text }: { text: string }) {
 }
 
 export default function OutputPanel({
+  selectedDay,
+  onSelectDay,
+  cacheStatus,
   outputText,
   thinkingText,
   outputTab,
   setOutputTab,
   errorMsg,
   isGenerating,
+  isBatchGenerating,
+  batchProgress,
   isCachedResponse,
+  onGenerate,
+  onGenerateAllDays,
   hidden = false
 }: OutputPanelProps) {
+  const isBusy = isGenerating || isBatchGenerating;
+
   return (
     <section className="glass-panel" style={{ display: hidden ? 'none' : 'flex', minHeight: '500px', flexDirection: 'column' }}>
+      {/* Day Switcher Toolbar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: '0.75rem',
+        marginBottom: '0.75rem',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        flexWrap: 'wrap',
+        gap: '0.5rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '0.25rem' }}>
+            Day:
+          </span>
+          {DAYS_OF_WEEK.map(day => {
+            const status = cacheStatus[day];
+            const isCurrent = day === selectedDay;
+            const progress = batchProgress[day];
+
+            let badgeBg = 'rgba(255,255,255,0.03)';
+            let badgeColor = 'var(--text-muted)';
+            let label = day.substring(0, 3);
+
+            if (progress === 'generating') {
+              badgeBg = 'rgba(192, 132, 252, 0.2)';
+              badgeColor = '#c084fc';
+              label = `⌛ ${day.substring(0, 3)}`;
+            } else if (progress === 'error') {
+              badgeBg = 'rgba(244, 63, 94, 0.2)';
+              badgeColor = '#fda4af';
+              label = `❌ ${day.substring(0, 3)}`;
+            } else if (status?.isValid) {
+              badgeBg = 'rgba(34, 197, 94, 0.15)';
+              badgeColor = '#4ade80';
+              label = `✓ ${day.substring(0, 3)}`;
+            } else if (status && !status.isValid) {
+              badgeBg = 'rgba(245, 158, 11, 0.15)';
+              badgeColor = '#fcd34d';
+              label = `! ${day.substring(0, 3)}`;
+            }
+
+            return (
+              <button
+                key={day}
+                onClick={() => onSelectDay(day)}
+                style={{
+                  padding: '0.25rem 0.55rem',
+                  fontSize: '0.75rem',
+                  borderRadius: '6px',
+                  border: isCurrent ? '1.5px solid #c084fc' : '1px solid rgba(255,255,255,0.06)',
+                  background: isCurrent ? (status?.isValid ? 'rgba(34, 197, 94, 0.2)' : 'rgba(192, 132, 252, 0.25)') : badgeBg,
+                  color: isCurrent ? '#fff' : badgeColor,
+                  cursor: 'pointer',
+                  fontWeight: isCurrent ? 700 : 500,
+                  transition: 'all 0.15s ease'
+                }}
+                title={`${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quick action button inside header if not generated or for quick generation */}
+        {!outputText && !isBusy && (
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button
+              className="btn-primary"
+              style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+              onClick={() => onGenerate(false)}
+            >
+              Generate {selectedDay}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Part 1 / Part 2 / Thinking Tabs */}
       <div className="output-header-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '1.5rem' }}>
           {thinkingText && (
@@ -76,28 +174,34 @@ export default function OutputPanel({
             className={`output-tab ${outputTab === 'user' ? 'active' : ''}`}
             onClick={() => setOutputTab('user')}
           >
-            Part 1: For Myself
+            Part 1: For Myself ({selectedDay})
           </button>
           <button
             className={`output-tab ${outputTab === 'cook' ? 'active' : ''}`}
             onClick={() => setOutputTab('cook')}
           >
-            Part 2: For Cook
+            Part 2: For Cook ({selectedDay})
           </button>
         </div>
         {isGenerating && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>
             <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', boxShadow: 'none', margin: 0 }}></div>
-            <span style={{ opacity: 0.9 }}>Streaming...</span>
+            <span style={{ opacity: 0.9 }}>Generating {selectedDay}...</span>
           </div>
         )}
-        {isCachedResponse && !isGenerating && outputText && (
+        {isBatchGenerating && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>
+            <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', boxShadow: 'none', margin: 0 }}></div>
+            <span style={{ opacity: 0.9 }}>Generating All 7 Days...</span>
+          </div>
+        )}
+        {isCachedResponse && !isBusy && outputText && (
           <div className="cache-badge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
               <path d="M22 4L12 14.01l-3-3"/>
             </svg>
-            Cached
+            {selectedDay} Cached
           </div>
         )}
       </div>
@@ -110,17 +214,19 @@ export default function OutputPanel({
       )}
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {isGenerating && !outputText && !thinkingText ? (
+        {isBusy && !outputText && !thinkingText ? (
           <div className="loading-container" style={{ flex: 1 }}>
             <div className="spinner"></div>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Gemini is solving calculations...</p>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isBatchGenerating ? 'Generating all 7 days in parallel...' : `Gemini is calculating plan for ${selectedDay}...`}
+            </p>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
           </div>
         ) : outputText || thinkingText ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {outputTab === 'thoughts' && thinkingText && (
               <div className="thinking-box" style={{ flex: 1 }}>
-                <div className="thinking-title">Gemini Thinking Output</div>
+                <div className="thinking-title">Gemini Thinking Output ({selectedDay})</div>
                 <div className="thinking-text" style={{ maxHeight: 'none', height: '430px' }}>
                   {thinkingText}
                 </div>
@@ -137,7 +243,9 @@ export default function OutputPanel({
             {outputTab === 'cook' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Each day can be copied individually below</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Copy-pasteable cook instructions for {selectedDay}
+                  </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', maxHeight: '500px', paddingRight: '0.25rem' }}>
@@ -182,12 +290,39 @@ export default function OutputPanel({
             )}
           </div>
         ) : (
-          <div className="placeholder-container" style={{ flex: 1 }}>
-            <div className="placeholder-icon">📋</div>
-            <h3 style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '1rem' }}>No Plan Generated Yet</h3>
-            <p style={{ fontSize: '0.85rem', maxWidth: '300px' }}>
-              {'Configure your targets and variables in the left builder and click "Generate Diet Plan".'}
+          <div className="placeholder-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+            <div className="placeholder-icon" style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📋</div>
+            <h3 style={{ color: '#fff', marginBottom: '0.5rem', fontSize: '1.1rem', fontWeight: 700 }}>
+              No Plan Generated for {selectedDay} Yet
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '360px', textAlign: 'center', marginBottom: '1.25rem' }}>
+              Click below to generate a calculated diet plan for {selectedDay}, or generate all 7 days at once.
             </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                className="btn-primary"
+                disabled={isBusy}
+                onClick={() => onGenerate(false)}
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+              >
+                Generate {selectedDay} Plan
+              </button>
+              <button
+                className="btn-secondary"
+                disabled={isBusy}
+                onClick={onGenerateAllDays}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  fontSize: '0.85rem',
+                  background: 'rgba(192, 132, 252, 0.15)',
+                  border: '1px solid rgba(192, 132, 252, 0.3)',
+                  color: '#e9d5ff'
+                }}
+              >
+                ⚡ Generate All 7 Days (Parallel)
+              </button>
+            </div>
           </div>
         )}
       </div>

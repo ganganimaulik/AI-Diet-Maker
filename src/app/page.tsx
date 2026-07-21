@@ -668,13 +668,20 @@ export default function Home() {
 
           {/* Right Column: AI Outputs */}
           <OutputPanel
+            selectedDay={config.selectedGenerationDay || 'MONDAY'}
+            onSelectDay={(day) => setConfig(prev => ({ ...prev, selectedGenerationDay: day }))}
+            cacheStatus={cacheStatus}
             outputText={outputText}
             thinkingText={thinkingText}
             outputTab={outputTab}
             setOutputTab={setOutputTab}
             errorMsg={errorMsg}
             isGenerating={isGenerating}
+            isBatchGenerating={isBatchGenerating}
+            batchProgress={batchProgress}
             isCachedResponse={isCachedResponse}
+            onGenerate={handleGenerate}
+            onGenerateAllDays={handleGenerateAllDays}
             hidden={layoutMode === 'builder'}
           />
         </main>
