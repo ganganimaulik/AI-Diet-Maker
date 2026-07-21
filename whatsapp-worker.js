@@ -287,6 +287,14 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       store: store,
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
+    // Pin an explicit WhatsApp Web version. The library's built-in default
+    // (2.3000.1017054665) was pruned from the wa-version repo and now 404s;
+    // with strict:false that silently falls back to the live (incompatible)
+    // page, which breaks injection ("Execution context was destroyed"). Pinning
+    // a version that still exists in the repo keeps the page consistent and
+    // injectable. NOTE: the repo keeps only a rolling window of recent versions,
+    // so this may need bumping to a current value if it later starts 404ing.
+    webVersion: '2.3000.1043553106-alpha',
     webVersionCache: {
       type: 'remote',
       remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
