@@ -439,6 +439,18 @@ export default function Home() {
 
     const promises = DAYS_OF_WEEK.map(async (day) => {
       try {
+        // Check if a valid cached entry already exists for this day; if so, skip API call
+        const cached = await checkCache(day);
+        if (cached) {
+          setBatchProgress(prev => ({ ...prev, [day]: 'done' }));
+          if (day === (config.selectedGenerationDay || 'MONDAY')) {
+            setOutputText(cached.responseText);
+            setThinkingText(cached.thinkingText);
+            setIsCachedResponse(true);
+          }
+          return;
+        }
+
         const dayPrompt = compilePromptText(config, { mode: 'single', selectedDay: day });
         const res = await fetch('/api/generate', {
           method: 'POST',
