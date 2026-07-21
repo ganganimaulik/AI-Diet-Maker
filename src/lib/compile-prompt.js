@@ -72,7 +72,7 @@ function formatIngredientEntry(ing, mealsList) {
  * @returns {string}
  */
 function compilePromptText(c, options) {
-  const { mode = 'all', selectedDay = 'MONDAY', daysOfWeek = DEFAULT_DAYS_OF_WEEK } = options || {};
+  const { mode = 'single', selectedDay = 'MONDAY', daysOfWeek = DEFAULT_DAYS_OF_WEEK } = options || {};
   const isSingle = mode === 'single';
   const idealMin = c.global.idealSodiumPotassiumRatioMin === undefined ? 0.70 : c.global.idealSodiumPotassiumRatioMin;
   const idealMax = c.global.idealSodiumPotassiumRatioMax === undefined ? 0.80 : c.global.idealSodiumPotassiumRatioMax;

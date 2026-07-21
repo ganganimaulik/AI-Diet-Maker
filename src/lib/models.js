@@ -78,7 +78,6 @@ const ConfigSchema = new Schema({
     of: [CustomSplitSchema],
     default: {}
   },
-  generationRange: { type: String, enum: ['all', 'single'], default: 'all' },
   selectedGenerationDay: { type: String, default: 'MONDAY' },
   huggingFaceToken: { type: String, default: '' },
   huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }

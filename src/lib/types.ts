@@ -64,7 +64,6 @@ export interface Config {
   dailySplits?: {
     [key: string]: CustomSplit[];
   };
-  generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
   huggingFaceSpace?: string;
@@ -196,7 +195,6 @@ export const DEFAULT_CONFIG: Config = {
     { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min', mealId: 'meal-chicken' }
   ],
   dailySplits: {},
-  generationRange: 'all',
   selectedGenerationDay: 'MONDAY'
 };
 

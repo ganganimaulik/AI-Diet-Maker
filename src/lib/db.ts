@@ -116,7 +116,6 @@ export interface IConfig {
   dailySplits?: {
     [key: string]: ICustomSplit[];
   };
-  generationRange: 'all' | 'single';
   selectedGenerationDay: string;
   huggingFaceToken?: string;
   huggingFaceSpace?: string;
