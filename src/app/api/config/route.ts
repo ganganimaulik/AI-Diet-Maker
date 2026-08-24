@@ -18,8 +18,8 @@ export async function GET() {
         provider: 'google-ai-studio',
         enterpriseAuthMethod: 'api-key',
         enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
-        model: 'gemini-3.6-flash',
-        customModel: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
+        customModel: 'gemini-3.7-flash',
         thinkingEnabled: true,
         thinkingBudget: 2048,
         global: {

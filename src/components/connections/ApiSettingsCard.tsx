@@ -143,7 +143,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
             value={config.model}
             onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
           >
-            <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+            <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
             <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
             <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
@@ -162,7 +162,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               className="form-input"
               value={config.customModel}
               onChange={e => setConfig(prev => ({ ...prev, customModel: e.target.value }))}
-              placeholder="gemini-3.6-flash"
+              placeholder="gemini-3.7-flash"
             />
           </div>
         )}

@@ -196,7 +196,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       prompt,
-      model = 'gemini-3.6-flash',
+      model = 'gemini-3.7-flash',
       thinkingEnabled = false,
       thinkingBudget = 2048,
       provider = 'google-ai-studio',
