@@ -14,7 +14,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 4;
+const PROMPT_TEMPLATE_VERSION = 5;
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -232,7 +232,7 @@ ${activeDays.map(day => {
 ===================================================================
 
 INSTRUCTIONS FOR THE CALCULATOR:
-1. Estimate the raw/uncooked calorie density (kcal per 1g) for each ingredient using standard USDA nutritional values (e.g. Raw Rice ≈ 3.6 kcal/g, Raw Chicken Breast ≈ 1.2 kcal/g, Olive Oil ≈ 8.75 kcal/g, Eggs ≈ 1.43 kcal/g, Butter ≈ 7.17 kcal/g, Pasta ≈ 3.55 kcal/g, Raw Oats ≈ 3.89 kcal/g, Whey Protein Isolate ≈ 3.7 kcal/g, Almonds ≈ 5.79 kcal/g, Cashews ≈ 5.53 kcal/g, Walnuts ≈ 6.54 kcal/g, Banana ≈ 0.89 kcal/g, Tomato ≈ 0.18 kcal/g, Potato (Raw) ≈ 0.77 kcal/g, Cluster Beans ≈ 0.16 kcal/g, Bottle Gourd ≈ 0.15 kcal/g, Brinjal ≈ 0.25 kcal/g, etc.).
+1. Estimate the raw/uncooked calorie density (kcal per 1g) for each ingredient using standard USDA nutritional values from your knowledge.
 2. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, sum the calculated calories of all strictly defined weights across all meals and daily variables:
    - Daily calories from meals = Sum of calories of all ingredient weights listed under each meal (these weights are already WHOLE DAY TOTALS, do NOT multiply by meals per day)
    - Daily variables calories = sum of calories of all variables for that day

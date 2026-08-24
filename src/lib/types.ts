@@ -150,6 +150,22 @@ export const DEFAULT_CONFIG: Config = {
       ],
       water: '',
       prepMethod: 'Chicken air fryer 200c, 15 min'
+    },
+    {
+      id: 'meal-shake',
+      name: 'Shake Meal',
+      mealsPerDay: 1,
+      cookQuantityMode: 'daily',
+      disabled: true,
+      ingredients: [
+        { name: 'Whey Protein Isolate', weight: '40', isAuto: false },
+        { name: 'Oats (Raw)', weight: '30', isAuto: false },
+        { name: 'Raisins', weight: '10', isAuto: false },
+        { name: 'Kimia Dates', weight: '10', isAuto: false },
+        { name: 'Banana', weight: '100', isAuto: false }
+      ],
+      water: '',
+      prepMethod: 'Blend all ingredients with water'
     }
   ],
   dailyVariables: {
