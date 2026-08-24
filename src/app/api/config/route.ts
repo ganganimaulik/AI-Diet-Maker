@@ -16,6 +16,7 @@ export async function GET() {
       const defaultData = {
         apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
         provider: 'google-ai-studio',
+        fireworksApiKey: process.env.FIREWORKS_API_KEY || '',
         enterpriseAuthMethod: 'api-key',
         enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
         model: 'gemini-3.7-flash',
@@ -56,6 +57,10 @@ export async function GET() {
       }
       if (!config.enterpriseApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
         config.enterpriseApiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
+        modified = true;
+      }
+      if (!config.fireworksApiKey && process.env.FIREWORKS_API_KEY) {
+        config.fireworksApiKey = process.env.FIREWORKS_API_KEY;
         modified = true;
       }
       if (config.huggingFaceSpace === undefined) {

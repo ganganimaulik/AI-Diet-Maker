@@ -50,6 +50,7 @@ const MealSchema = new Schema({
 const ConfigSchema = new Schema({
   apiKey: { type: String, default: '' },
   provider: { type: String, default: 'google-ai-studio' },
+  fireworksApiKey: { type: String, default: '' },
   enterpriseAuthMethod: { type: String, default: 'api-key' },
   enterpriseApiKey: { type: String, default: '' },
   enterpriseProjectId: { type: String, default: '' },

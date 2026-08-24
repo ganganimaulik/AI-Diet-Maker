@@ -19,12 +19,13 @@ export default function AppHeader({
   onLogout
 }: AppHeaderProps) {
   const hasApiCredentials =
+    (config.provider === 'fireworks' && (config.fireworksApiKey || config.apiKey)) ||
     (config.provider === 'gemini-enterprise' && (
       (config.enterpriseAuthMethod === 'api-key' && config.enterpriseApiKey) ||
       (config.enterpriseAuthMethod === 'service-account' && config.enterpriseServiceAccountJson) ||
       (config.enterpriseAuthMethod === 'adc')
     ) && config.enterpriseProjectId) ||
-    (config.provider !== 'gemini-enterprise' && config.apiKey);
+    (config.provider !== 'gemini-enterprise' && config.provider !== 'fireworks' && config.apiKey);
 
   return (
     <header className="header">
@@ -33,7 +34,7 @@ export default function AppHeader({
           <h1 className="header-title" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <span style={{ filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.45))' }}>🥗</span> AI Diet Maker
           </h1>
-          <p className="header-subtitle">Strict meal prep calculator, solved via Gemini Thinking Models</p>
+          <p className="header-subtitle">Strict meal prep calculator, solved via Gemini &amp; Fireworks Reasoning Models</p>
         </div>
 
         <nav className="header-nav">

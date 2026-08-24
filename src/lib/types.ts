@@ -35,6 +35,7 @@ export interface Meal {
 export interface Config {
   apiKey: string;
   provider?: string;
+  fireworksApiKey?: string;
   enterpriseAuthMethod?: string;
   enterpriseApiKey?: string;
   enterpriseProjectId?: string;
@@ -104,6 +105,7 @@ export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRID
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
   provider: 'google-ai-studio',
+  fireworksApiKey: '',
   enterpriseAuthMethod: 'api-key',
   enterpriseApiKey: '',
   enterpriseProjectId: '',

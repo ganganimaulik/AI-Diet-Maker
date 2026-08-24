@@ -19,7 +19,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
           <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/>
         </svg>
-        Gemini API &amp; LLM Settings
+        AI Provider &amp; LLM Settings
       </h3>
 
       <div className="form-group">
@@ -27,14 +27,49 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
         <select
           className="form-input"
           value={config.provider || 'google-ai-studio'}
-          onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}
+          onChange={e => {
+            const nextProvider = e.target.value;
+            setConfig(prev => {
+              let updatedModel = prev.model;
+              if (nextProvider === 'fireworks' && (prev.model.startsWith('gemini') || !prev.model)) {
+                updatedModel = 'accounts/fireworks/models/deepseek-v4-pro';
+              } else if (nextProvider !== 'fireworks' && prev.model.includes('fireworks')) {
+                updatedModel = 'gemini-3.7-flash';
+              }
+              return {
+                ...prev,
+                provider: nextProvider,
+                model: updatedModel
+              };
+            });
+          }}
         >
           <option value="google-ai-studio">Google AI Studio (Gemini API)</option>
           <option value="gemini-enterprise">Gemini Enterprise Agent Platform (Vertex AI)</option>
+          <option value="fireworks">Fireworks.ai (OpenAI-Compatible Inference)</option>
         </select>
       </div>
 
-      {(!config.provider || config.provider === 'google-ai-studio') ? (
+      {config.provider === 'fireworks' ? (
+        <div className="form-group">
+          <label className="form-label">Fireworks API Key</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type={showApiKey ? 'text' : 'password'}
+              className="form-input"
+              placeholder="fw_..."
+              value={config.fireworksApiKey || ''}
+              onChange={e => setConfig(prev => ({ ...prev, fireworksApiKey: e.target.value }))}
+            />
+            <button className="btn-secondary" onClick={() => setShowApiKey(!showApiKey)}>
+              {showApiKey ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            Your Fireworks API key is saved securely and used for inference requests.
+          </p>
+        </div>
+      ) : (!config.provider || config.provider === 'google-ai-studio') ? (
         <div className="form-group">
           <label className="form-label">Gemini API Key</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -137,21 +172,42 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
 
       <div className="input-row">
         <div className="form-group">
-          <label className="form-label">Gemini Model</label>
-          <select
-            className="form-input"
-            value={config.model}
-            onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
-          >
-            <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
-            <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-            <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-            <option value="custom">Custom Model Name</option>
-          </select>
+          <label className="form-label">
+            {config.provider === 'fireworks' ? 'Fireworks Model' : 'Gemini Model'}
+          </label>
+          {config.provider === 'fireworks' ? (
+            <select
+              className="form-input"
+              value={config.model}
+              onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
+            >
+              <option value="accounts/fireworks/models/deepseek-v4-pro">DeepSeek V4 Pro (Reasoning)</option>
+              <option value="accounts/fireworks/models/deepseek-v4-flash-0731">DeepSeek V4 Flash</option>
+              <option value="accounts/fireworks/models/kimi-k3">Kimi K3 (Reasoning)</option>
+              <option value="accounts/fireworks/models/glm-5p2">GLM 5.2 (Reasoning)</option>
+              <option value="accounts/fireworks/models/minimax-m3">MiniMax M3</option>
+              <option value="accounts/fireworks/models/gpt-oss-120b">GPT OSS 120B</option>
+              <option value="accounts/fireworks/models/qwen3p8-max">Qwen 3.8 Max</option>
+              <option value="accounts/fireworks/models/deepseek-r1">DeepSeek R1 (Reasoning)</option>
+              <option value="accounts/fireworks/models/llama-v3p3-70b-instruct">Llama 3.3 70B Instruct</option>
+              <option value="custom">Custom Model Name</option>
+            </select>
+          ) : (
+            <select
+              className="form-input"
+              value={config.model}
+              onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
+            >
+              <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="custom">Custom Model Name</option>
+            </select>
+          )}
         </div>
 
         {config.model === 'custom' && (
@@ -162,40 +218,44 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               className="form-input"
               value={config.customModel}
               onChange={e => setConfig(prev => ({ ...prev, customModel: e.target.value }))}
-              placeholder="gemini-3.7-flash"
+              placeholder={config.provider === 'fireworks' ? 'accounts/fireworks/models/...' : 'gemini-3.7-flash'}
             />
           </div>
         )}
       </div>
 
-      <div className="form-group" style={{ marginTop: '0.5rem' }}>
-        <div
-          className={`switch-container ${config.thinkingEnabled ? 'checked' : ''}`}
-          onClick={() => setConfig(prev => ({ ...prev, thinkingEnabled: !prev.thinkingEnabled }))}
-        >
-          <div className="switch-control"></div>
-          <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Thinking Mode</span>
-        </div>
-      </div>
+      {config.provider !== 'fireworks' && (
+        <>
+          <div className="form-group" style={{ marginTop: '0.5rem' }}>
+            <div
+              className={`switch-container ${config.thinkingEnabled ? 'checked' : ''}`}
+              onClick={() => setConfig(prev => ({ ...prev, thinkingEnabled: !prev.thinkingEnabled }))}
+            >
+              <div className="switch-control"></div>
+              <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Thinking Mode</span>
+            </div>
+          </div>
 
-      {config.thinkingEnabled && (
-        <div className="form-group">
-          <label className="form-label">Thinking Budget ({config.thinkingBudget} tokens)</label>
-          <input
-            type="range"
-            min="1024"
-            max="8192"
-            step="1024"
-            value={config.thinkingBudget}
-            onChange={e => setConfig(prev => ({ ...prev, thinkingBudget: parseInt(e.target.value) }))}
-            style={{ width: '100%', accentColor: 'var(--accent-purple)' }}
-          />
-          <p style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            <span>1024 (Low)</span>
-            <span>4096 (Med)</span>
-            <span>8192 (High)</span>
-          </p>
-        </div>
+          {config.thinkingEnabled && (
+            <div className="form-group">
+              <label className="form-label">Thinking Budget ({config.thinkingBudget} tokens)</label>
+              <input
+                type="range"
+                min="1024"
+                max="8192"
+                step="1024"
+                value={config.thinkingBudget}
+                onChange={e => setConfig(prev => ({ ...prev, thinkingBudget: parseInt(e.target.value) }))}
+                style={{ width: '100%', accentColor: 'var(--accent-purple)' }}
+              />
+              <p style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                <span>1024 (Low)</span>
+                <span>4096 (Med)</span>
+                <span>8192 (High)</span>
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <button

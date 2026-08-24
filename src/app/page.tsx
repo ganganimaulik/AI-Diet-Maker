@@ -224,7 +224,13 @@ export default function Home() {
       setLayoutMode('results');
     }
 
-    if (config.provider === 'gemini-enterprise') {
+    if (config.provider === 'fireworks') {
+      if (!config.fireworksApiKey && !config.apiKey) {
+        setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
+        setCurrentView('connections');
+        return;
+      }
+    } else if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
         setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
         setCurrentView('connections');
@@ -288,7 +294,8 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': config.apiKey
+          'x-api-key': config.apiKey,
+          'x-fireworks-api-key': config.fireworksApiKey || ''
         },
         body: JSON.stringify({
           prompt: activePrompt,
@@ -296,6 +303,7 @@ export default function Home() {
           thinkingEnabled: config.thinkingEnabled,
           thinkingBudget: config.thinkingBudget,
           provider: config.provider || 'google-ai-studio',
+          fireworksApiKey: config.fireworksApiKey,
           enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
           enterpriseApiKey: config.enterpriseApiKey,
           enterpriseProjectId: config.enterpriseProjectId,
@@ -396,7 +404,13 @@ export default function Home() {
       setLayoutMode('results');
     }
 
-    if (config.provider === 'gemini-enterprise') {
+    if (config.provider === 'fireworks') {
+      if (!config.fireworksApiKey && !config.apiKey) {
+        setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
+        setCurrentView('connections');
+        return;
+      }
+    } else if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
         setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
         setCurrentView('connections');
@@ -456,7 +470,8 @@ export default function Home() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': config.apiKey
+            'x-api-key': config.apiKey,
+            'x-fireworks-api-key': config.fireworksApiKey || ''
           },
           body: JSON.stringify({
             prompt: dayPrompt,
@@ -464,6 +479,7 @@ export default function Home() {
             thinkingEnabled: config.thinkingEnabled,
             thinkingBudget: config.thinkingBudget,
             provider: config.provider || 'google-ai-studio',
+            fireworksApiKey: config.fireworksApiKey,
             enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
             enterpriseApiKey: config.enterpriseApiKey,
             enterpriseProjectId: config.enterpriseProjectId,

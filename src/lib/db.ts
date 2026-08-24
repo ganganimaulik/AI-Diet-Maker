@@ -92,6 +92,7 @@ export interface IMeal {
 export interface IConfig {
   apiKey: string;
   provider?: string;
+  fireworksApiKey?: string;
   enterpriseAuthMethod?: string;
   enterpriseApiKey?: string;
   enterpriseProjectId?: string;

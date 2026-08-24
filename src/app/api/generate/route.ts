@@ -12,13 +12,20 @@ import {
   type GeminiPart
 } from '@/lib/gemini-helpers';
 
-interface GeminiChunk {
+import {
+  FIREWORKS_API_URL,
+  buildFireworksPayload,
+  extractFireworksChunk,
+  parseFireworksErrorText
+} from '@/lib/fireworks-helpers';
+
+interface StreamChunk {
   text: string;
   thought: string;
 }
 
-/** Parse one SSE `data:` payload into { text, thought }, or null if empty. */
-function parseSSEData(dataStr: string): GeminiChunk | null {
+/** Parse one Gemini SSE `data:` payload into { text, thought }, or null if empty. */
+function parseSSEData(dataStr: string): StreamChunk | null {
   if (dataStr === '[DONE]') return null;
   const data = JSON.parse(dataStr);
   const { text, thought } = extractResponseText(data);
@@ -28,17 +35,29 @@ function parseSSEData(dataStr: string): GeminiChunk | null {
   return null;
 }
 
-async function* parseSSEResponse(response: Response) {
+/** Parse one Fireworks SSE `data:` payload into { text, thought }, or null if empty. */
+function parseFireworksSSEData(dataStr: string): StreamChunk | null {
+  if (dataStr === '[DONE]') return null;
+  const data = JSON.parse(dataStr);
+  const { text, thought } = extractFireworksChunk(data);
+  if (text || thought) {
+    return { text, thought };
+  }
+  return null;
+}
+
+async function* parseSSEResponse(response: Response, isFireworks = false) {
   const reader = response.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();
   let buffer = '';
 
-  const parseLine = (line: string): GeminiChunk | null => {
+  const parseLine = (line: string): StreamChunk | null => {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return null;
     try {
-      return parseSSEData(trimmed.slice(5).trim());
+      const dataStr = trimmed.slice(5).trim();
+      return isFireworks ? parseFireworksSSEData(dataStr) : parseSSEData(dataStr);
     } catch (e) {
       console.error('Error parsing SSE chunk:', trimmed, e);
       return null;
@@ -78,9 +97,32 @@ async function* getChunks(
   enterpriseApiKey: string,
   enterpriseProjectId: string,
   enterpriseLocation: string,
-  enterpriseServiceAccountJson: string
+  enterpriseServiceAccountJson: string,
+  fireworksApiKey: string
 ) {
-  if (provider === 'gemini-enterprise') {
+  if (provider === 'fireworks') {
+    const activeFireworksKey = fireworksApiKey || process.env.FIREWORKS_API_KEY || apiKey;
+    if (!activeFireworksKey) {
+      throw new Error('Fireworks API Key is required. Please set it in Settings or FIREWORKS_API_KEY environment variable.');
+    }
+
+    const payload = buildFireworksPayload(model, prompt, { temperature: 0.1, stream: true });
+    const response = await fetch(FIREWORKS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${activeFireworksKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(parseFireworksErrorText(errorText, 'Failed to generate content from Fireworks API.'));
+    }
+
+    yield* parseSSEResponse(response, true);
+  } else if (provider === 'gemini-enterprise') {
     if (enterpriseAuthMethod === 'api-key') {
       const activeEnterpriseApiKey = enterpriseApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
       if (!activeEnterpriseApiKey) {
@@ -200,6 +242,7 @@ export async function POST(req: Request) {
       thinkingEnabled = false,
       thinkingBudget = 2048,
       provider = 'google-ai-studio',
+      fireworksApiKey = '',
       enterpriseAuthMethod = 'api-key',
       enterpriseApiKey = '',
       enterpriseProjectId = '',
@@ -208,6 +251,7 @@ export async function POST(req: Request) {
     } = body;
 
     const apiKey = req.headers.get('x-api-key') || body.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const activeFireworksKey = req.headers.get('x-fireworks-api-key') || fireworksApiKey || req.headers.get('x-api-key') || body.apiKey || process.env.FIREWORKS_API_KEY;
 
     if (!prompt) {
       return NextResponse.json(
@@ -235,7 +279,8 @@ export async function POST(req: Request) {
             enterpriseApiKey,
             enterpriseProjectId,
             enterpriseLocation,
-            enterpriseServiceAccountJson
+            enterpriseServiceAccountJson,
+            activeFireworksKey
           );
 
           for await (const chunk of generator) {

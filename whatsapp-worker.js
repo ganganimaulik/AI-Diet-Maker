@@ -29,6 +29,12 @@ const {
   buildStudioEndpoint,
   buildEnterpriseEndpoint
 } = require('./src/lib/gemini.js');
+const {
+  FIREWORKS_API_URL,
+  buildFireworksPayload,
+  extractFireworksResponse,
+  parseFireworksErrorText
+} = require('./src/lib/fireworks.js');
 
 // RemoteAuth.disconnect() normally DELETES the session from the remote store,
 // and whatsapp-web.js calls it internally on any non-accepted connection state
@@ -674,14 +680,17 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     if (!configDoc) {
       throw new Error('Diet configuration is missing.');
     }
+    const hasFireworksCreds = configDoc.provider === 'fireworks' && (
+      process.env.FIREWORKS_API_KEY || configDoc.fireworksApiKey || configDoc.apiKey
+    );
     const hasEnterpriseCreds = configDoc.provider === 'gemini-enterprise' && (
       configDoc.enterpriseAuthMethod === 'adc' ||
       (configDoc.enterpriseAuthMethod === 'api-key' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.enterpriseApiKey)) ||
       (configDoc.enterpriseAuthMethod === 'service-account' && configDoc.enterpriseServiceAccountJson)
     );
-    const hasStudioCreds = configDoc.provider !== 'gemini-enterprise' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.apiKey);
-    if (!hasEnterpriseCreds && !hasStudioCreds) {
-      throw new Error('Gemini API Key or credentials are missing.');
+    const hasStudioCreds = configDoc.provider !== 'gemini-enterprise' && configDoc.provider !== 'fireworks' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.apiKey);
+    if (!hasFireworksCreds && !hasEnterpriseCreds && !hasStudioCreds) {
+      throw new Error('AI API Key or credentials are missing.');
     }
 
     // 3. Compile prompt for target day
@@ -860,11 +869,36 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
   }
 }
 
-// Helper: Call Google Gemini API (shared payload/endpoint/parsing logic lives in src/lib/gemini.js)
+// Helper: Call AI API (Fireworks or Google Gemini)
 async function callGeminiAPI(c, prompt) {
   const model = c.model === 'custom' ? c.customModel : c.model;
 
-  if (c.provider === 'gemini-enterprise') {
+  if (c.provider === 'fireworks') {
+    const fireworksKey = process.env.FIREWORKS_API_KEY || c.fireworksApiKey || c.apiKey;
+    if (!fireworksKey) {
+      throw new Error('Fireworks API Key is missing.');
+    }
+
+    const payload = buildFireworksPayload(model, prompt, { temperature: 0.1, stream: false });
+    const response = await fetch(FIREWORKS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${fireworksKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Fireworks API returned error (${response.status}): ${parseFireworksErrorText(errorText)}`);
+    }
+
+    const data = await response.json();
+    const { text, thought } = extractFireworksResponse(data);
+    return { text, thinking: thought };
+
+  } else if (c.provider === 'gemini-enterprise') {
     if (c.enterpriseAuthMethod === 'api-key') {
       const enterpriseApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || c.enterpriseApiKey;
       if (!enterpriseApiKey) {
