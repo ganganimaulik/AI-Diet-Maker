@@ -18,6 +18,17 @@ interface IngredientEditorRowProps {
 export default function IngredientEditorRow({ ingredient: ing, mealOptions, onField, onRemove }: IngredientEditorRowProps) {
   const isDailyVariant = !!mealOptions;
 
+  // The prompt compiler only keeps daily variables owned by a live, enabled
+  // meal. Without this warning such a row looks active but never reaches the AI.
+  const ownerMeal = mealOptions?.find(m => m.id === (ing.mealId || 'meal-chicken'));
+  const orphanReason = !isDailyVariant || ing.disabled
+    ? ''
+    : !ownerMeal
+      ? 'its meal no longer exists'
+      : ownerMeal.disabled
+        ? `"${ownerMeal.name}" is disabled`
+        : '';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
       <div
@@ -96,6 +107,21 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, onFi
           </svg>
         </button>
       </div>
+
+      {orphanReason && (
+        <div
+          style={{
+            marginLeft: isDailyVariant ? '1.5rem' : undefined,
+            fontSize: '0.72rem',
+            color: '#fcd34d',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35rem'
+          }}
+        >
+          ⚠️ Not sent to the AI — {orphanReason}. Pick another meal to include it.
+        </div>
+      )}
 
       {!ing.disabled && (
         <div className="ingredient-sub-options" style={isDailyVariant ? { marginLeft: '1.5rem' } : undefined}>

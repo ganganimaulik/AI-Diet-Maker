@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Dispatch, SetStateAction } from 'react';
-import { Config, Ingredient, Meal } from '@/lib/types';
+import { Config, CustomSplit, Ingredient, Meal } from '@/lib/types';
 
 /**
  * All config-mutation handlers for the diet builder, extracted from page.tsx.
@@ -55,7 +55,15 @@ export function useConfigActions(
         }
       }
 
-      return { ...prev, meals: remainingMeals, customSplits, dailySplits };
+      // Daily variables belonging to this meal go with it. Left behind they
+      // would still show in the Daily Variables tab while the prompt compiler
+      // silently dropped them (it only keeps ingredients owned by a live meal).
+      const dailyVariables: Config['dailyVariables'] = {};
+      for (const day in (prev.dailyVariables || {})) {
+        dailyVariables[day] = (prev.dailyVariables[day] || []).filter(ing => (ing.mealId || 'meal-chicken') !== id);
+      }
+
+      return { ...prev, meals: remainingMeals, customSplits, dailySplits, dailyVariables };
     });
     setActiveTab('global');
   };
@@ -221,8 +229,17 @@ export function useConfigActions(
       const splitsA = dailySplits[dayA] || [];
       const splitsB = dailySplits[dayB] || [];
 
-      dailySplits[dayA] = splitsB;
-      dailySplits[dayB] = splitsA;
+      // Keep days without overrides absent rather than storing empty arrays,
+      // so a swap between two un-overridden days is a genuine no-op.
+      const assignSplits = (day: string, splits: CustomSplit[]) => {
+        if (splits.length > 0) {
+          dailySplits[day] = splits;
+        } else {
+          delete dailySplits[day];
+        }
+      };
+      assignSplits(dayA, splitsB);
+      assignSplits(dayB, splitsA);
 
       return {
         ...prev,

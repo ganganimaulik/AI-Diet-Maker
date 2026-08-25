@@ -24,6 +24,7 @@ const path = require('path');
 const { compilePromptText } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 const {
+  assertGeminiFinishReason,
   extractResponseText,
   buildGenerationPayload,
   normalizeThinkingLevel,
@@ -718,7 +719,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
 
     // 4. Check cache before calling Gemini API
     let generatedText;
-    const currentHash = computeConfigHash(configDoc);
+    const currentHash = computeConfigHash(configDoc, targetDayName);
     const cachedEntry = await CachedResponse.findOne({ day: targetDayName });
 
     if (cachedEntry && cachedEntry.configHash === currentHash && cachedEntry.responseText) {
@@ -732,6 +733,13 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
       const geminiResult = await callGeminiAPI(configDoc, prompt);
       generatedText = geminiResult.text;
       const thinkingText = geminiResult.thinking;
+
+      // An empty response (safety block, no candidates) is a failure, not a
+      // plan: sending it would deliver "No plan generated" and mark the day
+      // done. Throwing here keeps the retry window open instead.
+      if (!generatedText || !generatedText.trim()) {
+        throw new Error('The AI returned an empty response, so there is no plan to send.');
+      }
 
       // Save to cache after successful generation
       try {
@@ -934,7 +942,8 @@ async function callGeminiAPI(c, prompt) {
       }
 
       const data = await response.json();
-      const { text, thought } = extractResponseText(data);
+      const { text, thought, finishReason } = extractResponseText(data);
+      assertGeminiFinishReason(finishReason);
       return { text, thinking: thought };
 
     } else {
@@ -987,7 +996,8 @@ async function callGeminiAPI(c, prompt) {
         config: configObj
       });
 
-      const { text, thought } = extractResponseText(sdkResponse);
+      const { text, thought, finishReason } = extractResponseText(sdkResponse);
+      assertGeminiFinishReason(finishReason);
       return { text, thinking: thought };
     }
   } else {
@@ -1012,7 +1022,8 @@ async function callGeminiAPI(c, prompt) {
     }
 
     const data = await response.json();
-    const { text, thought } = extractResponseText(data);
+    const { text, thought, finishReason } = extractResponseText(data);
+    assertGeminiFinishReason(finishReason);
     return { text, thinking: thought };
   }
 }

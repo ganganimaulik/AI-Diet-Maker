@@ -15,6 +15,8 @@ export interface GeminiPart {
 export interface GeminiExtract {
   text: string;
   thought: string;
+  /** Only set on the final chunk of a stream / a non-streaming response. */
+  finishReason?: string;
 }
 
 export interface GeminiPayload {
@@ -34,6 +36,8 @@ export interface GeminiPayload {
 export const normalizeThinkingLevel: (thinkingLevel?: string) => string = gemini.normalizeThinkingLevel;
 export const extractPartsText: (parts: GeminiPart[]) => GeminiExtract = gemini.extractPartsText;
 export const extractResponseText: (data: unknown) => GeminiExtract = gemini.extractResponseText;
+/** Throws when Gemini stopped for MAX_TOKENS, SAFETY, etc. instead of STOP. */
+export const assertGeminiFinishReason: (finishReason?: string) => void = gemini.assertGeminiFinishReason;
 export const buildGenerationPayload: (
   prompt: string,
   thinkingLevel: string,

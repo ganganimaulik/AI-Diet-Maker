@@ -3,6 +3,7 @@ import { isAuthenticated } from '@/lib/auth';
 import { GoogleGenAI } from '@google/genai';
 
 import {
+  assertGeminiFinishReason,
   extractPartsText,
   extractResponseText,
   buildGenerationPayload,
@@ -170,7 +171,13 @@ async function* getChunks(
         throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini Enterprise API.'));
       }
 
-      yield* parseSSEResponse(response);
+      let enterpriseFinishReason = '';
+      for await (const chunk of parseSSEResponse(response)) {
+        if (chunk.finishReason) enterpriseFinishReason = chunk.finishReason;
+        if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
+      }
+      // Surface truncation instead of caching half a plan.
+      assertGeminiFinishReason(enterpriseFinishReason);
     } else {
       if (enterpriseAuthMethod === 'service-account' && !enterpriseServiceAccountJson) {
         throw new Error('Service Account JSON is required when Service Account authentication is selected.');
@@ -219,13 +226,17 @@ async function* getChunks(
         config: configObj
       });
 
+      let sdkFinishReason = '';
       for await (const chunk of responseStream) {
-        const parts = (chunk.candidates?.[0]?.content?.parts as GeminiPart[]) || [];
+        const candidate = chunk.candidates?.[0];
+        if (candidate?.finishReason) sdkFinishReason = String(candidate.finishReason);
+        const parts = (candidate?.content?.parts as GeminiPart[]) || [];
         const { text, thought } = extractPartsText(parts);
         if (text || thought) {
           yield { text, thought };
         }
       }
+      assertGeminiFinishReason(sdkFinishReason);
     }
   } else {
     if (!apiKey) {
@@ -246,7 +257,12 @@ async function* getChunks(
       throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini API.'));
     }
 
-    yield* parseSSEResponse(response);
+    let studioFinishReason = '';
+    for await (const chunk of parseSSEResponse(response)) {
+      if (chunk.finishReason) studioFinishReason = chunk.finishReason;
+      if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
+    }
+    assertGeminiFinishReason(studioFinishReason);
   }
 }
 

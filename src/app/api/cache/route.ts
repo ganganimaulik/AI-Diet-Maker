@@ -18,16 +18,17 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const day = searchParams.get('day');
 
-    // Load current config to compute hash
+    // Load current config to compute hashes (one per day)
     const config = await Config.findOne();
     if (!config) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
-    const currentHash = computeConfigHash(config);
 
     if (day) {
       // Return cached response for a specific day
-      const cached = await CachedResponse.findOne({ day: day.toUpperCase() });
+      const dayKey = day.toUpperCase();
+      const currentHash = computeConfigHash(config, dayKey);
+      const cached = await CachedResponse.findOne({ day: dayKey });
       if (!cached) {
         return NextResponse.json({ cached: null, configHash: currentHash });
       }
@@ -49,13 +50,12 @@ export async function GET(req: Request) {
       const entries = allCached.map((entry) => ({
         day: entry.day,
         generatedAt: entry.generatedAt,
-        isValid: entry.configHash === currentHash,
+        // Each day is validated against its own hash, so editing one day
+        // leaves the other six cached plans valid.
+        isValid: entry.configHash === computeConfigHash(config, entry.day),
       }));
 
-      return NextResponse.json({
-        entries,
-        configHash: currentHash,
-      });
+      return NextResponse.json({ entries });
     }
   } catch (error) {
     console.error('Error in cache GET:', error);
@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     if (!config) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
-    const configHash = computeConfigHash(config);
+    const configHash = computeConfigHash(config, day.toUpperCase());
 
     // Upsert the cached response
     const cached = await CachedResponse.findOneAndUpdate(

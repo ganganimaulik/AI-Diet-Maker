@@ -60,6 +60,15 @@ export const renderMarkdown = (md: string) => {
       .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 0.1rem 0.35rem; border-radius: 4px; font-family: monospace;">$1</code>');
   };
 
+  // Split a markdown table row into cells. The outer pipes are optional —
+  // dropping them by index would silently swallow the last column.
+  const parseRowCells = (row: string) => {
+    let inner = row.trim();
+    if (inner.startsWith('|')) inner = inner.slice(1);
+    if (inner.endsWith('|')) inner = inner.slice(0, -1);
+    return inner.split('|').map(c => c.trim());
+  };
+
   const renderTable = (rows: string[]) => {
     if (rows.length === 0) return '';
     const tHtml = ['<table>'];
@@ -69,10 +78,7 @@ export const renderMarkdown = (md: string) => {
       const row = rows[r];
       if (row.includes('---') && r === 1) continue;
 
-      const cells = row
-        .split('|')
-        .map(c => c.trim())
-        .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+      const cells = parseRowCells(row);
 
       if (r === 0) {
         tHtml.push('<thead><tr>');

@@ -8,4 +8,5 @@
 const { computeConfigHash: _computeConfigHash } = require('./compute-config-hash.js');
 
 // Accepts plain config objects as well as hydrated mongoose documents.
-export const computeConfigHash: (config: object) => string = _computeConfigHash;
+// The hash covers the shared config plus only `day`'s own overrides.
+export const computeConfigHash: (config: object, day: string) => string = _computeConfigHash;

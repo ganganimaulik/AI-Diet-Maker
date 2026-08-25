@@ -31,13 +31,31 @@ function extractPartsText(parts) {
 }
 
 /**
- * Extract { text, thought } from a full (non-streaming) or chunked (streaming)
- * Gemini API response body.
+ * Extract { text, thought, finishReason } from a full (non-streaming) or
+ * chunked (streaming) Gemini API response body. Only the final streamed chunk
+ * carries a finishReason; earlier chunks report ''.
  */
 function extractResponseText(data) {
   const candidate = data && data.candidates && data.candidates[0];
   const parts = (candidate && candidate.content && candidate.content.parts) || [];
-  return extractPartsText(parts);
+  return {
+    ...extractPartsText(parts),
+    finishReason: (candidate && candidate.finishReason) || ''
+  };
+}
+
+/**
+ * Throw when Gemini stopped for any reason other than a natural end, so a
+ * truncated or blocked plan is never mistaken for a complete one. Mirrors the
+ * Fireworks `finish_reason: 'length'` check.
+ */
+function assertGeminiFinishReason(finishReason) {
+  const reason = String(finishReason || '').toUpperCase();
+  if (!reason || reason === 'STOP') return;
+  if (reason === 'MAX_TOKENS') {
+    throw new Error('Gemini stopped early: the response hit the max output token limit, so this plan is incomplete. Raise "Max Output Tokens" in API settings (or set it to 0 for the model default) and try again.');
+  }
+  throw new Error(`Gemini stopped early (finish reason: ${reason}), so this plan is incomplete.`);
 }
 
 /**
@@ -126,6 +144,7 @@ module.exports = {
   normalizeThinkingLevel,
   extractPartsText,
   extractResponseText,
+  assertGeminiFinishReason,
   buildGenerationPayload,
   buildStudioEndpoint,
   buildEnterpriseEndpoint,
