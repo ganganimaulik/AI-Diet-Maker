@@ -58,8 +58,8 @@ const ConfigSchema = new Schema({
   enterpriseServiceAccountJson: { type: String, default: '' },
   model: { type: String, default: 'gemini-3.7-flash' },
   customModel: { type: String, default: 'gemini-3.7-flash' },
-  thinkingEnabled: { type: Boolean, default: true },
-  thinkingBudget: { type: Number, default: 2048 },
+  // Gemini thinking depth: 'default' omits thinkingConfig, else low|medium|high
+  thinkingLevel: { type: String, default: 'high' },
   // 0 = provider default (Fireworks falls back to 16384, Gemini to the model's own limit)
   maxTokens: { type: Number, default: 0 },
   // 'default' = omit reasoning_effort from the request (Fireworks only)

@@ -43,8 +43,8 @@ export interface Config {
   enterpriseServiceAccountJson?: string;
   model: string;
   customModel: string;
-  thinkingEnabled: boolean;
-  thinkingBudget: number;
+  /** Gemini thinking depth; 'default' = don't send it, else low|medium|high. */
+  thinkingLevel: string;
   /** Output token cap; 0 = provider default. */
   maxTokens?: number;
   /** Fireworks reasoning_effort; 'default' = don't send it. */
@@ -117,8 +117,7 @@ export const DEFAULT_CONFIG: Config = {
   enterpriseServiceAccountJson: '',
   model: 'gemini-3.7-flash',
   customModel: 'gemini-3.7-flash',
-  thinkingEnabled: true,
-  thinkingBudget: 2048,
+  thinkingLevel: 'high',
   maxTokens: 0,
   reasoningEffort: 'default',
   huggingFaceToken: '',

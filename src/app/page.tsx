@@ -300,8 +300,7 @@ export default function Home() {
         body: JSON.stringify({
           prompt: activePrompt,
           model: selectedModel,
-          thinkingEnabled: config.thinkingEnabled,
-          thinkingBudget: config.thinkingBudget,
+          thinkingLevel: config.thinkingLevel,
           maxTokens: config.maxTokens || 0,
           reasoningEffort: config.reasoningEffort || 'default',
           provider: config.provider || 'google-ai-studio',
@@ -478,8 +477,7 @@ export default function Home() {
           body: JSON.stringify({
             prompt: dayPrompt,
             model: selectedModel,
-            thinkingEnabled: config.thinkingEnabled,
-            thinkingBudget: config.thinkingBudget,
+            thinkingLevel: config.thinkingLevel,
             maxTokens: config.maxTokens || 0,
             reasoningEffort: config.reasoningEffort || 'default',
             provider: config.provider || 'google-ai-studio',

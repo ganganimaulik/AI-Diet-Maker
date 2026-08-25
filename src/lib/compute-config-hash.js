@@ -21,7 +21,7 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  *   - customSplits
  *   - dailyVariables (per-day ingredient overrides)
  *   - dailySplits (per-day split overrides)
- *   - provider, model, customModel, thinkingEnabled, thinkingBudget
+ *   - provider, model, customModel, thinkingLevel
  *   - maxTokens, reasoningEffort (only once moved off their defaults, so
  *     existing caches are not invalidated by simply adding the settings)
  *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
@@ -68,8 +68,7 @@ function computeConfigHash(config) {
     provider: config.provider || '',
     model: config.model || '',
     customModel: config.customModel || '',
-    thinkingEnabled: !!config.thinkingEnabled,
-    thinkingBudget: config.thinkingBudget || 0,
+    thinkingLevel: String(config.thinkingLevel || '').toLowerCase(),
     promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
   };
 

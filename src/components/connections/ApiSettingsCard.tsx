@@ -283,37 +283,24 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
       </div>
 
       {config.provider !== 'fireworks' && (
-        <>
-          <div className="form-group" style={{ marginTop: '0.5rem' }}>
-            <div
-              className={`switch-container ${config.thinkingEnabled ? 'checked' : ''}`}
-              onClick={() => setConfig(prev => ({ ...prev, thinkingEnabled: !prev.thinkingEnabled }))}
-            >
-              <div className="switch-control"></div>
-              <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Thinking Mode</span>
-            </div>
-          </div>
-
-          {config.thinkingEnabled && (
-            <div className="form-group">
-              <label className="form-label">Thinking Budget ({config.thinkingBudget} tokens)</label>
-              <input
-                type="range"
-                min="1024"
-                max="8192"
-                step="1024"
-                value={config.thinkingBudget}
-                onChange={e => setConfig(prev => ({ ...prev, thinkingBudget: parseInt(e.target.value) }))}
-                style={{ width: '100%', accentColor: 'var(--accent-purple)' }}
-              />
-              <p style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                <span>1024 (Low)</span>
-                <span>4096 (Med)</span>
-                <span>8192 (High)</span>
-              </p>
-            </div>
-          )}
-        </>
+        <div className="form-group" style={{ marginTop: '0.5rem' }}>
+          <label className="form-label">Thinking Level</label>
+          <select
+            className="form-input"
+            value={config.thinkingLevel || 'default'}
+            onChange={e => setConfig(prev => ({ ...prev, thinkingLevel: e.target.value }))}
+          >
+            <option value="default">Model default (dynamic)</option>
+            <option value="low">Low (fastest, cheapest)</option>
+            <option value="medium">Medium</option>
+            <option value="high">High (deepest reasoning)</option>
+          </select>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            Sent as <code>thinkingConfig.thinkingLevel</code> (Gemini 3+). Levels are relative
+            allowances, not token counts &mdash; thinking tokens still come out of the output cap above.
+            Pick <em>Model default</em> for pre-Gemini-3 models, which do not accept a level.
+          </p>
+        </div>
       )}
 
       <button

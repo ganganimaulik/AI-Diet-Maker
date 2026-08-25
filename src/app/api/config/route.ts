@@ -21,8 +21,7 @@ export async function GET() {
         enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
         model: 'gemini-3.7-flash',
         customModel: 'gemini-3.7-flash',
-        thinkingEnabled: true,
-        thinkingBudget: 2048,
+        thinkingLevel: 'high',
         maxTokens: 0,
         reasoningEffort: 'default',
         global: {
@@ -71,6 +70,12 @@ export async function GET() {
       }
       if (config.huggingFaceToken === undefined) {
         config.huggingFaceToken = '';
+        modified = true;
+      }
+      // Configs written before Gemini 3 carry thinkingEnabled + a numeric
+      // thinkingBudget instead; both are ignored now, so seed the level.
+      if (!config.thinkingLevel) {
+        config.thinkingLevel = 'high';
         modified = true;
       }
       if (!config.global) {

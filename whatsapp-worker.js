@@ -26,6 +26,7 @@ const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 const {
   extractResponseText,
   buildGenerationPayload,
+  normalizeThinkingLevel,
   buildStudioEndpoint,
   buildEnterpriseEndpoint
 } = require('./src/lib/gemini.js');
@@ -916,7 +917,7 @@ async function callGeminiAPI(c, prompt) {
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048, { maxOutputTokens: c.maxTokens || 0 });
+      const payload = buildGenerationPayload(prompt, c.thinkingLevel, { maxOutputTokens: c.maxTokens || 0 });
       const endpoint = buildEnterpriseEndpoint(c.enterpriseProjectId, c.enterpriseLocation, model, enterpriseApiKey);
 
       const response = await fetch(endpoint, {
@@ -973,9 +974,10 @@ async function callGeminiAPI(c, prompt) {
         configObj.maxOutputTokens = Number(c.maxTokens);
       }
 
-      if (c.thinkingEnabled) {
+      const sdkThinkingLevel = normalizeThinkingLevel(c.thinkingLevel);
+      if (sdkThinkingLevel) {
         configObj.thinkingConfig = {
-          thinkingBudget: c.thinkingBudget || 2048
+          thinkingLevel: sdkThinkingLevel
         };
       }
 
@@ -995,7 +997,7 @@ async function callGeminiAPI(c, prompt) {
       throw new Error('Gemini API Key is missing.');
     }
 
-    const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048, { maxOutputTokens: c.maxTokens || 0 });
+    const payload = buildGenerationPayload(prompt, c.thinkingLevel, { maxOutputTokens: c.maxTokens || 0 });
     const response = await fetch(buildStudioEndpoint(model, apiKey), {
       method: 'POST',
       headers: {

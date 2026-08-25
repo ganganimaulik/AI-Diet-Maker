@@ -100,8 +100,7 @@ export interface IConfig {
   enterpriseServiceAccountJson?: string;
   model: string;
   customModel: string;
-  thinkingEnabled: boolean;
-  thinkingBudget: number;
+  thinkingLevel: string;
   maxTokens?: number;
   reasoningEffort?: string;
   global: {

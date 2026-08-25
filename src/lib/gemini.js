@@ -41,12 +41,29 @@ function extractResponseText(data) {
 }
 
 /**
+ * Thinking depths accepted by `thinkingConfig.thinkingLevel` (Gemini 3+).
+ * Gemini 3 dropped the numeric `thinkingBudget` in favour of these levels,
+ * which are relative allowances rather than hard token counts.
+ */
+const THINKING_LEVELS = ['low', 'medium', 'high'];
+
+/**
+ * Map a stored level to the canonical enum name the REST API and the
+ * @google/genai SDK expect ('low' -> 'LOW'). Returns '' for 'default' or any
+ * unknown value, meaning: send no thinkingConfig and let the model decide.
+ */
+function normalizeThinkingLevel(thinkingLevel) {
+  const level = String(thinkingLevel || '').toLowerCase();
+  return THINKING_LEVELS.includes(level) ? level.toUpperCase() : '';
+}
+
+/**
  * Build the REST request payload shared by AI Studio and Vertex endpoints.
  *
  * `maxOutputTokens` of 0/blank is omitted so the model keeps its own default
  * output limit (thinking tokens count against this budget too).
  */
-function buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens = 0 } = {}) {
+function buildGenerationPayload(prompt, thinkingLevel, { maxOutputTokens = 0 } = {}) {
   const payload = {
     contents: [
       {
@@ -58,9 +75,10 @@ function buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOu
       temperature: 0.1,
     }
   };
-  if (thinkingEnabled) {
+  const level = normalizeThinkingLevel(thinkingLevel);
+  if (level) {
     payload.generationConfig.thinkingConfig = {
-      thinkingBudget: thinkingBudget
+      thinkingLevel: level
     };
   }
   const requestedMaxTokens = Number(maxOutputTokens);
@@ -105,6 +123,7 @@ function parseGeminiErrorText(errorText, fallbackMessage) {
 }
 
 module.exports = {
+  normalizeThinkingLevel,
   extractPartsText,
   extractResponseText,
   buildGenerationPayload,

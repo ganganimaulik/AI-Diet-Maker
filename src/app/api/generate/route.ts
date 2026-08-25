@@ -6,6 +6,7 @@ import {
   extractPartsText,
   extractResponseText,
   buildGenerationPayload,
+  normalizeThinkingLevel,
   buildStudioEndpoint,
   buildEnterpriseEndpoint,
   parseGeminiErrorText,
@@ -87,8 +88,7 @@ async function* getChunks(
   apiKey: string,
   model: string,
   prompt: string,
-  thinkingEnabled: boolean,
-  thinkingBudget: number,
+  thinkingLevel: string,
   enterpriseAuthMethod: string,
   enterpriseApiKey: string,
   enterpriseProjectId: string,
@@ -148,7 +148,7 @@ async function* getChunks(
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens: maxTokens });
+      const payload = buildGenerationPayload(prompt, thinkingLevel, { maxOutputTokens: maxTokens });
       const endpoint = buildEnterpriseEndpoint(
         enterpriseProjectId,
         enterpriseLocation,
@@ -206,9 +206,10 @@ async function* getChunks(
         configObj.maxOutputTokens = Number(maxTokens);
       }
 
-      if (thinkingEnabled) {
+      const sdkThinkingLevel = normalizeThinkingLevel(thinkingLevel);
+      if (sdkThinkingLevel) {
         configObj.thinkingConfig = {
-          thinkingBudget: thinkingBudget
+          thinkingLevel: sdkThinkingLevel
         };
       }
 
@@ -231,7 +232,7 @@ async function* getChunks(
       throw new Error('Gemini API Key is required. Please set it in the configuration.');
     }
 
-    const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens: maxTokens });
+    const payload = buildGenerationPayload(prompt, thinkingLevel, { maxOutputTokens: maxTokens });
     const response = await fetch(buildStudioEndpoint(model, apiKey, { stream: true }), {
       method: 'POST',
       headers: {
@@ -259,8 +260,7 @@ export async function POST(req: Request) {
     const {
       prompt,
       model = 'gemini-3.7-flash',
-      thinkingEnabled = false,
-      thinkingBudget = 2048,
+      thinkingLevel = 'default',
       maxTokens = 0,
       reasoningEffort = 'default',
       provider = 'google-ai-studio',
@@ -296,8 +296,7 @@ export async function POST(req: Request) {
             apiKey,
             model,
             prompt,
-            thinkingEnabled,
-            thinkingBudget,
+            thinkingLevel,
             enterpriseAuthMethod,
             enterpriseApiKey,
             enterpriseProjectId,

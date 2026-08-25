@@ -26,17 +26,17 @@ export interface GeminiPayload {
     temperature: number;
     maxOutputTokens?: number;
     thinkingConfig?: {
-      thinkingBudget: number;
+      thinkingLevel: string;
     };
   };
 }
 
+export const normalizeThinkingLevel: (thinkingLevel?: string) => string = gemini.normalizeThinkingLevel;
 export const extractPartsText: (parts: GeminiPart[]) => GeminiExtract = gemini.extractPartsText;
 export const extractResponseText: (data: unknown) => GeminiExtract = gemini.extractResponseText;
 export const buildGenerationPayload: (
   prompt: string,
-  thinkingEnabled: boolean,
-  thinkingBudget: number,
+  thinkingLevel: string,
   opts?: { maxOutputTokens?: number }
 ) => GeminiPayload = gemini.buildGenerationPayload;
 export const buildStudioEndpoint: (
