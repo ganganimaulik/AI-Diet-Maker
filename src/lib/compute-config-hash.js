@@ -21,11 +21,11 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  *   - customSplits
  *   - dailyVariables (per-day ingredient overrides)
  *   - dailySplits (per-day split overrides)
- *   - model, customModel, thinkingEnabled, thinkingBudget
+ *   - provider, model, customModel, thinkingEnabled, thinkingBudget
  *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
  *
  * Excluded fields (changes do NOT invalidate cache):
- *   - apiKey, provider, enterpriseApiKey, etc. (API routing config)
+ *   - apiKey, enterpriseApiKey, etc. (credentials only)
  *   - generationRange, selectedGenerationDay (UI selection only)
  *   - huggingFaceToken, huggingFaceSpace (WhatsApp worker config)
  */
@@ -63,6 +63,7 @@ function computeConfigHash(config) {
     })),
     dailyVariables: normalizeDailyMap(config.dailyVariables),
     dailySplits: normalizeDailySplitsMap(config.dailySplits),
+    provider: config.provider || '',
     model: config.model || '',
     customModel: config.customModel || '',
     thinkingEnabled: !!config.thinkingEnabled,

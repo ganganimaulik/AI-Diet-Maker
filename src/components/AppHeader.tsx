@@ -19,7 +19,7 @@ export default function AppHeader({
   onLogout
 }: AppHeaderProps) {
   const hasApiCredentials =
-    (config.provider === 'fireworks' && (config.fireworksApiKey || config.apiKey)) ||
+    (config.provider === 'fireworks' && config.fireworksApiKey) ||
     (config.provider === 'gemini-enterprise' && (
       (config.enterpriseAuthMethod === 'api-key' && config.enterpriseApiKey) ||
       (config.enterpriseAuthMethod === 'service-account' && config.enterpriseServiceAccountJson) ||

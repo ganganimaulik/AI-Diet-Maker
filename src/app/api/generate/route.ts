@@ -15,38 +15,35 @@ import {
 import {
   FIREWORKS_API_URL,
   buildFireworksPayload,
-  extractFireworksChunk,
+  createFireworksStreamExtractor,
   parseFireworksErrorText
 } from '@/lib/fireworks-helpers';
+
+// Fireworks reasoning models stream for minutes; the platform default
+// (10-15s on Vercel) would kill the function part-way through a plan.
+export const maxDuration = 300;
 
 interface StreamChunk {
   text: string;
   thought: string;
+  finishReason?: string;
 }
 
-/** Parse one Gemini SSE `data:` payload into { text, thought }, or null if empty. */
-function parseSSEData(dataStr: string): StreamChunk | null {
+/** Pulls { text, thought } out of one provider's decoded SSE payload. */
+type ChunkExtractor = (data: unknown) => StreamChunk;
+
+/** Parse one SSE `data:` payload into { text, thought }, or null if empty. */
+function parseSSEData(dataStr: string, extract: ChunkExtractor): StreamChunk | null {
   if (dataStr === '[DONE]') return null;
   const data = JSON.parse(dataStr);
-  const { text, thought } = extractResponseText(data);
-  if (text || thought) {
-    return { text, thought };
+  const { text, thought, finishReason } = extract(data);
+  if (text || thought || finishReason) {
+    return { text, thought, finishReason };
   }
   return null;
 }
 
-/** Parse one Fireworks SSE `data:` payload into { text, thought }, or null if empty. */
-function parseFireworksSSEData(dataStr: string): StreamChunk | null {
-  if (dataStr === '[DONE]') return null;
-  const data = JSON.parse(dataStr);
-  const { text, thought } = extractFireworksChunk(data);
-  if (text || thought) {
-    return { text, thought };
-  }
-  return null;
-}
-
-async function* parseSSEResponse(response: Response, isFireworks = false) {
+async function* parseSSEResponse(response: Response, extract: ChunkExtractor = extractResponseText) {
   const reader = response.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();
@@ -56,8 +53,7 @@ async function* parseSSEResponse(response: Response, isFireworks = false) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return null;
     try {
-      const dataStr = trimmed.slice(5).trim();
-      return isFireworks ? parseFireworksSSEData(dataStr) : parseSSEData(dataStr);
+      return parseSSEData(trimmed.slice(5).trim(), extract);
     } catch (e) {
       console.error('Error parsing SSE chunk:', trimmed, e);
       return null;
@@ -101,8 +97,8 @@ async function* getChunks(
   fireworksApiKey: string
 ) {
   if (provider === 'fireworks') {
-    const activeFireworksKey = fireworksApiKey || process.env.FIREWORKS_API_KEY || apiKey;
-    if (!activeFireworksKey) {
+    // Already fully resolved by the caller; never fall back to the Gemini key.
+    if (!fireworksApiKey) {
       throw new Error('Fireworks API Key is required. Please set it in Settings or FIREWORKS_API_KEY environment variable.');
     }
 
@@ -110,7 +106,7 @@ async function* getChunks(
     const response = await fetch(FIREWORKS_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${activeFireworksKey}`,
+        'Authorization': `Bearer ${fireworksApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
@@ -121,7 +117,20 @@ async function* getChunks(
       throw new Error(parseFireworksErrorText(errorText, 'Failed to generate content from Fireworks API.'));
     }
 
-    yield* parseSSEResponse(response, true);
+    const extract = createFireworksStreamExtractor();
+    let finishReason = '';
+    for await (const chunk of parseSSEResponse(response, extract)) {
+      if (chunk.finishReason) finishReason = chunk.finishReason;
+      if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
+    }
+
+    // Drain any <think> tag or block left buffered when the stream ended.
+    const tail = extract.flush();
+    if (tail.text || tail.thought) yield { text: tail.text, thought: tail.thought };
+
+    if (finishReason === 'length') {
+      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Try a shorter prompt or a model with a larger output limit.');
+    }
   } else if (provider === 'gemini-enterprise') {
     if (enterpriseAuthMethod === 'api-key') {
       const activeEnterpriseApiKey = enterpriseApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -251,7 +260,8 @@ export async function POST(req: Request) {
     } = body;
 
     const apiKey = req.headers.get('x-api-key') || body.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    const activeFireworksKey = req.headers.get('x-fireworks-api-key') || fireworksApiKey || req.headers.get('x-api-key') || body.apiKey || process.env.FIREWORKS_API_KEY;
+    // Fireworks credentials only — the Gemini key must never be sent to fireworks.ai.
+    const activeFireworksKey = req.headers.get('x-fireworks-api-key') || fireworksApiKey || process.env.FIREWORKS_API_KEY || '';
 
     if (!prompt) {
       return NextResponse.json(

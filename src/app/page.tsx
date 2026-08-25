@@ -225,7 +225,7 @@ export default function Home() {
     }
 
     if (config.provider === 'fireworks') {
-      if (!config.fireworksApiKey && !config.apiKey) {
+      if (!config.fireworksApiKey) {
         setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
         setCurrentView('connections');
         return;
@@ -405,7 +405,7 @@ export default function Home() {
     }
 
     if (config.provider === 'fireworks') {
-      if (!config.fireworksApiKey && !config.apiKey) {
+      if (!config.fireworksApiKey) {
         setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
         setCurrentView('connections');
         return;
@@ -499,6 +499,7 @@ export default function Home() {
         let buffer = '';
         let dayText = '';
         let dayThought = '';
+        let dayError = '';
 
         while (true) {
           const { value, done } = await reader.read();
@@ -513,6 +514,7 @@ export default function Home() {
             if (!trimmed.startsWith('data:')) continue;
             try {
               const parsed = JSON.parse(trimmed.slice(5).trim());
+              if (parsed.error) dayError = parsed.error;
               if (parsed.thought) dayThought += parsed.thought;
               if (parsed.text) dayText += parsed.text;
             } catch {}
@@ -522,10 +524,14 @@ export default function Home() {
         if (buffer.trim().startsWith('data:')) {
           try {
             const parsed = JSON.parse(buffer.trim().slice(5).trim());
+            if (parsed.error) dayError = parsed.error;
             if (parsed.thought) dayThought += parsed.thought;
             if (parsed.text) dayText += parsed.text;
           } catch {}
         }
+
+        // Surface the server's reason and keep a partial stream out of the cache.
+        if (dayError) throw new Error(dayError);
 
         if (dayText) {
           await saveToCache(day, dayText, dayThought);
@@ -540,6 +546,7 @@ export default function Home() {
         }
       } catch (err) {
         console.error(`Error generating ${day}:`, err);
+        setErrorMsg(err instanceof Error && err.message ? `${day}: ${err.message}` : `Failed to generate ${day}.`);
         setBatchProgress(prev => ({ ...prev, [day]: 'error' }));
       }
     });

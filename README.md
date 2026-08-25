@@ -140,6 +140,9 @@ APP_PASSWORD=your_secure_password
 # Gemini API Key (Optional - can also be configured in the UI)
 GEMINI_API_KEY=your_gemini_api_key_here
 
+# Fireworks.ai API Key (Optional - required only when using the Fireworks provider)
+FIREWORKS_API_KEY=your_fireworks_api_key_here
+
 # Port for the WhatsApp worker health check server (Default: 7860)
 PORT=7860
 ```
@@ -171,6 +174,7 @@ Once started, navigate to the **Connections** tab in the dashboard to scan the Q
 | `MONGODB_URI` | **Yes** | — | MongoDB connection string for configuration, caches, and WhatsApp session storage. |
 | `APP_PASSWORD` | No | `admin123` | Master password for web dashboard login. |
 | `GEMINI_API_KEY` | No | — | Google AI Studio Gemini API Key (can also be entered directly in the web UI). |
+| `FIREWORKS_API_KEY` | No | — | Fireworks.ai API Key, used when the provider is set to Fireworks (can also be entered directly in the web UI). Never falls back to `GEMINI_API_KEY`. |
 | `PORT` | No | `7860` | HTTP port for the worker's diagnostic & health check server. |
 | `PUPPETEER_EXECUTABLE_PATH` | No | *Auto-detected* | Custom path to Chromium executable if not using Puppeteer's bundled Chrome. |
 | `DNS_SERVERS` | No | `1.1.1.1 8.8.8.8 1.0.0.1` | Custom DNS resolvers for the Docker container entrypoint. |
@@ -187,6 +191,7 @@ Once started, navigate to the **Connections** tab in the dashboard to scan the Q
    - `MONGODB_URI`
    - `APP_PASSWORD`
    - `GEMINI_API_KEY`
+   - `FIREWORKS_API_KEY` (only if using the Fireworks provider)
 4. Deploy!
 
 ### 2. WhatsApp Worker
@@ -200,7 +205,7 @@ An automated GitHub Actions workflow is provided in `.github/workflows/deploy-or
    - `ORACLE_HOST`
    - `ORACLE_USER`
    - `ORACLE_SSH_KEY`
-3. Configure `~/worker.env` on the remote VM containing `MONGODB_URI` and `GEMINI_API_KEY`.
+3. Configure `~/worker.env` on the remote VM containing `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider).
 4. Pushing changes to `main` touching worker files automatically builds and redeploys the Docker container.
 
 #### Option B: Hugging Face Spaces (Docker SDK)
@@ -209,7 +214,7 @@ The repository includes a `Dockerfile` compatible with Hugging Face Spaces:
 2. Set repository secrets in GitHub:
    - `HF_TOKEN`
 3. Run or enable `.github/workflows/sync-to-hub.yml` to automatically push and build on Hugging Face Spaces.
-4. Add `MONGODB_URI` and `GEMINI_API_KEY` in the Space's Settings secrets.
+4. Add `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider) in the Space's Settings secrets.
 
 #### Option C: Standalone Docker Run
 To build and run the worker on any server or local Docker daemon:
@@ -223,6 +228,7 @@ docker run -d \
   -p 7860:7860 \
   -e MONGODB_URI="your_mongodb_uri" \
   -e GEMINI_API_KEY="your_gemini_api_key" \
+  -e FIREWORKS_API_KEY="your_fireworks_api_key" \
   diet-worker
 ```
 

@@ -681,7 +681,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
       throw new Error('Diet configuration is missing.');
     }
     const hasFireworksCreds = configDoc.provider === 'fireworks' && (
-      process.env.FIREWORKS_API_KEY || configDoc.fireworksApiKey || configDoc.apiKey
+      process.env.FIREWORKS_API_KEY || configDoc.fireworksApiKey
     );
     const hasEnterpriseCreds = configDoc.provider === 'gemini-enterprise' && (
       configDoc.enterpriseAuthMethod === 'adc' ||
@@ -874,7 +874,7 @@ async function callGeminiAPI(c, prompt) {
   const model = c.model === 'custom' ? c.customModel : c.model;
 
   if (c.provider === 'fireworks') {
-    const fireworksKey = process.env.FIREWORKS_API_KEY || c.fireworksApiKey || c.apiKey;
+    const fireworksKey = process.env.FIREWORKS_API_KEY || c.fireworksApiKey;
     if (!fireworksKey) {
       throw new Error('Fireworks API Key is missing.');
     }
@@ -895,7 +895,10 @@ async function callGeminiAPI(c, prompt) {
     }
 
     const data = await response.json();
-    const { text, thought } = extractFireworksResponse(data);
+    const { text, thought, finishReason } = extractFireworksResponse(data);
+    if (finishReason === 'length') {
+      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete.');
+    }
     return { text, thinking: thought };
 
   } else if (c.provider === 'gemini-enterprise') {

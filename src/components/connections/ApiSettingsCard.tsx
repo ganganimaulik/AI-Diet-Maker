@@ -30,16 +30,31 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           onChange={e => {
             const nextProvider = e.target.value;
             setConfig(prev => {
-              let updatedModel = prev.model;
-              if (nextProvider === 'fireworks' && (prev.model.startsWith('gemini') || !prev.model)) {
-                updatedModel = 'accounts/fireworks/models/deepseek-v4-pro';
-              } else if (nextProvider !== 'fireworks' && prev.model.includes('fireworks')) {
-                updatedModel = 'gemini-3.7-flash';
+              const prevModel = prev.model || '';
+              const prevCustomModel = prev.customModel || '';
+              let updatedModel = prevModel;
+              let updatedCustomModel = prevCustomModel;
+              if (nextProvider === 'fireworks') {
+                // Rewrite customModel too, or `model: 'custom'` carries a Gemini id to Fireworks.
+                if (!prevModel || prevModel.startsWith('gemini')) {
+                  updatedModel = 'accounts/fireworks/models/deepseek-v4-pro';
+                }
+                if (!prevCustomModel || prevCustomModel.startsWith('gemini')) {
+                  updatedCustomModel = 'accounts/fireworks/models/deepseek-v4-pro';
+                }
+              } else {
+                if (prevModel.includes('fireworks')) {
+                  updatedModel = 'gemini-3.7-flash';
+                }
+                if (prevCustomModel.includes('fireworks')) {
+                  updatedCustomModel = 'gemini-3.7-flash';
+                }
               }
               return {
                 ...prev,
                 provider: nextProvider,
-                model: updatedModel
+                model: updatedModel,
+                customModel: updatedCustomModel
               };
             });
           }}
