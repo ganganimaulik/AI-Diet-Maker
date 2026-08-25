@@ -24,6 +24,7 @@ export interface GeminiPayload {
   }>;
   generationConfig: {
     temperature: number;
+    maxOutputTokens?: number;
     thinkingConfig?: {
       thinkingBudget: number;
     };
@@ -35,7 +36,8 @@ export const extractResponseText: (data: unknown) => GeminiExtract = gemini.extr
 export const buildGenerationPayload: (
   prompt: string,
   thinkingEnabled: boolean,
-  thinkingBudget: number
+  thinkingBudget: number,
+  opts?: { maxOutputTokens?: number }
 ) => GeminiPayload = gemini.buildGenerationPayload;
 export const buildStudioEndpoint: (
   model: string,

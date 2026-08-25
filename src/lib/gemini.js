@@ -42,8 +42,11 @@ function extractResponseText(data) {
 
 /**
  * Build the REST request payload shared by AI Studio and Vertex endpoints.
+ *
+ * `maxOutputTokens` of 0/blank is omitted so the model keeps its own default
+ * output limit (thinking tokens count against this budget too).
  */
-function buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget) {
+function buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens = 0 } = {}) {
   const payload = {
     contents: [
       {
@@ -59,6 +62,10 @@ function buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget) {
     payload.generationConfig.thinkingConfig = {
       thinkingBudget: thinkingBudget
     };
+  }
+  const requestedMaxTokens = Number(maxOutputTokens);
+  if (requestedMaxTokens > 0) {
+    payload.generationConfig.maxOutputTokens = requestedMaxTokens;
   }
   return payload;
 }

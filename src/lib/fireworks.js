@@ -15,14 +15,22 @@ const FIREWORKS_API_URL = 'https://api.fireworks.ai/inference/v1/chat/completion
 // an explicit budget, and let callers check finishReason for the rest.
 const DEFAULT_MAX_TOKENS = 16384;
 
+// reasoning_effort values accepted by Fireworks' OpenAI-compatible endpoint.
+// 'default' means "omit the field" and let the model decide.
+const REASONING_EFFORTS = ['default', 'none', 'low', 'medium', 'high'];
+
 const THINK_OPEN = '<think>';
 const THINK_CLOSE = '</think>';
 
 /**
  * Build Fireworks.ai chat completion payload.
+ *
+ * `maxTokens` of 0/blank falls back to DEFAULT_MAX_TOKENS; `reasoningEffort` is
+ * only sent when the user picked something other than the provider default.
  */
-function buildFireworksPayload(model, prompt, { temperature = 0.1, stream = false, maxTokens = DEFAULT_MAX_TOKENS } = {}) {
-  return {
+function buildFireworksPayload(model, prompt, { temperature = 0.1, stream = false, maxTokens = 0, reasoningEffort = '' } = {}) {
+  const requestedMaxTokens = Number(maxTokens);
+  const payload = {
     model: model,
     messages: [
       {
@@ -31,9 +39,13 @@ function buildFireworksPayload(model, prompt, { temperature = 0.1, stream = fals
       }
     ],
     temperature: temperature,
-    max_tokens: maxTokens,
+    max_tokens: requestedMaxTokens > 0 ? requestedMaxTokens : DEFAULT_MAX_TOKENS,
     stream: stream
   };
+  if (reasoningEffort && reasoningEffort !== 'default') {
+    payload.reasoning_effort = reasoningEffort;
+  }
+  return payload;
 }
 
 /**
@@ -198,6 +210,8 @@ function parseFireworksErrorText(errorText, fallbackMessage) {
 
 module.exports = {
   FIREWORKS_API_URL,
+  DEFAULT_MAX_TOKENS,
+  REASONING_EFFORTS,
   buildFireworksPayload,
   extractFireworksChunk,
   createFireworksStreamExtractor,

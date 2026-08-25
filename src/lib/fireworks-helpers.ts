@@ -28,13 +28,16 @@ export interface FireworksPayload {
   temperature: number;
   max_tokens: number;
   stream: boolean;
+  reasoning_effort?: string;
 }
 
 export const FIREWORKS_API_URL: string = fireworks.FIREWORKS_API_URL;
+export const DEFAULT_MAX_TOKENS: number = fireworks.DEFAULT_MAX_TOKENS;
+export const REASONING_EFFORTS: string[] = fireworks.REASONING_EFFORTS;
 export const buildFireworksPayload: (
   model: string,
   prompt: string,
-  opts?: { temperature?: number; stream?: boolean; maxTokens?: number }
+  opts?: { temperature?: number; stream?: boolean; maxTokens?: number; reasoningEffort?: string }
 ) => FireworksPayload = fireworks.buildFireworksPayload;
 export const extractFireworksChunk: (data: unknown) => FireworksExtract = fireworks.extractFireworksChunk;
 export const createFireworksStreamExtractor: () => FireworksStreamExtractor = fireworks.createFireworksStreamExtractor;

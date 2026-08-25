@@ -23,6 +23,8 @@ export async function GET() {
         customModel: 'gemini-3.7-flash',
         thinkingEnabled: true,
         thinkingBudget: 2048,
+        maxTokens: 0,
+        reasoningEffort: 'default',
         global: {
           dailyCalorieTarget: 1600,
           totalOliveOil: 18,

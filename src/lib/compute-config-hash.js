@@ -22,6 +22,8 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  *   - dailyVariables (per-day ingredient overrides)
  *   - dailySplits (per-day split overrides)
  *   - provider, model, customModel, thinkingEnabled, thinkingBudget
+ *   - maxTokens, reasoningEffort (only once moved off their defaults, so
+ *     existing caches are not invalidated by simply adding the settings)
  *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
  *
  * Excluded fields (changes do NOT invalidate cache):
@@ -70,6 +72,15 @@ function computeConfigHash(config) {
     thinkingBudget: config.thinkingBudget || 0,
     promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
   };
+
+  // Added later than the fields above: include them only when they carry a
+  // non-default value, so configs that never touched them keep their hash.
+  if (config.maxTokens) {
+    hashableFields.maxTokens = config.maxTokens;
+  }
+  if (config.reasoningEffort && config.reasoningEffort !== 'default') {
+    hashableFields.reasoningEffort = config.reasoningEffort;
+  }
 
   const jsonStr = JSON.stringify(hashableFields, (key, value) => {
     // Sort object keys at every level for deterministic serialization

@@ -879,7 +879,12 @@ async function callGeminiAPI(c, prompt) {
       throw new Error('Fireworks API Key is missing.');
     }
 
-    const payload = buildFireworksPayload(model, prompt, { temperature: 0.1, stream: false });
+    const payload = buildFireworksPayload(model, prompt, {
+      temperature: 0.1,
+      stream: false,
+      maxTokens: c.maxTokens || 0,
+      reasoningEffort: c.reasoningEffort || 'default'
+    });
     const response = await fetch(FIREWORKS_API_URL, {
       method: 'POST',
       headers: {
@@ -897,7 +902,7 @@ async function callGeminiAPI(c, prompt) {
     const data = await response.json();
     const { text, thought, finishReason } = extractFireworksResponse(data);
     if (finishReason === 'length') {
-      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete.');
+      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Raise "Max Output Tokens" in API settings or lower the reasoning effort.');
     }
     return { text, thinking: thought };
 
@@ -911,7 +916,7 @@ async function callGeminiAPI(c, prompt) {
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048);
+      const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048, { maxOutputTokens: c.maxTokens || 0 });
       const endpoint = buildEnterpriseEndpoint(c.enterpriseProjectId, c.enterpriseLocation, model, enterpriseApiKey);
 
       const response = await fetch(endpoint, {
@@ -964,6 +969,10 @@ async function callGeminiAPI(c, prompt) {
         temperature: 0.1,
       };
 
+      if (Number(c.maxTokens) > 0) {
+        configObj.maxOutputTokens = Number(c.maxTokens);
+      }
+
       if (c.thinkingEnabled) {
         configObj.thinkingConfig = {
           thinkingBudget: c.thinkingBudget || 2048
@@ -986,7 +995,7 @@ async function callGeminiAPI(c, prompt) {
       throw new Error('Gemini API Key is missing.');
     }
 
-    const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048);
+    const payload = buildGenerationPayload(prompt, c.thinkingEnabled, c.thinkingBudget || 2048, { maxOutputTokens: c.maxTokens || 0 });
     const response = await fetch(buildStudioEndpoint(model, apiKey), {
       method: 'POST',
       headers: {

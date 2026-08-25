@@ -60,6 +60,10 @@ const ConfigSchema = new Schema({
   customModel: { type: String, default: 'gemini-3.7-flash' },
   thinkingEnabled: { type: Boolean, default: true },
   thinkingBudget: { type: Number, default: 2048 },
+  // 0 = provider default (Fireworks falls back to 16384, Gemini to the model's own limit)
+  maxTokens: { type: Number, default: 0 },
+  // 'default' = omit reasoning_effort from the request (Fireworks only)
+  reasoningEffort: { type: String, default: 'default' },
   global: {
     dailyCalorieTarget: { type: Number, default: 1600 },
     totalOliveOil: { type: Number, default: 18 },

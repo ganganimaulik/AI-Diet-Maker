@@ -239,6 +239,49 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
         )}
       </div>
 
+      <div className="input-row">
+        <div className="form-group">
+          <label className="form-label">Max Output Tokens</label>
+          <input
+            type="number"
+            min="0"
+            step="256"
+            className="form-input"
+            placeholder={config.provider === 'fireworks' ? 'Auto (16384)' : 'Auto (model default)'}
+            value={config.maxTokens ? String(config.maxTokens) : ''}
+            onChange={e => {
+              const parsed = parseInt(e.target.value, 10);
+              setConfig(prev => ({ ...prev, maxTokens: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 }));
+            }}
+          />
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            Caps the response length. Leave blank for the provider default
+            ({config.provider === 'fireworks' ? '16,384' : "the model's own limit"}).
+            Thinking/reasoning tokens are charged against this same budget.
+          </p>
+        </div>
+
+        {config.provider === 'fireworks' && (
+          <div className="form-group">
+            <label className="form-label">Reasoning Effort</label>
+            <select
+              className="form-input"
+              value={config.reasoningEffort || 'default'}
+              onChange={e => setConfig(prev => ({ ...prev, reasoningEffort: e.target.value }))}
+            >
+              <option value="default">Model default</option>
+              <option value="none">None (no reasoning)</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+              Sent as <code>reasoning_effort</code>. Models without reasoning control ignore it.
+            </p>
+          </div>
+        )}
+      </div>
+
       {config.provider !== 'fireworks' && (
         <>
           <div className="form-group" style={{ marginTop: '0.5rem' }}>

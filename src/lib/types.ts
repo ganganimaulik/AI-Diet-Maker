@@ -45,6 +45,10 @@ export interface Config {
   customModel: string;
   thinkingEnabled: boolean;
   thinkingBudget: number;
+  /** Output token cap; 0 = provider default. */
+  maxTokens?: number;
+  /** Fireworks reasoning_effort; 'default' = don't send it. */
+  reasoningEffort?: string;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;
@@ -115,6 +119,8 @@ export const DEFAULT_CONFIG: Config = {
   customModel: 'gemini-3.7-flash',
   thinkingEnabled: true,
   thinkingBudget: 2048,
+  maxTokens: 0,
+  reasoningEffort: 'default',
   huggingFaceToken: '',
   huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {

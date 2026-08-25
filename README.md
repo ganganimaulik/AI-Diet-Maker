@@ -27,6 +27,7 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 ### 🧠 Gemini AI Generation & Smart Caching
 - **Gemini AI Integration**: Supports Google AI Studio (API Key) and Gemini Enterprise / Vertex AI (API Key, Service Account JSON, or ADC).
 - **Thinking Mode Support**: Configurable reasoning budget for Gemini thinking models with live preview of the AI's internal thought process.
+- **Output & Reasoning Controls**: Set **Max Output Tokens** per provider (blank = provider default: 16,384 on Fireworks, the model's own limit on Gemini) and pick a **Reasoning Effort** (`none`/`low`/`medium`/`high`, sent as `reasoning_effort`) for Fireworks reasoning models — both apply to dashboard generation and the WhatsApp worker.
 - **Structured Dual-Part Output**:
   - **Part 1 (User Plan)**: Complete nutrition tables, macros (protein, carbs, fat, fiber), micro-nutrients (sodium, potassium), and meal schedules.
   - **Part 2 (Cook Instructions)**: Clean, cook-friendly preparation instructions, ingredient weights, and seasoning splits in clear language.

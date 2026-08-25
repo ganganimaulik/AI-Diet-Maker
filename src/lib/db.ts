@@ -102,6 +102,8 @@ export interface IConfig {
   customModel: string;
   thinkingEnabled: boolean;
   thinkingBudget: number;
+  maxTokens?: number;
+  reasoningEffort?: string;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;

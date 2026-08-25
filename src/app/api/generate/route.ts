@@ -94,7 +94,9 @@ async function* getChunks(
   enterpriseProjectId: string,
   enterpriseLocation: string,
   enterpriseServiceAccountJson: string,
-  fireworksApiKey: string
+  fireworksApiKey: string,
+  maxTokens: number,
+  reasoningEffort: string
 ) {
   if (provider === 'fireworks') {
     // Already fully resolved by the caller; never fall back to the Gemini key.
@@ -102,7 +104,12 @@ async function* getChunks(
       throw new Error('Fireworks API Key is required. Please set it in Settings or FIREWORKS_API_KEY environment variable.');
     }
 
-    const payload = buildFireworksPayload(model, prompt, { temperature: 0.1, stream: true });
+    const payload = buildFireworksPayload(model, prompt, {
+      temperature: 0.1,
+      stream: true,
+      maxTokens,
+      reasoningEffort
+    });
     const response = await fetch(FIREWORKS_API_URL, {
       method: 'POST',
       headers: {
@@ -129,7 +136,7 @@ async function* getChunks(
     if (tail.text || tail.thought) yield { text: tail.text, thought: tail.thought };
 
     if (finishReason === 'length') {
-      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Try a shorter prompt or a model with a larger output limit.');
+      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Raise "Max Output Tokens" in API settings, lower the reasoning effort, or try a shorter prompt.');
     }
   } else if (provider === 'gemini-enterprise') {
     if (enterpriseAuthMethod === 'api-key') {
@@ -141,7 +148,7 @@ async function* getChunks(
         throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
       }
 
-      const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget);
+      const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens: maxTokens });
       const endpoint = buildEnterpriseEndpoint(
         enterpriseProjectId,
         enterpriseLocation,
@@ -195,6 +202,10 @@ async function* getChunks(
         temperature: 0.1,
       };
 
+      if (Number(maxTokens) > 0) {
+        configObj.maxOutputTokens = Number(maxTokens);
+      }
+
       if (thinkingEnabled) {
         configObj.thinkingConfig = {
           thinkingBudget: thinkingBudget
@@ -220,7 +231,7 @@ async function* getChunks(
       throw new Error('Gemini API Key is required. Please set it in the configuration.');
     }
 
-    const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget);
+    const payload = buildGenerationPayload(prompt, thinkingEnabled, thinkingBudget, { maxOutputTokens: maxTokens });
     const response = await fetch(buildStudioEndpoint(model, apiKey, { stream: true }), {
       method: 'POST',
       headers: {
@@ -250,6 +261,8 @@ export async function POST(req: Request) {
       model = 'gemini-3.7-flash',
       thinkingEnabled = false,
       thinkingBudget = 2048,
+      maxTokens = 0,
+      reasoningEffort = 'default',
       provider = 'google-ai-studio',
       fireworksApiKey = '',
       enterpriseAuthMethod = 'api-key',
@@ -290,7 +303,9 @@ export async function POST(req: Request) {
             enterpriseProjectId,
             enterpriseLocation,
             enterpriseServiceAccountJson,
-            activeFireworksKey
+            activeFireworksKey,
+            maxTokens,
+            reasoningEffort
           );
 
           for await (const chunk of generator) {
