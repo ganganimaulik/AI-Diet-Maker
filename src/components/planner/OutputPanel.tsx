@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { DAYS_OF_WEEK } from '@/lib/types';
+import { DayProgress, DAYS_OF_WEEK } from '@/lib/types';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 import { renderMarkdown, getCookPlanOnly, parseCookPlanDays } from '@/lib/markdown';
 
@@ -17,7 +17,7 @@ interface OutputPanelProps {
   errorMsg: string;
   isGenerating: boolean;
   isBatchGenerating: boolean;
-  batchProgress: Record<string, 'pending' | 'generating' | 'done' | 'error'>;
+  dayProgress: Record<string, DayProgress>;
   isCachedResponse: boolean;
   onGenerate: (forceRegenerate?: boolean) => void;
   onGenerateAllDays: () => void;
@@ -70,13 +70,16 @@ export default function OutputPanel({
   errorMsg,
   isGenerating,
   isBatchGenerating,
-  batchProgress,
+  dayProgress,
   isCachedResponse,
   onGenerate,
   onGenerateAllDays,
   hidden = false
 }: OutputPanelProps) {
   const isBusy = isGenerating || isBatchGenerating;
+  // Days differ in whether they carry thinking output — fall back to the plan
+  // tab instead of rendering an empty panel after switching days.
+  const activeTab: OutputTab = outputTab === 'thoughts' && !thinkingText ? 'user' : outputTab;
 
   return (
     <section className="glass-panel" style={{ display: hidden ? 'none' : 'flex', minHeight: '500px', flexDirection: 'column' }}>
@@ -98,13 +101,13 @@ export default function OutputPanel({
           {DAYS_OF_WEEK.map(day => {
             const status = cacheStatus[day];
             const isCurrent = day === selectedDay;
-            const progress = batchProgress[day];
+            const progress = dayProgress[day];
 
             let badgeBg = 'rgba(255,255,255,0.03)';
             let badgeColor = 'var(--text-muted)';
             let label = day.substring(0, 3);
 
-            if (progress === 'generating') {
+            if (progress === 'generating' || progress === 'checking') {
               badgeBg = 'rgba(192, 132, 252, 0.2)';
               badgeColor = '#c084fc';
               label = `⌛ ${day.substring(0, 3)}`;
@@ -137,7 +140,11 @@ export default function OutputPanel({
                   fontWeight: isCurrent ? 700 : 500,
                   transition: 'all 0.15s ease'
                 }}
-                title={`${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`}
+                title={
+                  progress === 'generating' || progress === 'checking'
+                    ? `${day}: generating…`
+                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`
+                }
               >
                 {label}
               </button>
@@ -146,11 +153,12 @@ export default function OutputPanel({
         </div>
 
         {/* Quick action button inside header if not generated or for quick generation */}
-        {!outputText && !isBusy && (
+        {!outputText && !isGenerating && (
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button
               className="btn-primary"
               style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+              disabled={isBatchGenerating}
               onClick={() => onGenerate(false)}
             >
               Generate {selectedDay}
@@ -164,20 +172,20 @@ export default function OutputPanel({
         <div style={{ display: 'flex', gap: '1.5rem' }}>
           {thinkingText && (
             <button
-              className={`output-tab ${outputTab === 'thoughts' ? 'active' : ''}`}
+              className={`output-tab ${activeTab === 'thoughts' ? 'active' : ''}`}
               onClick={() => setOutputTab('thoughts')}
             >
               Thinking Process
             </button>
           )}
           <button
-            className={`output-tab ${outputTab === 'user' ? 'active' : ''}`}
+            className={`output-tab ${activeTab === 'user' ? 'active' : ''}`}
             onClick={() => setOutputTab('user')}
           >
             Part 1: For Myself ({selectedDay})
           </button>
           <button
-            className={`output-tab ${outputTab === 'cook' ? 'active' : ''}`}
+            className={`output-tab ${activeTab === 'cook' ? 'active' : ''}`}
             onClick={() => setOutputTab('cook')}
           >
             Part 2: For Cook ({selectedDay})
@@ -189,7 +197,7 @@ export default function OutputPanel({
             <span style={{ opacity: 0.9 }}>Generating {selectedDay}...</span>
           </div>
         )}
-        {isBatchGenerating && (
+        {isBatchGenerating && !isGenerating && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>
             <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', boxShadow: 'none', margin: 0 }}></div>
             <span style={{ opacity: 0.9 }}>Generating All 7 Days...</span>
@@ -218,13 +226,13 @@ export default function OutputPanel({
           <div className="loading-container" style={{ flex: 1 }}>
             <div className="spinner"></div>
             <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-              {isBatchGenerating ? 'Generating all 7 days in parallel...' : `Gemini is calculating plan for ${selectedDay}...`}
+              {isGenerating ? `Gemini is calculating plan for ${selectedDay}...` : 'Generating all 7 days in parallel...'}
             </p>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
           </div>
         ) : outputText || thinkingText ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {outputTab === 'thoughts' && thinkingText && (
+            {activeTab === 'thoughts' && thinkingText && (
               <div className="thinking-box" style={{ flex: 1 }}>
                 <div className="thinking-title">Gemini Thinking Output ({selectedDay})</div>
                 <div className="thinking-text" style={{ maxHeight: 'none', height: '430px' }}>
@@ -233,14 +241,14 @@ export default function OutputPanel({
               </div>
             )}
 
-            {outputTab === 'user' && (
+            {activeTab === 'user' && (
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(outputText) }}
               />
             )}
 
-            {outputTab === 'cook' && (
+            {activeTab === 'cook' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.75rem' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -310,7 +318,7 @@ export default function OutputPanel({
               </button>
               <button
                 className="btn-secondary"
-                disabled={isBusy}
+                disabled={isBatchGenerating}
                 onClick={onGenerateAllDays}
                 style={{
                   padding: '0.5rem 1.25rem',

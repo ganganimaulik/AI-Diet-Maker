@@ -11,8 +11,6 @@ export interface CacheEntryStatus {
  */
 export function useDietCache(isAuthenticated: boolean | null) {
   const [cacheStatus, setCacheStatus] = useState<Record<string, CacheEntryStatus>>({});
-  const [isCachedResponse, setIsCachedResponse] = useState(false);
-  const [isCacheLoading, setIsCacheLoading] = useState(false);
 
   // Fetch cache status for all days
   const fetchCacheStatus = async () => {
@@ -74,7 +72,6 @@ export function useDietCache(isAuthenticated: boolean | null) {
         }
         return {};
       });
-      setIsCachedResponse(false);
     } catch (e) {
       console.error('Error clearing cache:', e);
     }
@@ -90,10 +87,6 @@ export function useDietCache(isAuthenticated: boolean | null) {
 
   return {
     cacheStatus,
-    isCachedResponse,
-    setIsCachedResponse,
-    isCacheLoading,
-    setIsCacheLoading,
     fetchCacheStatus,
     checkCache,
     saveToCache,

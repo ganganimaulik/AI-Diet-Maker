@@ -1,8 +1,7 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { compilePromptText } from '@/lib/compile-prompt';
-import { Config, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayOutput, DayProgress, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
 import { useConfigActions } from '@/hooks/useConfigActions';
 import { useWhatsApp } from '@/hooks/useWhatsApp';
 import { useDietCache } from '@/hooks/useDietCache';
@@ -35,14 +34,40 @@ export default function Home() {
   const [customPrompt, setCustomPrompt] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
 
-  // Output and generation states
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Output and generation states.
+  // Progress, streamed output and errors are all keyed by day so several days
+  // can generate at the same time without overwriting each other.
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<Record<string, 'pending' | 'generating' | 'done' | 'error'>>({});
-  const [errorMsg, setErrorMsg] = useState('');
-  const [outputText, setOutputText] = useState('');
-  const [thinkingText, setThinkingText] = useState('');
+  const [dayProgress, setDayProgress] = useState<Record<string, DayProgress>>({});
+  const [dayOutputs, setDayOutputs] = useState<Record<string, DayOutput>>({});
+  const [dayErrors, setDayErrors] = useState<Record<string, string>>({});
+  const [configErrorMsg, setConfigErrorMsg] = useState('');
   const [outputTab, setOutputTab] = useState<OutputTab>('user');
+
+  // Mirrors of state that async generation closures need to read live
+  const dayProgressRef = useRef<Record<string, DayProgress>>({});
+  const selectedDayRef = useRef('MONDAY');
+
+  const markDayProgress = (day: string, status: DayProgress) => {
+    dayProgressRef.current = { ...dayProgressRef.current, [day]: status };
+    setDayProgress(prev => ({ ...prev, [day]: status }));
+  };
+
+  const setDayOutput = (day: string, text: string, thinking: string, isCached: boolean) => {
+    setDayOutputs(prev => ({ ...prev, [day]: { text, thinking, isCached } }));
+  };
+
+  const clearDayProgress = (day: string) => {
+    const next = { ...dayProgressRef.current };
+    delete next[day];
+    dayProgressRef.current = next;
+    setDayProgress(next);
+  };
+
+  const isDayBusy = (day: string) => {
+    const status = dayProgressRef.current[day];
+    return status === 'checking' || status === 'generating';
+  };
 
   // Authentication and Save states
   const [isAuthenticatedState, setIsAuthenticatedState] = useState<boolean | null>(null);
@@ -57,10 +82,6 @@ export default function Home() {
   const cache = useDietCache(isAuthenticatedState);
   const {
     cacheStatus,
-    isCachedResponse,
-    setIsCachedResponse,
-    isCacheLoading,
-    setIsCacheLoading,
     fetchCacheStatus,
     checkCache,
     saveToCache,
@@ -198,61 +219,112 @@ export default function Home() {
     return config.selectedGenerationDay || 'MONDAY';
   };
 
-  // Auto-load cached response when selected generation day changes
+  // What the panel shows right now: the slot belonging to the selected day
+  const currentDay = getCurrentCacheDay();
+  const currentOutput = dayOutputs[currentDay];
+  const outputText = currentOutput?.text || '';
+  const thinkingText = currentOutput?.thinking || '';
+  const isCachedResponse = !!currentOutput?.isCached;
+  const isGenerating = dayProgress[currentDay] === 'generating';
+  const isCacheLoading = dayProgress[currentDay] === 'checking';
+  const errorMsg = dayErrors[currentDay] || configErrorMsg;
+
+  // Keep the ref in sync so in-flight streams know which day is on screen
+  useEffect(() => {
+    selectedDayRef.current = currentDay;
+  }, [currentDay]);
+
+  // Clear cache for one day (or all days) and drop the matching on-screen
+  // output. Days still generating keep their slot and progress.
+  const handleClearCache = async (day?: string) => {
+    await clearCache(day);
+
+    setDayOutputs(prev => {
+      const next = { ...prev };
+      for (const d of day ? [day] : Object.keys(next)) {
+        if (!isDayBusy(d)) delete next[d];
+      }
+      return next;
+    });
+    setDayErrors(prev => {
+      const next = { ...prev };
+      for (const d of day ? [day] : Object.keys(next)) delete next[d];
+      return next;
+    });
+
+    const nextProgress: Record<string, DayProgress> = {};
+    for (const [d, status] of Object.entries(dayProgressRef.current)) {
+      if (isDayBusy(d) || (day && d !== day)) nextProgress[d] = status;
+    }
+    dayProgressRef.current = nextProgress;
+    setDayProgress(nextProgress);
+  };
+
+  // Auto-load cached response when selected generation day changes.
+  // A day that already holds output — loaded earlier or streaming right now —
+  // keeps whatever is in its slot.
   useEffect(() => {
     if (!isMounted || isAuthenticatedState !== true) return;
     const day = config.selectedGenerationDay || 'MONDAY';
+    if (dayOutputs[day] || isDayBusy(day)) return;
+
+    let cancelled = false;
     const loadDayFromCache = async () => {
       const cached = await checkCache(day);
+      if (cancelled || isDayBusy(day)) return;
       if (cached) {
-        setOutputText(cached.responseText);
-        setThinkingText(cached.thinkingText);
-        setIsCachedResponse(true);
-      } else {
-        setOutputText('');
-        setThinkingText('');
-        setIsCachedResponse(false);
+        setDayOutput(day, cached.responseText, cached.thinkingText, true);
       }
     };
     loadDayFromCache();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.selectedGenerationDay, isMounted, isAuthenticatedState]);
 
-  // Run AI Generation for selected day
+  // Run AI Generation for one day. The target day is pinned when the request
+  // starts, so a second day can be launched while this one is still streaming.
   const handleGenerate = async (forceRegenerate = false) => {
+    const day = getCurrentCacheDay();
+    if (isDayBusy(day)) return;
+
     if (layoutMode === 'builder') {
       setLayoutMode('results');
     }
 
     if (config.provider === 'fireworks') {
       if (!config.fireworksApiKey) {
-        setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
+        setConfigErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
         setCurrentView('connections');
         return;
       }
     } else if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
-        setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
+        setConfigErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
         setCurrentView('connections');
         return;
       }
       if (config.enterpriseAuthMethod === 'service-account' && !config.enterpriseServiceAccountJson) {
-        setErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
+        setConfigErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
         setCurrentView('connections');
         return;
       }
       if (!config.enterpriseProjectId) {
-        setErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
+        setConfigErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
         setCurrentView('connections');
         return;
       }
     } else {
       if (!config.apiKey) {
-        setErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
+        setConfigErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
         setCurrentView('connections');
         return;
       }
     }
+
+    // Claim the day before the first await so a double click can't start it twice
+    markDayProgress(day, 'checking');
+    setConfigErrorMsg('');
+    setDayErrors(prev => ({ ...prev, [day]: '' }));
 
     // Auto-save config if there are unsaved changes so the config hash
     // in the database reflects the current state before cache validation
@@ -261,32 +333,31 @@ export default function Home() {
         await saveConfig(config);
       } catch {
         // saveConfig already shows an alert on failure; bail out
+        clearDayProgress(day);
         return;
       }
     }
 
-    const cacheDay = getCurrentCacheDay();
+    // Compile for the pinned day — the user may switch days while this runs
+    const dayPrompt = isCustomMode
+      ? activePrompt
+      : compilePromptText(config, { mode: 'single', selectedDay: day });
 
     // Check cache first (unless forcing regeneration)
     if (!forceRegenerate && !isCustomMode) {
-      setIsCacheLoading(true);
-      const cached = await checkCache(cacheDay);
-      setIsCacheLoading(false);
+      const cached = await checkCache(day);
       if (cached) {
-        setOutputText(cached.responseText);
-        setThinkingText(cached.thinkingText);
-        setIsCachedResponse(true);
-        setErrorMsg('');
-        setOutputTab('user');
+        markDayProgress(day, 'done');
+        setDayOutput(day, cached.responseText, cached.thinkingText, true);
+        if (selectedDayRef.current === day) {
+          setOutputTab('user');
+        }
         return;
       }
     }
 
-    setIsGenerating(true);
-    setErrorMsg('');
-    setOutputText('');
-    setThinkingText('');
-    setIsCachedResponse(false);
+    markDayProgress(day, 'generating');
+    setDayOutput(day, '', '', false);
 
     try {
       const selectedModel = config.model === 'custom' ? config.customModel : config.model;
@@ -298,7 +369,7 @@ export default function Home() {
           'x-fireworks-api-key': config.fireworksApiKey || ''
         },
         body: JSON.stringify({
-          prompt: activePrompt,
+          prompt: dayPrompt,
           model: selectedModel,
           thinkingLevel: config.thinkingLevel,
           maxTokens: config.maxTokens || 0,
@@ -334,25 +405,30 @@ export default function Home() {
       let hasSwitchedToThoughts = false;
       let hasSwitchedToUser = false;
 
-      // Apply one parsed SSE event to the streaming output state
+      // Apply one parsed SSE event to this day's output slot
       const applyEvent = (parsed: { error?: string; thought?: string; text?: string }) => {
         if (parsed.error) {
           throw new Error(parsed.error);
         }
         if (parsed.thought) {
           currentThought += parsed.thought;
-          setThinkingText(currentThought);
+          setDayOutput(day, currentText, currentThought, false);
           if (!hasSwitchedToThoughts) {
             hasSwitchedToThoughts = true;
-            setOutputTab('thoughts');
+            // Only steer the tab if this day is the one on screen
+            if (selectedDayRef.current === day) {
+              setOutputTab('thoughts');
+            }
           }
         }
         if (parsed.text) {
           currentText += parsed.text;
-          setOutputText(currentText);
+          setDayOutput(day, currentText, currentThought, false);
           if (!hasSwitchedToUser) {
             hasSwitchedToUser = true;
-            setOutputTab('user');
+            if (selectedDayRef.current === day) {
+              setOutputTab('user');
+            }
           }
         }
       };
@@ -386,50 +462,68 @@ export default function Home() {
 
       processLine(buffer, true);
 
+      if (!currentText) {
+        throw new Error('The model returned an empty response.');
+      }
+
+      markDayProgress(day, 'done');
+
       // Save to cache after successful generation (only for non-custom prompts)
-      if (currentText && !isCustomMode) {
-        saveToCache(cacheDay, currentText, currentThought);
+      if (!isCustomMode) {
+        saveToCache(day, currentText, currentThought);
       }
 
     } catch (e) {
       console.error(e);
-      setErrorMsg(e instanceof Error && e.message ? e.message : 'An error occurred while connecting to the Gemini API.');
-    } finally {
-      setIsGenerating(false);
+      setDayErrors(prev => ({
+        ...prev,
+        [day]: e instanceof Error && e.message ? e.message : 'An error occurred while connecting to the Gemini API.'
+      }));
+      markDayProgress(day, 'error');
+      // Drop an empty slot so re-selecting the day re-checks the cache
+      setDayOutputs(prev => {
+        const existing = prev[day];
+        if (!existing || existing.text || existing.thinking) return prev;
+        const next = { ...prev };
+        delete next[day];
+        return next;
+      });
     }
   };
 
   // Parallel AI Generation for all 7 days
   const handleGenerateAllDays = async () => {
+    if (isBatchGenerating) return;
+
     if (layoutMode === 'builder') {
       setLayoutMode('results');
     }
 
     if (config.provider === 'fireworks') {
       if (!config.fireworksApiKey) {
-        setErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
+        setConfigErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
         setCurrentView('connections');
         return;
       }
     } else if (config.provider === 'gemini-enterprise') {
       if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
-        setErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
+        setConfigErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
         setCurrentView('connections');
         return;
       }
       if (config.enterpriseAuthMethod === 'service-account' && !config.enterpriseServiceAccountJson) {
-        setErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
+        setConfigErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
         setCurrentView('connections');
         return;
       }
       if (!config.enterpriseProjectId) {
-        setErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
+        setConfigErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
         setCurrentView('connections');
         return;
       }
     } else {
       if (!config.apiKey) {
-        setErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
+        setConfigErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
         setCurrentView('connections');
         return;
       }
@@ -444,25 +538,26 @@ export default function Home() {
     }
 
     setIsBatchGenerating(true);
-    setErrorMsg('');
+    setConfigErrorMsg('');
 
-    const initProgress: Record<string, 'pending' | 'generating' | 'done' | 'error'> = {};
-    DAYS_OF_WEEK.forEach(day => { initProgress[day] = 'generating'; });
-    setBatchProgress(initProgress);
+    // A day already generating on its own keeps running; don't duplicate it
+    const daysToRun = DAYS_OF_WEEK.filter(day => !isDayBusy(day));
+    daysToRun.forEach(day => markDayProgress(day, 'generating'));
+    setDayErrors(prev => {
+      const next = { ...prev };
+      daysToRun.forEach(day => { next[day] = ''; });
+      return next;
+    });
 
     const selectedModel = config.model === 'custom' ? config.customModel : config.model;
 
-    const promises = DAYS_OF_WEEK.map(async (day) => {
+    const promises = daysToRun.map(async (day) => {
       try {
         // Check if a valid cached entry already exists for this day; if so, skip API call
         const cached = await checkCache(day);
         if (cached) {
-          setBatchProgress(prev => ({ ...prev, [day]: 'done' }));
-          if (day === (config.selectedGenerationDay || 'MONDAY')) {
-            setOutputText(cached.responseText);
-            setThinkingText(cached.thinkingText);
-            setIsCachedResponse(true);
-          }
+          markDayProgress(day, 'done');
+          setDayOutput(day, cached.responseText, cached.thinkingText, true);
           return;
         }
 
@@ -537,19 +632,19 @@ export default function Home() {
 
         if (dayText) {
           await saveToCache(day, dayText, dayThought);
-          setBatchProgress(prev => ({ ...prev, [day]: 'done' }));
-          if (day === (config.selectedGenerationDay || 'MONDAY')) {
-            setOutputText(dayText);
-            setThinkingText(dayThought);
-            setIsCachedResponse(true);
-          }
+          markDayProgress(day, 'done');
+          setDayOutput(day, dayText, dayThought, true);
         } else {
-          setBatchProgress(prev => ({ ...prev, [day]: 'error' }));
+          setDayErrors(prev => ({ ...prev, [day]: 'The model returned an empty response.' }));
+          markDayProgress(day, 'error');
         }
       } catch (err) {
         console.error(`Error generating ${day}:`, err);
-        setErrorMsg(err instanceof Error && err.message ? `${day}: ${err.message}` : `Failed to generate ${day}.`);
-        setBatchProgress(prev => ({ ...prev, [day]: 'error' }));
+        setDayErrors(prev => ({
+          ...prev,
+          [day]: err instanceof Error && err.message ? err.message : `Failed to generate ${day}.`
+        }));
+        markDayProgress(day, 'error');
       }
     });
 
@@ -681,11 +776,11 @@ export default function Home() {
                   currentCacheDay={getCurrentCacheDay()}
                   isGenerating={isGenerating}
                   isBatchGenerating={isBatchGenerating}
-                  batchProgress={batchProgress}
+                  dayProgress={dayProgress}
                   isCacheLoading={isCacheLoading}
                   onGenerate={handleGenerate}
                   onGenerateAllDays={handleGenerateAllDays}
-                  onClearCache={clearCache}
+                  onClearCache={handleClearCache}
                 />
               </div>
             </div>
@@ -703,7 +798,7 @@ export default function Home() {
             errorMsg={errorMsg}
             isGenerating={isGenerating}
             isBatchGenerating={isBatchGenerating}
-            batchProgress={batchProgress}
+            dayProgress={dayProgress}
             isCachedResponse={isCachedResponse}
             onGenerate={handleGenerate}
             onGenerateAllDays={handleGenerateAllDays}

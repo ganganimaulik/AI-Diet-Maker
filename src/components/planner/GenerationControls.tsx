@@ -1,5 +1,5 @@
 'use client';
-import { Config, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayProgress, DAYS_OF_WEEK } from '@/lib/types';
 import { getDayVariantName } from '@/lib/compile-prompt';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 
@@ -10,7 +10,7 @@ interface GenerationControlsProps {
   currentCacheDay: string;
   isGenerating: boolean;
   isBatchGenerating: boolean;
-  batchProgress: Record<string, 'pending' | 'generating' | 'done' | 'error'>;
+  dayProgress: Record<string, DayProgress>;
   isCacheLoading: boolean;
   onGenerate: (forceRegenerate: boolean) => void;
   onGenerateAllDays: () => void;
@@ -24,7 +24,7 @@ export default function GenerationControls({
   currentCacheDay,
   isGenerating,
   isBatchGenerating,
-  batchProgress,
+  dayProgress,
   isCacheLoading,
   onGenerate,
   onGenerateAllDays,
@@ -81,13 +81,13 @@ export default function GenerationControls({
           {DAYS_OF_WEEK.map(day => {
             const status = cacheStatus[day];
             const isCurrent = day === config.selectedGenerationDay;
-            const progress = batchProgress[day];
-            
+            const progress = dayProgress[day];
+
             let badgeBg = 'rgba(255,255,255,0.04)';
             let badgeColor = 'var(--text-muted)';
             let label = day.substring(0, 3);
 
-            if (progress === 'generating') {
+            if (progress === 'generating' || progress === 'checking') {
               badgeBg = 'rgba(192, 132, 252, 0.2)';
               badgeColor = '#c084fc';
               label = `⌛ ${day.substring(0, 3)}`;
@@ -119,7 +119,11 @@ export default function GenerationControls({
                   cursor: 'pointer',
                   fontWeight: isCurrent ? 700 : 500
                 }}
-                title={`${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}`}
+                title={
+                  progress === 'generating' || progress === 'checking'
+                    ? `${day}: generating…`
+                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}`
+                }
               >
                 {label}
               </button>
@@ -214,7 +218,7 @@ export default function GenerationControls({
               justifyContent: 'center',
               gap: '0.5rem'
             }}
-            disabled={isGenerating || isBatchGenerating || isCacheLoading}
+            disabled={isBatchGenerating}
             onClick={onGenerateAllDays}
             title="Generate all 7 days concurrently in parallel and store each in cache"
           >

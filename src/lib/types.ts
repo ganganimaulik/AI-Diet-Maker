@@ -106,6 +106,16 @@ export interface ContactEntry {
 
 export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
+/** Generation state of a single day. Tracked per day so days can run concurrently. */
+export type DayProgress = 'checking' | 'generating' | 'done' | 'error';
+
+/** Streamed / cached response held for one day. */
+export interface DayOutput {
+  text: string;
+  thinking: string;
+  isCached: boolean;
+}
+
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
   provider: 'google-ai-studio',
