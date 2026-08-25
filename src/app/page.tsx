@@ -283,38 +283,42 @@ export default function Home() {
 
   // Run AI Generation for one day. The target day is pinned when the request
   // starts, so a second day can be launched while this one is still streaming.
-  const handleGenerate = async (forceRegenerate = false) => {
-    const day = getCurrentCacheDay();
+  // `targetDay` regenerates a day other than the selected one; `configOverride`
+  // lets a caller that just changed the config generate against the new value
+  // instead of the stale render closure.
+  const handleGenerate = async (forceRegenerate = false, targetDay?: string, configOverride?: Config) => {
+    const cfg = configOverride ?? config;
+    const day = targetDay || cfg.selectedGenerationDay || 'MONDAY';
     if (isDayBusy(day)) return;
 
     if (layoutMode === 'builder') {
       setLayoutMode('results');
     }
 
-    if (config.provider === 'fireworks') {
-      if (!config.fireworksApiKey) {
+    if (cfg.provider === 'fireworks') {
+      if (!cfg.fireworksApiKey) {
         setConfigErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
         setCurrentView('connections');
         return;
       }
-    } else if (config.provider === 'gemini-enterprise') {
-      if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
+    } else if (cfg.provider === 'gemini-enterprise') {
+      if (cfg.enterpriseAuthMethod === 'api-key' && !cfg.enterpriseApiKey) {
         setConfigErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
         setCurrentView('connections');
         return;
       }
-      if (config.enterpriseAuthMethod === 'service-account' && !config.enterpriseServiceAccountJson) {
+      if (cfg.enterpriseAuthMethod === 'service-account' && !cfg.enterpriseServiceAccountJson) {
         setConfigErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
         setCurrentView('connections');
         return;
       }
-      if (!config.enterpriseProjectId) {
+      if (!cfg.enterpriseProjectId) {
         setConfigErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
         setCurrentView('connections');
         return;
       }
     } else {
-      if (!config.apiKey) {
+      if (!cfg.apiKey) {
         setConfigErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
         setCurrentView('connections');
         return;
@@ -328,9 +332,10 @@ export default function Home() {
 
     // Auto-save config if there are unsaved changes so the config hash
     // in the database reflects the current state before cache validation
-    if (hasUnsavedChanges) {
+    const isDirty = savedConfig ? stableStringify(cfg) !== stableStringify(savedConfig) : false;
+    if (isDirty) {
       try {
-        await saveConfig(config);
+        await saveConfig(cfg);
       } catch {
         // saveConfig already shows an alert on failure; bail out
         clearDayProgress(day);
@@ -338,13 +343,17 @@ export default function Home() {
       }
     }
 
+    // The hand-written prompt belongs to the day it was authored against, so
+    // regenerating any other day falls back to the compiled prompt.
+    const useCustomPrompt = isCustomMode && day === (config.selectedGenerationDay || 'MONDAY');
+
     // Compile for the pinned day — the user may switch days while this runs
-    const dayPrompt = isCustomMode
+    const dayPrompt = useCustomPrompt
       ? activePrompt
-      : compilePromptText(config, { mode: 'single', selectedDay: day });
+      : compilePromptText(cfg, { mode: 'single', selectedDay: day });
 
     // Check cache first (unless forcing regeneration)
-    if (!forceRegenerate && !isCustomMode) {
+    if (!forceRegenerate && !useCustomPrompt) {
       const cached = await checkCache(day);
       if (cached) {
         markDayProgress(day, 'done');
@@ -360,27 +369,27 @@ export default function Home() {
     setDayOutput(day, '', '', false);
 
     try {
-      const selectedModel = config.model === 'custom' ? config.customModel : config.model;
+      const selectedModel = cfg.model === 'custom' ? cfg.customModel : cfg.model;
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': config.apiKey,
-          'x-fireworks-api-key': config.fireworksApiKey || ''
+          'x-api-key': cfg.apiKey,
+          'x-fireworks-api-key': cfg.fireworksApiKey || ''
         },
         body: JSON.stringify({
           prompt: dayPrompt,
           model: selectedModel,
-          thinkingLevel: config.thinkingLevel,
-          maxTokens: config.maxTokens || 0,
-          reasoningEffort: config.reasoningEffort || 'default',
-          provider: config.provider || 'google-ai-studio',
-          fireworksApiKey: config.fireworksApiKey,
-          enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
-          enterpriseApiKey: config.enterpriseApiKey,
-          enterpriseProjectId: config.enterpriseProjectId,
-          enterpriseLocation: config.enterpriseLocation || 'global',
-          enterpriseServiceAccountJson: config.enterpriseServiceAccountJson
+          thinkingLevel: cfg.thinkingLevel,
+          maxTokens: cfg.maxTokens || 0,
+          reasoningEffort: cfg.reasoningEffort || 'default',
+          provider: cfg.provider || 'google-ai-studio',
+          fireworksApiKey: cfg.fireworksApiKey,
+          enterpriseAuthMethod: cfg.enterpriseAuthMethod || 'api-key',
+          enterpriseApiKey: cfg.enterpriseApiKey,
+          enterpriseProjectId: cfg.enterpriseProjectId,
+          enterpriseLocation: cfg.enterpriseLocation || 'global',
+          enterpriseServiceAccountJson: cfg.enterpriseServiceAccountJson
         })
       });
 
@@ -469,7 +478,7 @@ export default function Home() {
       markDayProgress(day, 'done');
 
       // Save to cache after successful generation (only for non-custom prompts)
-      if (!isCustomMode) {
+      if (!useCustomPrompt) {
         saveToCache(day, currentText, currentThought);
       }
 
@@ -489,6 +498,17 @@ export default function Home() {
         return next;
       });
     }
+  };
+
+  // Regenerate one specific day straight from the results view. The day is
+  // brought on screen first so its stream is visible, and the config carrying
+  // that selection is handed to handleGenerate so the auto-save writes it too.
+  const handleRegenerateDay = (day: string) => {
+    if (isDayBusy(day)) return;
+    const nextConfig = { ...config, selectedGenerationDay: day };
+    setConfig(nextConfig);
+    selectedDayRef.current = day;
+    handleGenerate(true, day, nextConfig);
   };
 
   // Parallel AI Generation for all 7 days
@@ -802,6 +822,7 @@ export default function Home() {
             isCachedResponse={isCachedResponse}
             onGenerate={handleGenerate}
             onGenerateAllDays={handleGenerateAllDays}
+            onRegenerateDay={handleRegenerateDay}
             hidden={layoutMode === 'builder'}
           />
         </main>

@@ -21,7 +21,17 @@ interface OutputPanelProps {
   isCachedResponse: boolean;
   onGenerate: (forceRegenerate?: boolean) => void;
   onGenerateAllDays: () => void;
+  onRegenerateDay: (day: string) => void;
   hidden?: boolean;
+}
+
+function RegenerateIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 4v6h6M23 20v-6h-6"/>
+      <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+    </svg>
+  );
 }
 
 function DayCopyButton({ text }: { text: string }) {
@@ -74,6 +84,7 @@ export default function OutputPanel({
   isCachedResponse,
   onGenerate,
   onGenerateAllDays,
+  onRegenerateDay,
   hidden = false
 }: OutputPanelProps) {
   const isBusy = isGenerating || isBatchGenerating;
@@ -102,12 +113,14 @@ export default function OutputPanel({
             const status = cacheStatus[day];
             const isCurrent = day === selectedDay;
             const progress = dayProgress[day];
+            const dayBusy = progress === 'generating' || progress === 'checking';
+            const hasPlan = !!status;
 
             let badgeBg = 'rgba(255,255,255,0.03)';
             let badgeColor = 'var(--text-muted)';
             let label = day.substring(0, 3);
 
-            if (progress === 'generating' || progress === 'checking') {
+            if (dayBusy) {
               badgeBg = 'rgba(192, 132, 252, 0.2)';
               badgeColor = '#c084fc';
               label = `⌛ ${day.substring(0, 3)}`;
@@ -126,35 +139,48 @@ export default function OutputPanel({
             }
 
             return (
-              <button
+              <div
                 key={day}
-                onClick={() => onSelectDay(day)}
+                className={`day-chip-group ${isCurrent ? 'is-current' : ''}`}
                 style={{
-                  padding: '0.25rem 0.55rem',
-                  fontSize: '0.75rem',
-                  borderRadius: '6px',
-                  border: isCurrent ? '1.5px solid #c084fc' : '1px solid rgba(255,255,255,0.06)',
                   background: isCurrent ? (status?.isValid ? 'rgba(34, 197, 94, 0.2)' : 'rgba(192, 132, 252, 0.25)') : badgeBg,
-                  color: isCurrent ? '#fff' : badgeColor,
-                  cursor: 'pointer',
-                  fontWeight: isCurrent ? 700 : 500,
-                  transition: 'all 0.15s ease'
+                  color: isCurrent ? '#fff' : badgeColor
                 }}
-                title={
-                  progress === 'generating' || progress === 'checking'
-                    ? `${day}: generating…`
-                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`
-                }
               >
-                {label}
-              </button>
+                <button
+                  className="day-chip"
+                  onClick={() => onSelectDay(day)}
+                  title={
+                    dayBusy
+                      ? `${day}: generating…`
+                      : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`
+                  }
+                >
+                  {label}
+                </button>
+                <button
+                  className="day-chip-regen"
+                  disabled={dayBusy || isBatchGenerating}
+                  onClick={() => onRegenerateDay(day)}
+                  title={
+                    dayBusy
+                      ? `${day} is already generating…`
+                      : hasPlan
+                        ? `Regenerate ${day} — ignores the cached plan`
+                        : `Generate ${day}`
+                  }
+                  aria-label={hasPlan ? `Regenerate ${day}` : `Generate ${day}`}
+                >
+                  <RegenerateIcon size={11} />
+                </button>
+              </div>
             );
           })}
         </div>
 
-        {/* Quick action button inside header if not generated or for quick generation */}
-        {!outputText && !isGenerating && (
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+        {/* Quick action for the day on screen: generate it, or redo it fresh */}
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
+          {!outputText && !isGenerating ? (
             <button
               className="btn-primary"
               style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
@@ -163,8 +189,19 @@ export default function OutputPanel({
             >
               Generate {selectedDay}
             </button>
-          </div>
-        )}
+          ) : (
+            <button
+              className="btn-regenerate"
+              style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '8px' }}
+              disabled={isBusy}
+              onClick={() => onRegenerateDay(selectedDay)}
+              title={`Regenerate ${selectedDay} — ignores the cached plan`}
+            >
+              <RegenerateIcon size={13} />
+              Regenerate {selectedDay.substring(0, 3)}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Part 1 / Part 2 / Thinking Tabs */}

@@ -1274,6 +1274,71 @@ input[type="radio"]:disabled {
   cursor: not-allowed;
 }
 
+/* Day chips in the results toolbar — the label selects the day, the trailing
+   arrows button regenerates that one day without touching the other six. */
+.day-chip-group {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.day-chip-group.is-current {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 1px rgba(192, 132, 252, 0.3);
+}
+
+.day-chip {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.day-chip-group.is-current .day-chip {
+  font-weight: 700;
+}
+
+.day-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.day-chip-regen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35rem;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: all var(--transition-fast);
+}
+
+.day-chip-regen:hover:not(:disabled) {
+  background: rgba(192, 132, 252, 0.35);
+  color: #fff;
+  opacity: 1;
+}
+
+.day-chip-regen:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.day-chip-regen svg {
+  display: block;
+}
+
 .cache-badge {
   display: inline-flex;
   align-items: center;
