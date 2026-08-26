@@ -18,9 +18,12 @@ export default function LoginScreen({ passwordInput, setPasswordInput, loginErro
         </p>
 
         <div className="form-group" style={{ textAlign: 'left' }}>
-          <label className="form-label">Password</label>
+          <label className="form-label" htmlFor="appPassword">Password</label>
           <input
             type="password"
+            id="appPassword"
+            name="appPassword"
+            autoComplete="current-password"
             className="form-input"
             style={{ padding: '0.75rem 1rem' }}
             placeholder="••••••••"

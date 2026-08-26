@@ -67,10 +67,17 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
 
       {config.provider === 'fireworks' ? (
         <div className="form-group">
-          <label className="form-label">Fireworks API Key</label>
+          <label className="form-label" htmlFor="fireworksApiKey">Fireworks API Key</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type={showApiKey ? 'text' : 'password'}
+              name="fireworksApiKey"
+              id="fireworksApiKey"
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              spellCheck={false}
               className="form-input"
               placeholder="fw_..."
               value={config.fireworksApiKey || ''}
@@ -86,13 +93,20 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
         </div>
       ) : (!config.provider || config.provider === 'google-ai-studio') ? (
         <div className="form-group">
-          <label className="form-label">Gemini API Key</label>
+          <label className="form-label" htmlFor="geminiApiKey">Gemini API Key</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type={showApiKey ? 'text' : 'password'}
+              name="geminiApiKey"
+              id="geminiApiKey"
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              spellCheck={false}
               className="form-input"
               placeholder="AIzaSy..."
-              value={config.apiKey}
+              value={config.apiKey || ''}
               onChange={e => setConfig(prev => ({ ...prev, apiKey: e.target.value }))}
             />
             <button className="btn-secondary" onClick={() => setShowApiKey(!showApiKey)}>
@@ -106,9 +120,12 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.25rem' }}>
           <div className="form-group">
-            <label className="form-label">GCP Project ID</label>
+            <label className="form-label" htmlFor="enterpriseProjectId">GCP Project ID</label>
             <input
               type="text"
+              name="enterpriseProjectId"
+              id="enterpriseProjectId"
+              autoComplete="off"
               className="form-input"
               placeholder="my-gcp-project-id"
               value={config.enterpriseProjectId || ''}
@@ -131,10 +148,17 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
 
           {config.enterpriseAuthMethod === 'api-key' && (
             <div className="form-group">
-              <label className="form-label">Agent Platform API Key</label>
+              <label className="form-label" htmlFor="enterpriseApiKey">Agent Platform API Key</label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
                   type={showApiKey ? 'text' : 'password'}
+                  name="enterpriseApiKey"
+                  id="enterpriseApiKey"
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  spellCheck={false}
                   className="form-input"
                   placeholder="Agent Platform API Key..."
                   value={config.enterpriseApiKey || ''}

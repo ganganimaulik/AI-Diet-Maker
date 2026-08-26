@@ -23,16 +23,29 @@ export async function GET() {
       config = await Config.create(defaultData);
     } else {
       // Fallback/pre-fill API key from environment variables if not set in DB
+      // and sanitize any fields corrupted by browser password autofill.
       let modified = false;
-      if (!config.apiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
+
+      if (process.env.APP_PASSWORD && config.apiKey === process.env.APP_PASSWORD) {
+        config.apiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY || '') as string;
+        modified = true;
+      } else if (!config.apiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
         config.apiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
         modified = true;
       }
-      if (!config.enterpriseApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
+
+      if (process.env.APP_PASSWORD && config.enterpriseApiKey === process.env.APP_PASSWORD) {
+        config.enterpriseApiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY || '') as string;
+        modified = true;
+      } else if (!config.enterpriseApiKey && (process.env.GEMINI_API_KEY || process.env.API_KEY)) {
         config.enterpriseApiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY) as string;
         modified = true;
       }
-      if (!config.fireworksApiKey && process.env.FIREWORKS_API_KEY) {
+
+      if (process.env.APP_PASSWORD && config.fireworksApiKey === process.env.APP_PASSWORD) {
+        config.fireworksApiKey = process.env.FIREWORKS_API_KEY || '';
+        modified = true;
+      } else if (!config.fireworksApiKey && process.env.FIREWORKS_API_KEY) {
         config.fireworksApiKey = process.env.FIREWORKS_API_KEY;
         modified = true;
       }
