@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbConnect, Config } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
+import { DEFAULT_CONFIG } from '@/lib/types';
 
 export async function GET() {
   try {
@@ -14,39 +15,10 @@ export async function GET() {
     if (!config) {
       // Create a default config document in database
       const defaultData = {
-        apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
-        provider: 'google-ai-studio',
-        fireworksApiKey: process.env.FIREWORKS_API_KEY || '',
-        enterpriseAuthMethod: 'api-key',
-        enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
-        model: 'gemini-3.7-flash',
-        customModel: 'gemini-3.7-flash',
-        thinkingLevel: 'high',
-        maxTokens: 0,
-        reasoningEffort: 'default',
-        global: {
-          dailyCalorieTarget: 1600,
-          totalOliveOil: 18,
-          oliveOilSplitPercent: 50,
-          idealSodiumPotassiumRatioMin: 0.70,
-          idealSodiumPotassiumRatioMax: 0.80
-        },
-        meals: [
-          {
-            id: 'meal-1',
-            name: 'Breakfast',
-            mealsPerDay: 1,
-            ingredients: [
-              { name: 'Oats', weight: '50', isAuto: false }
-            ],
-            water: '',
-            prepMethod: ''
-          }
-        ],
-        customSplits: [],
-        dailyVariables: {},
-        huggingFaceToken: '',
-        huggingFaceSpace: 'ganganimaulik/diet-maker-worker'
+        ...DEFAULT_CONFIG,
+        apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || DEFAULT_CONFIG.apiKey,
+        fireworksApiKey: process.env.FIREWORKS_API_KEY || DEFAULT_CONFIG.fireworksApiKey,
+        enterpriseApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || DEFAULT_CONFIG.enterpriseApiKey
       };
       config = await Config.create(defaultData);
     } else {

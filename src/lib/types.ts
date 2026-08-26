@@ -118,114 +118,180 @@ export interface DayOutput {
 
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
-  provider: 'google-ai-studio',
+  provider: 'gemini-enterprise',
   fireworksApiKey: '',
-  enterpriseAuthMethod: 'api-key',
+  enterpriseAuthMethod: 'service-account',
   enterpriseApiKey: '',
-  enterpriseProjectId: '',
+  enterpriseProjectId: 'gen-lang-client-0131109551',
   enterpriseLocation: 'global',
   enterpriseServiceAccountJson: '',
   model: 'gemini-3.7-flash',
   customModel: 'gemini-3.7-flash',
   thinkingLevel: 'high',
-  maxTokens: 0,
+  maxTokens: 65536,
   reasoningEffort: 'default',
   huggingFaceToken: '',
   huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {
-    dailyCalorieTarget: 1600,
+    dailyCalorieTarget: 3200,
     totalOliveOil: 18,
     oliveOilSplitPercent: 50,
-    idealSodiumPotassiumRatioMin: 0.70,
+    idealSodiumPotassiumRatioMin: 0.79,
     idealSodiumPotassiumRatioMax: 0.80
   },
   meals: [
     {
-      id: 'meal-oats',
-      name: 'Oats Meal',
+      id: 'meal-1784100564298',
+      name: 'Oats Egg Omelette',
       mealsPerDay: 1,
       cookQuantityMode: 'daily',
+      disabled: true,
       ingredients: [
-        { name: 'Oats (Raw)', weight: '30', isAuto: false },
-        { name: 'Whey Protein Isolate', weight: '60', isAuto: false },
-        { name: 'Almonds', weight: '5', isAuto: false },
-        { name: 'Cashews', weight: '5', isAuto: false },
-        { name: 'Walnuts', weight: '5', isAuto: false },
-        { name: 'Banana', weight: '60', isAuto: false }
+        { name: 'oats', weight: '', isAuto: true },
+        { name: 'olive oil', weight: '8', isAuto: false },
+        { name: 'eggs', weight: '200', isAuto: false },
+        { name: 'tomato', weight: '', isAuto: true, minGrams: '100', maxGrams: '120' }
       ],
-      water: '190g water',
+      water: '',
+      prepMethod: ''
+    },
+    {
+      id: 'meal-oats',
+      name: 'Oats Meal 1',
+      mealsPerDay: 1,
+      cookQuantityMode: 'daily',
+      disabled: false,
+      ingredients: [
+        { name: 'Instant Oats (Raw)', weight: '', isAuto: true, minGrams: '70', maxGrams: '100' },
+        { name: 'Whey Protein Isolate - myprotein matcha blueberry', weight: '60', isAuto: false },
+        { name: 'Almonds', weight: '15', isAuto: false },
+        { name: 'Cashews', weight: '15', isAuto: false },
+        { name: 'Walnuts', weight: '5', isAuto: false, disabled: true },
+        { name: 'Banana', weight: '', isAuto: true, minGrams: '50', maxGrams: '70' }
+      ],
+      water: '290g water',
       prepMethod: 'Oats airfryer 200c, 10min'
     },
     {
-      id: 'meal-chicken',
-      name: 'Chicken Meal',
-      mealsPerDay: 3,
+      id: 'meal-1784098317896',
+      name: 'Oats Meal 2',
+      mealsPerDay: 1,
       cookQuantityMode: 'daily',
+      disabled: true,
       ingredients: [
-        { name: 'Chicken Breast (Raw)', weight: '425', isAuto: false },
-        { name: 'Olive oil', weight: '18', isAuto: false, split: '9g in subji, 9g in chicken' }
+        { name: 'Instant Oats (Raw)', weight: '', isAuto: true, minGrams: '70', maxGrams: '90' },
+        { name: 'Fast & up Whey Protein Isolate', weight: '55', isAuto: false },
+        { name: 'banana', weight: '', isAuto: true, minGrams: '120', maxGrams: '125' }
       ],
       water: '',
-      prepMethod: 'Chicken air fryer 200c, 15 min'
+      prepMethod: ''
+    },
+    {
+      id: 'meal-chicken',
+      name: 'Vegitable Meal',
+      mealsPerDay: 3,
+      cookQuantityMode: 'daily',
+      disabled: false,
+      ingredients: [
+        { name: 'Olive oil', weight: '9', isAuto: false, split: '9g in subji' },
+        { name: 'aamchur powder', weight: '2', isAuto: false, split: '2g in subji' }
+      ],
+      water: '',
+      prepMethod: '\n'
+    },
+    {
+      id: 'meal-1784463984639',
+      name: 'Chicken meal',
+      mealsPerDay: 1,
+      cookQuantityMode: 'per-meal',
+      disabled: false,
+      ingredients: [
+        { name: 'chicken breast', weight: '425', isAuto: false },
+        { name: 'tomato', weight: '', isAuto: true, minGrams: '100', maxGrams: '120' },
+        { name: 'egg', weight: '37', isAuto: false, disabled: true },
+        { name: 'Olive oil', weight: '10', isAuto: false }
+      ],
+      water: '',
+      prepMethod: 'gas pe bna dena onion garlic and green chili dal ke. '
+    },
+    {
+      id: 'meal-oats-chilla',
+      name: 'Oats Chilla',
+      mealsPerDay: 1,
+      cookQuantityMode: 'per-meal',
+      disabled: true,
+      ingredients: [
+        { name: 'Instant Oats (Raw)', weight: '75', isAuto: false },
+        { name: 'Besan', weight: '50', isAuto: false },
+        { name: 'Tomato', weight: '', isAuto: true, minGrams: '50', maxGrams: '80' },
+        { name: 'Olive oil', weight: '7', isAuto: false }
+      ],
+      water: '100g water',
+      prepMethod: 'Whisk oats powder, besan, tomato, green chilli, coriander, ajwain and salt with water. Cook crisp on tawa with olive oil.'
     },
     {
       id: 'meal-shake',
       name: 'Shake Meal',
       mealsPerDay: 1,
-      cookQuantityMode: 'daily',
-      disabled: true,
+      cookQuantityMode: 'per-meal',
+      disabled: false,
       ingredients: [
-        { name: 'Whey Protein Isolate', weight: '40', isAuto: false },
-        { name: 'Oats (Raw)', weight: '30', isAuto: false },
-        { name: 'Raisins', weight: '10', isAuto: false },
-        { name: 'Kimia Dates', weight: '10', isAuto: false },
+        { name: 'Whey Protein Isolate - myprotein matcha blueberry', weight: '40', isAuto: false },
+        { name: 'Oats (Raw)', weight: '15', isAuto: false },
+        { name: 'Raisins', weight: '15', isAuto: false },
+        { name: 'Kimia Dates', weight: '15', isAuto: false },
         { name: 'Banana', weight: '100', isAuto: false }
       ],
-      water: '',
+      water: '330g water',
       prepMethod: 'Blend all ingredients with water'
     }
   ],
   dailyVariables: {
     MONDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '180', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '400' },
+      { name: 'Brinjal', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '120' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' },
+      { name: 'Eggs', weight: '80', isAuto: false, mealId: 'meal-chicken', disabled: true }
     ],
     TUESDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Potato (Raw)', weight: '150', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '400' },
+      { name: 'Bottle Gourd', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '129' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' }
     ],
     WEDNESDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Cluster Beans', weight: '185', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' },
+      { name: 'Sweet Potato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '280' }
     ],
     THURSDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Bottle Gourd', weight: '185', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Spinach', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '100', maxGrams: '150' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '200' }
     ],
     FRIDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Cluster Beans', weight: '180', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '400' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' }
     ],
     SATURDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Potato (Raw)', weight: '150', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Bottle Gourd', weight: '185', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '90', maxGrams: '100' },
+      { name: 'Sweet Potato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '380' }
     ],
     SUNDAY: [
-      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken' },
-      { name: 'Brinjal', weight: '180', isAuto: false, mealId: 'meal-chicken' },
-      { name: 'Tomato', weight: '80', isAuto: false, mealId: 'meal-chicken' }
+      { name: 'Rice', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '60' },
+      { name: 'Potato (Raw)', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '400' },
+      { name: 'Cluster Beans', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '50', maxGrams: '150' },
+      { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' }
     ]
   },
   customSplits: [
-    { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste', mealId: 'meal-chicken' },
-    { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min', mealId: 'meal-chicken' }
+    { id: 'salt', name: 'Salt Seasoning Split', value: ' 3g in subji', mealId: 'meal-chicken' },
+    { id: '1784465883936', name: 'salt', value: '4g', mealId: 'meal-1784463984639' },
+    { id: 'salt-oats-chilla', name: 'Salt in Oats Chilla', value: '1g', mealId: 'meal-oats-chilla' }
   ],
   dailySplits: {},
   selectedGenerationDay: 'MONDAY'

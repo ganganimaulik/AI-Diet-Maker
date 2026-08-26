@@ -65,10 +65,10 @@ const ConfigSchema = new Schema({
   // 'default' = omit reasoning_effort from the request (Fireworks only)
   reasoningEffort: { type: String, default: 'default' },
   global: {
-    dailyCalorieTarget: { type: Number, default: 1600 },
+    dailyCalorieTarget: { type: Number, default: 3200 },
     totalOliveOil: { type: Number, default: 18 },
     oliveOilSplitPercent: { type: Number, default: 50 },
-    idealSodiumPotassiumRatioMin: { type: Number, default: 0.70 },
+    idealSodiumPotassiumRatioMin: { type: Number, default: 0.79 },
     idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
   },
   meals: [MealSchema],
