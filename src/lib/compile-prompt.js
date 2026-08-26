@@ -14,7 +14,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 5;
+const PROMPT_TEMPLATE_VERSION = 6;
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -231,17 +231,46 @@ ${activeDays.map(day => {
                         MATH & OUTPUT GENERATION
 ===================================================================
 
+STANDARD RAW NUTRITIONAL REFERENCE DATABASE (PER 100g UNCOOKED/RAW):
+You MUST use these exact standard nutritional values for all calorie sums, [AUTO] weight solving, macro breakdowns, and mineral calculations:
+- Whey Protein Isolate - myprotein matcha blueberry: 367 kcal (3.67 kcal/g), 77.0g Protein, 8.71g Carbs, 2.03g Fat, 240mg Sodium, 400mg Potassium
+- Fast & up Whey Protein Isolate: 375 kcal (3.75 kcal/g), 81.0g Protein, 3.50g Carbs, 1.50g Fat, 180mg Sodium, 350mg Potassium
+- Whey Protein Isolate (Generic / Default WPI): 375 kcal (3.75 kcal/g), 83.0g Protein, 3.00g Carbs, 1.20g Fat, 180mg Sodium, 380mg Potassium
+- Instant Oats (Raw) / Oats (Raw) / oats: 379 kcal (3.79 kcal/g), 13.2g Protein, 67.7g Carbs, 6.50g Fat, 6mg Sodium, 350mg Potassium
+- chicken breast / Chicken Breast (Raw): 120 kcal (1.20 kcal/g), 22.5g Protein, 0.0g Carbs, 2.50g Fat, 45mg Sodium, 300mg Potassium
+- Olive oil / olive oil: 884 kcal (8.84 kcal/g), 0.0g Protein, 0.0g Carbs, 100.0g Fat, 2mg Sodium, 1mg Potassium
+- Rice / White Rice: 365 kcal (3.65 kcal/g), 7.1g Protein, 80.0g Carbs, 0.70g Fat, 5mg Sodium, 115mg Potassium
+- Potato (Raw) / potato: 77 kcal (0.77 kcal/g), 2.0g Protein, 17.5g Carbs, 0.10g Fat, 6mg Sodium, 421mg Potassium
+- Sweet Potato: 86 kcal (0.86 kcal/g), 1.6g Protein, 20.1g Carbs, 0.10g Fat, 55mg Sodium, 337mg Potassium
+- Tomato / tomato: 18 kcal (0.18 kcal/g), 0.9g Protein, 3.9g Carbs, 0.20g Fat, 5mg Sodium, 237mg Potassium
+- Spinach: 23 kcal (0.23 kcal/g), 2.9g Protein, 3.6g Carbs, 0.40g Fat, 79mg Sodium, 558mg Potassium
+- Bottle Gourd: 14 kcal (0.14 kcal/g), 0.6g Protein, 3.4g Carbs, 0.02g Fat, 2mg Sodium, 150mg Potassium
+- Cluster Beans: 36 kcal (0.36 kcal/g), 3.2g Protein, 5.0g Carbs, 0.40g Fat, 4mg Sodium, 230mg Potassium
+- Brinjal: 25 kcal (0.25 kcal/g), 1.0g Protein, 5.9g Carbs, 0.20g Fat, 2mg Sodium, 230mg Potassium
+- Besan: 387 kcal (3.87 kcal/g), 22.4g Protein, 57.8g Carbs, 6.70g Fat, 64mg Sodium, 846mg Potassium
+- poha: 353 kcal (3.53 kcal/g), 6.7g Protein, 77.3g Carbs, 1.20g Fat, 8mg Sodium, 130mg Potassium
+- Almonds: 579 kcal (5.79 kcal/g), 21.2g Protein, 21.6g Carbs, 49.9g Fat, 1mg Sodium, 733mg Potassium
+- Cashews: 553 kcal (5.53 kcal/g), 18.2g Protein, 30.2g Carbs, 43.8g Fat, 12mg Sodium, 660mg Potassium
+- Walnuts: 654 kcal (6.54 kcal/g), 15.2g Protein, 13.7g Carbs, 65.2g Fat, 2mg Sodium, 441mg Potassium
+- Banana / banana: 89 kcal (0.89 kcal/g), 1.1g Protein, 22.8g Carbs, 0.30g Fat, 1mg Sodium, 358mg Potassium
+- Raisins: 299 kcal (2.99 kcal/g), 3.1g Protein, 79.2g Carbs, 0.50g Fat, 20mg Sodium, 749mg Potassium
+- Kimia Dates: 277 kcal (2.77 kcal/g), 1.8g Protein, 75.0g Carbs, 0.20g Fat, 2mg Sodium, 696mg Potassium
+- Eggs / egg / eggs: 143 kcal (1.43 kcal/g), 12.6g Protein, 0.7g Carbs, 9.50g Fat, 142mg Sodium, 138mg Potassium
+- aamchur powder: 300 kcal (3.00 kcal/g), 3.0g Protein, 68.0g Carbs, 1.50g Fat, 30mg Sodium, 250mg Potassium
+- Table Salt (NaCl): 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt (38,800mg/100g), 0mg Potassium
+* If any ingredient is not listed above, use standard raw USDA FoodData Central values.
+
 INSTRUCTIONS FOR THE CALCULATOR:
-1. Estimate the raw/uncooked calorie density (kcal per 1g) for each ingredient using standard USDA nutritional values from your knowledge.
+1. Use the exact raw/uncooked calorie densities (kcal per 1g) and nutritional values from the STANDARD RAW NUTRITIONAL REFERENCE DATABASE above for all calculations.
 2. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, sum the calculated calories of all strictly defined weights across all meals and daily variables:
    - Daily calories from meals = Sum of calories of all ingredient weights listed under each meal (these weights are already WHOLE DAY TOTALS, do NOT multiply by meals per day)
    - Daily variables calories = sum of calories of all variables for that day
 3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
-4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` using their calorie density to determine their exact weight. 
+4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` by dividing the deficit calories by their exact calorie density from the reference table.
 5. Each daily variable ingredient is marked with a "(belongs to [Meal Name])" suffix specifying which meal it belongs to. When constructing the meal breakdowns in PART 1 and copy-pasteable meal plans in PART 2, you MUST add each daily variable ingredient to its designated meal. Do NOT add any daily variable ingredient under any meal other than the one specified in its belongs-to suffix. The same ownership rule applies to splits: every entry under [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] is marked with a "(belongs to [Meal Name])" suffix — in PART 2 you MUST print each entry inside its owning meal's block (after the meal's ingredient lines) WITHOUT the "(belongs to ...)" suffix. PART 2 must NOT contain any separate or trailing "Splits & Cooking Instructions" section; if an entry somehow lacks a belongs-to suffix, print it at the end of that day's plan without any section heading.
 6. If a day contains multiple \`[AUTO]\` ingredients:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
-   - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients. For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
+   - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients from the reference table (e.g., Potato = 421mg K / 100g, Sweet Potato = 337mg K / 100g, Rice = 115mg K / 100g). For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
    - If the ratio is already in the ideal range of ${idealMinStr} to ${idealMaxStr} with a 50-50 split, or if it is mathematically impossible to reach the ideal range by adjusting the split (or if the ingredients have very similar nutritional profiles), default to distributing the remaining calorie deficit equally.
    - **MIN/MAX GRAM CONSTRAINTS**: If any \`[AUTO]\` ingredient has a \`min\` gram constraint (e.g. \`[AUTO, min Xg]\`), its calculated weight MUST NOT be less than X grams. If it has a \`max\` gram constraint (e.g. \`[AUTO, max Yg]\`), its calculated weight MUST NOT exceed Y grams. If the initial calculation violates any constraint, enforce the boundary value (e.g. set the weight to exactly X or Y grams) and redistribute the remaining calorie deficit to the other \`[AUTO]\` ingredients. If the configuration becomes mathematically impossible or causes all ingredients to hit their boundaries while falling short or exceeding the target, flag it as impossible.
    - Ensure all resulting weights are non-negative, and that their combined calories sum exactly to the remaining calorie deficit.
@@ -249,12 +278,11 @@ INSTRUCTIONS FOR THE CALCULATOR:
 7. For each meal, divide its daily baseline weights and any daily variable weights that belong to this meal (as specified in the belongs-to suffix) by the meal's daily frequency to find the per-meal weight.
 8. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.
 9. Calculate the total daily Sodium (Na) and Potassium (K) in milligrams (mg), and their ratio (Na:K ratio) for ${dayRefLabel}:
-   - Table salt (NaCl) contains approximately 388 mg of sodium per 1 g of salt.
+   - Table salt (NaCl) contains exactly 388 mg of sodium per 1 g of salt.
    - Scan EVERY entry under [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] and identify ALL table salt (NaCl) allocations across ALL meals. Salt may appear as a named multi-part split (e.g. "Salt Seasoning Split: 8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste") AND/OR as a simple per-meal seasoning split (e.g. "salt: 3g (belongs to Egg Meal)"). You MUST sum the salt from every such entry — do NOT limit the calculation to a single split.
    - For any salt portion that is boiled in water which is then thrown away (e.g., "7g in chicken with 1 liter water"), assume only 10% of that salt/sodium is absorbed and retained by the food (meaning only 0.7g of that salt is consumed, while the other 90% is discarded with the water). All other salt allocations (e.g. in subji, in marinate paste, salt added directly while cooking a meal) are assumed to be 100% consumed.
    - Do NOT treat non-salt seasonings listed in the splits (e.g. aamchur powder, turmeric, black pepper) as table salt; only count their sodium if the seasoning is notably sodium-rich (e.g. soy sauce, baking soda).
-   - Estimate natural sodium per 100g of raw ingredients: Raw Chicken Breast ≈ 70mg, White Rice ≈ 5mg, Potato (Raw) ≈ 6mg, Tomato ≈ 5mg, Bottle Gourd ≈ 2mg, Cluster Beans ≈ 2mg, Brinjal ≈ 2mg, Olive Oil ≈ 2mg, Eggs ≈ 140mg, Oats ≈ 2mg, Whey Protein ≈ 160mg, Nuts ≈ 1mg, Banana ≈ 1mg.
-   - Estimate natural potassium per 100g of raw ingredients: Raw Chicken Breast ≈ 256mg, White Rice ≈ 115mg, Potato (Raw) ≈ 400mg, Tomato ≈ 237mg, Bottle Gourd ≈ 150mg, Cluster Beans ≈ 230mg, Brinjal ≈ 230mg, Olive Oil ≈ 1mg, Eggs ≈ 130mg, Oats ≈ 429mg, Whey Protein ≈ 350mg, Almonds/Cashews/Walnuts ≈ 600mg, Banana ≈ 358mg.
+   - Use the natural sodium and potassium per 100g values strictly from the STANDARD RAW NUTRITIONAL REFERENCE DATABASE above for all ingredients.
    - Compute Total Daily Sodium (mg) = Sodium from consumed salt + Natural sodium from all daily ingredients.
    - Compute Total Daily Potassium (mg) = Natural potassium from all daily ingredients.
    - Compute the Sodium-to-Potassium Ratio (Na:K Ratio) = Total Daily Sodium (mg) / Total Daily Potassium (mg) (rounded to 2 decimal places).
@@ -262,7 +290,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is below ${idealMinStr}, calculate the additional Sodium required to reach a ratio of ${idealMinStr}: Additional Na (mg) = (${idealMinStr} * Total Daily Potassium) - Total Daily Sodium. Also convert this to equivalent additional salt grams: Additional Salt (g) = Additional Na (mg) / 388 (rounded to 2 decimal places).
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
-10. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) by estimating the macronutrient densities of all daily ingredients (including solved [AUTO] weights and variables) using standard USDA nutritional values. Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
+10. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) using the exact macronutrient densities from the STANDARD RAW NUTRITIONAL REFERENCE DATABASE above for all ingredients (including solved [AUTO] weights and variables). Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
 11. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1, and in Part 2 inside the owning meal's block (as marked by the entry's belongs-to suffix). Ensure the sum of split weights matches the total ingredient weight exactly.
 
 ---
