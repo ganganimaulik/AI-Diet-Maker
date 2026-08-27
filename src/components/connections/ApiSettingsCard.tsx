@@ -68,7 +68,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
       {config.provider === 'fireworks' ? (
         <div className="form-group">
           <label className="form-label" htmlFor="fireworksApiKey">Fireworks API Key</label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="input-with-action">
             <input
               type={showApiKey ? 'text' : 'password'}
               name="fireworksApiKey"
@@ -87,14 +87,14 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               {showApiKey ? 'Hide' : 'Show'}
             </button>
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+          <p className="note-text">
             Your Fireworks API key is saved securely and used for inference requests.
           </p>
         </div>
       ) : (!config.provider || config.provider === 'google-ai-studio') ? (
         <div className="form-group">
           <label className="form-label" htmlFor="geminiApiKey">Gemini API Key</label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="input-with-action">
             <input
               type={showApiKey ? 'text' : 'password'}
               name="geminiApiKey"
@@ -113,12 +113,12 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               {showApiKey ? 'Hide' : 'Show'}
             </button>
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+          <p className="note-text">
             Your key is saved locally in localStorage and never sent anywhere except directly to Google.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.03)', marginBottom: '1.25rem' }}>
+        <div className="settings-subgroup">
           <div className="form-group">
             <label className="form-label" htmlFor="enterpriseProjectId">GCP Project ID</label>
             <input
@@ -149,7 +149,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           {config.enterpriseAuthMethod === 'api-key' && (
             <div className="form-group">
               <label className="form-label" htmlFor="enterpriseApiKey">Agent Platform API Key</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div className="input-with-action">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   name="enterpriseApiKey"
@@ -176,7 +176,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               <label className="form-label">Service Account Key (JSON)</label>
               <textarea
                 className="form-input"
-                style={{ height: '120px', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', resize: 'vertical' }}
+                style={{ height: '120px', fontFamily: 'var(--font-mono)' }}
                 placeholder='{ "type": "service_account", ... }'
                 value={config.enterpriseServiceAccountJson || ''}
                 onChange={e => {
@@ -195,14 +195,14 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
                   }));
                 }}
               />
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+              <p className="note-text">
                 Paste the contents of your Google Cloud Service Account JSON key.
               </p>
             </div>
           )}
 
           {config.enterpriseAuthMethod === 'adc' && (
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+            <p className="note-text" style={{ marginTop: 0 }}>
               ℹ️ Authenticating via Application Default Credentials (ADC). Make sure your environment has GCP credentials configured.
             </p>
           )}
@@ -268,6 +268,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           <label className="form-label">Max Output Tokens</label>
           <input
             type="number"
+            inputMode="numeric"
             min="0"
             step="256"
             className="form-input"
@@ -278,7 +279,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               setConfig(prev => ({ ...prev, maxTokens: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 }));
             }}
           />
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+          <p className="note-text">
             Caps the response length. Leave blank for the provider default
             ({config.provider === 'fireworks' ? '16,384' : "the model's own limit"}).
             Thinking/reasoning tokens are charged against this same budget.
@@ -299,7 +300,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            <p className="note-text">
               Sent as <code>reasoning_effort</code>. Models without reasoning control ignore it.
             </p>
           </div>
@@ -319,7 +320,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
             <option value="medium">Medium</option>
             <option value="high">High (deepest reasoning)</option>
           </select>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+          <p className="note-text">
             Sent as <code>thinkingConfig.thinkingLevel</code> (Gemini 3+). Levels are relative
             allowances, not token counts &mdash; thinking tokens still come out of the output cap above.
             Pick <em>Model default</em> for pre-Gemini-3 models, which do not accept a level.
@@ -329,7 +330,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
 
       <button
         className="btn-primary"
-        style={{ marginTop: '1.5rem', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.2)' }}
+        style={{ marginTop: '0.5rem', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 4px 15px rgba(59, 130, 246, 0.2)' }}
         disabled={isSavingConfig}
         onClick={onSave}
       >

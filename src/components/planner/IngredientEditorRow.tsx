@@ -14,6 +14,10 @@ interface IngredientEditorRowProps {
  * One editable ingredient row (name, weight, Active/AUTO/Personal toggles,
  * optional meal select, plus AUTO-range and split sub-options).
  * Shared by the meal editor and the daily-variables editor.
+ *
+ * Each cell carries a named class so the stylesheet can place it with grid
+ * areas: a stacked card on phones, a single dense row from lg up. The DOM
+ * order never changes between the two.
  */
 export default function IngredientEditorRow({ ingredient: ing, mealOptions, onField, onRemove }: IngredientEditorRowProps) {
   const isDailyVariant = !!mealOptions;
@@ -31,27 +35,26 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, onFi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-      <div
-        className={`ingredient-row-compact ${ing.disabled ? 'is-disabled' : ''}`}
-        style={isDailyVariant ? { gridTemplateColumns: 'minmax(140px, 2fr) minmax(100px, 1.5fr) 125px auto auto auto auto' } : undefined}
-      >
+      <div className={`ingredient-row-compact ${isDailyVariant ? 'has-meal' : ''} ${ing.disabled ? 'is-disabled' : ''}`}>
         <input
           type="text"
-          className="form-input"
+          className="form-input ing-name"
           style={{ textDecoration: ing.disabled ? 'line-through' : 'none' }}
           value={ing.name}
           disabled={ing.disabled}
           onChange={e => onField('name', e.target.value)}
           placeholder="Ingredient Name"
+          aria-label="Ingredient name"
         />
 
         {mealOptions && (
           <select
-            className="form-input"
+            className="form-input ing-meal"
             style={{ background: 'rgba(0,0,0,0.15)' }}
             value={ing.mealId || ''}
             disabled={ing.disabled}
             onChange={e => onField('mealId', e.target.value)}
+            aria-label="Belongs to meal"
           >
             <option value="" disabled>Select Meal...</option>
             {mealOptions.map(m => (
@@ -60,112 +63,111 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, onFi
           </select>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <div className="ing-weight">
           <input
             type="number"
+            inputMode="decimal"
             className="form-input"
             placeholder="Weight"
             disabled={ing.isAuto || ing.disabled}
             value={ing.weight}
             onChange={e => onField('weight', e.target.value)}
+            aria-label="Weight in grams"
           />
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>g</span>
+          <span className="ing-unit">g</span>
         </div>
 
-        <label className="auto-checkbox-container" title="Active">
-          <input
-            type="checkbox"
-            checked={!ing.disabled}
-            onChange={e => onField('disabled', !e.target.checked)}
-          />
-          <span style={{ fontSize: '0.65rem', fontWeight: 'bold' }}>Active</span>
-        </label>
+        <div className="ing-flags">
+          <label className="auto-checkbox-container" title="Active">
+            <input
+              type="checkbox"
+              checked={!ing.disabled}
+              onChange={e => onField('disabled', !e.target.checked)}
+            />
+            <span>Active</span>
+          </label>
 
-        <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }} title="AUTO">
-          <input
-            type="checkbox"
-            disabled={ing.disabled}
-            checked={ing.isAuto}
-            onChange={e => onField('isAuto', e.target.checked)}
-          />
-          <span style={{ fontSize: '0.65rem', fontWeight: 'bold' }}>AUTO</span>
-        </label>
+          <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }} title="AUTO">
+            <input
+              type="checkbox"
+              disabled={ing.disabled}
+              checked={ing.isAuto}
+              onChange={e => onField('isAuto', e.target.checked)}
+            />
+            <span>AUTO</span>
+          </label>
 
-        <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }} title="Personal">
-          <input
-            type="checkbox"
-            disabled={ing.disabled}
-            checked={!!ing.personalOnly}
-            onChange={e => onField('personalOnly', e.target.checked)}
-          />
-          <span style={{ fontSize: '0.65rem', fontWeight: 'bold' }}>Pers.</span>
-        </label>
+          <label className="auto-checkbox-container" style={{ opacity: ing.disabled ? 0.5 : 1 }} title="Personal">
+            <input
+              type="checkbox"
+              disabled={ing.disabled}
+              checked={!!ing.personalOnly}
+              onChange={e => onField('personalOnly', e.target.checked)}
+            />
+            <span>Pers.</span>
+          </label>
+        </div>
 
-        <button className="btn-remove" onClick={onRemove} title="Delete Ingredient">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <button className="btn-remove ing-remove" onClick={onRemove} title="Delete Ingredient" aria-label="Delete ingredient">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
             <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
         </button>
       </div>
 
       {orphanReason && (
-        <div
-          style={{
-            marginLeft: isDailyVariant ? '1.5rem' : undefined,
-            fontSize: '0.72rem',
-            color: '#fcd34d',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.35rem'
-          }}
-        >
-          ⚠️ Not sent to the AI — {orphanReason}. Pick another meal to include it.
+        <div className="ingredient-warning">
+          <span aria-hidden="true">⚠️</span>
+          <span>Not sent to the AI — {orphanReason}. Pick another meal to include it.</span>
         </div>
       )}
 
       {!ing.disabled && (
-        <div className="ingredient-sub-options" style={isDailyVariant ? { marginLeft: '1.5rem' } : undefined}>
+        <div className="ingredient-sub-options">
           {ing.isAuto && (
             <div className="ingredient-sub-range">
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>AUTO RANGE:</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Min</span>
+              <span className="sub-label">AUTO RANGE:</span>
+              <div className="range-field">
+                <span className="sub-label">Min</span>
                 <input
                   type="number"
-                  className="form-input"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                  inputMode="decimal"
+                  className="form-input form-input--compact form-input--num"
                   placeholder="Min g"
                   disabled={ing.disabled || !ing.isAuto}
                   value={ing.minGrams || ''}
                   onChange={e => onField('minGrams', e.target.value)}
+                  aria-label="Minimum grams"
                 />
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>g</span>
+                <span className="sub-label">g</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Max</span>
+              <div className="range-field">
+                <span className="sub-label">Max</span>
                 <input
                   type="number"
-                  className="form-input"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: '65px', height: 'auto' }}
+                  inputMode="decimal"
+                  className="form-input form-input--compact form-input--num"
                   placeholder="Max g"
                   disabled={ing.disabled || !ing.isAuto}
                   value={ing.maxGrams || ''}
                   onChange={e => onField('maxGrams', e.target.value)}
+                  aria-label="Maximum grams"
                 />
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>g</span>
+                <span className="sub-label">g</span>
               </div>
             </div>
           )}
 
           <div className="ingredient-sub-split">
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', minWidth: '40px', fontWeight: 600 }}>Split:</span>
+            <span className="sub-label">Split:</span>
             <input
               type="text"
-              className="form-input"
-              style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', flex: 1, height: 'auto', background: 'rgba(0,0,0,0.15)' }}
+              className="form-input form-input--compact"
+              style={{ background: 'rgba(0,0,0,0.15)' }}
               placeholder="Optional split instruction (e.g. 50% in subji, remaining in chicken)"
               value={ing.split || ''}
               onChange={e => onField('split', e.target.value)}
+              aria-label="Split instruction"
             />
           </div>
         </div>

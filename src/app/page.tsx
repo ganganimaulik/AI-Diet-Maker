@@ -675,7 +675,7 @@ export default function Home() {
 
   if (isAuthenticatedState === null || !isMounted) {
     return (
-      <div className="loading-container" style={{ minHeight: '100vh' }}>
+      <div className="loading-container" style={{ minHeight: '100dvh' }}>
         <div className="spinner"></div>
         <p style={{ color: 'var(--text-secondary)' }}>Checking credentials &amp; loading configuration...</p>
       </div>
@@ -734,12 +734,11 @@ export default function Home() {
 
             {hasUnsavedChanges && (
               <div className="save-config-bar">
-                <span style={{ fontSize: '0.85rem', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span className="save-config-bar__text">
                   ⚠️ You have unsaved changes
                 </span>
                 <button
                   className="btn-secondary"
-                  style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: 700 }}
                   disabled={isSavingConfig}
                   onClick={() => saveConfig()}
                 >
@@ -836,7 +835,7 @@ export default function Home() {
             onSave={() => saveConfig()}
           />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div className="settings-column">
             <WhatsAppConnectionCard
               whatsappState={whatsapp.whatsappState}
               isResettingWhatsapp={whatsapp.isResettingWhatsapp}

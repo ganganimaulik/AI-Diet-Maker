@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Diet Maker",
   description: "Strict meal prep calculator & formatter powered by Gemini",
+  appleWebApp: {
+    capable: true,
+    title: "Diet Maker",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+/**
+ * `viewportFit: 'cover'` lets the layout paint under a notch; the stylesheet
+ * pads content back out with env(safe-area-inset-*). Zoom is deliberately
+ * left enabled — capping it would break pinch-zoom accessibility.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#03000a",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({

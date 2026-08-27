@@ -71,7 +71,9 @@ export const renderMarkdown = (md: string) => {
 
   const renderTable = (rows: string[]) => {
     if (rows.length === 0) return '';
-    const tHtml = ['<table>'];
+    // Wrapped so a wide table scrolls inside its own box instead of
+    // forcing the whole page sideways on a phone.
+    const tHtml = ['<div class="table-scroll"><table>'];
     let hasHeader = false;
 
     for (let r = 0; r < rows.length; r++) {
@@ -92,7 +94,7 @@ export const renderMarkdown = (md: string) => {
       }
     }
     if (hasHeader) tHtml.push('</tbody>');
-    tHtml.push('</table>');
+    tHtml.push('</table></div>');
     return tHtml.join('\n');
   };
 

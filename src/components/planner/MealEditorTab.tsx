@@ -31,37 +31,35 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
             placeholder="e.g. Oats Meal, Pasta Meal"
           />
         </div>
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ flex: '1.2 1 220px', margin: 0 }}>
-            <label className="form-label" style={{ whiteSpace: 'nowrap' }}>Meals Per Day (Frequency)</label>
+        <div className="input-row">
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Meals Per Day (Frequency)</label>
             <input
               type="number"
+              inputMode="numeric"
               className="form-input"
               value={selectedMeal.mealsPerDay}
               onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
             />
           </div>
-          <div className="form-group" style={{ flex: '2 1 200px', margin: 0 }}>
+          <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">Status</label>
-            <div style={{ display: 'flex', alignItems: 'center', minHeight: '44px' }}>
-              <label className="auto-checkbox-container" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                <input
-                  type="checkbox"
-                  style={{ cursor: 'pointer' }}
-                  checked={!selectedMeal.disabled}
-                  onChange={e => updateMeal(selectedMeal.id, 'disabled', !e.target.checked)}
-                />
-                Active / Include in Prompt
-              </label>
-            </div>
+            <label className="auto-checkbox-container" style={{ justifyContent: 'flex-start' }}>
+              <input
+                type="checkbox"
+                checked={!selectedMeal.disabled}
+                onChange={e => updateMeal(selectedMeal.id, 'disabled', !e.target.checked)}
+              />
+              Active / Include in Prompt
+            </label>
           </div>
         </div>
       </div>
 
-      <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '550px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', padding: '0.85rem 1.15rem', borderRadius: '10px' }}>
+      <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '550px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', padding: '0.85rem 1rem', borderRadius: '10px' }}>
         <label className="form-label" style={{ marginBottom: '0.35rem' }}>Cook Quantity Mode</label>
-        <div style={{ display: 'flex', gap: '1.5rem', margin: '0.25rem 0' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+        <div className="choice-row">
+          <label className="choice-option">
             <input
               type="radio"
               name={`cookQty-${selectedMeal.id}`}
@@ -70,7 +68,7 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
             />
             Whole Day Total
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-primary)', cursor: 'pointer' }}>
+          <label className="choice-option">
             <input
               type="radio"
               name={`cookQty-${selectedMeal.id}`}
@@ -80,19 +78,18 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
             Per Meal
           </label>
         </div>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
+        <p className="note-text">
           {(selectedMeal.cookQuantityMode || 'daily') === 'per-meal'
             ? `Cook message will show per-meal quantities (daily total ÷ ${selectedMeal.mealsPerDay}).`
             : 'Cook message will show the entire day\'s total for this meal.'}
         </p>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+      <div className="builder-subheading">
         <label className="form-label" style={{ margin: 0 }}>Meal Ingredients</label>
         {canDelete && (
           <button
-            className="btn-remove"
-            style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--accent-rose)', background: 'rgba(244, 63, 94, 0.08)' }}
+            className="btn-remove btn-remove--text"
             onClick={() => deleteMeal(selectedMeal.id)}
           >
             Delete Meal
@@ -115,7 +112,7 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
         + Add Ingredient to {selectedMeal.name}
       </button>
 
-      <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
+      <hr className="hr-soft" />
 
       <div className="form-group">
         <label className="form-label">Liquid Configuration (e.g. water, milk, or &quot;none&quot;)</label>
@@ -140,7 +137,7 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
         />
       </div>
 
-      <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
+      <hr className="hr-soft" />
 
       <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
         Cook Seasoning &amp; Instructions Splits
@@ -153,46 +150,34 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
             return daySplits.some(s => s.id === split.id);
           });
           return (
-            <div key={split.id} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div key={split.id} className="split-card">
+              <div className="split-card__fields">
                 <input
                   type="text"
-                  className="form-input"
-                  style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                  className="form-input form-input--compact split-card__title"
                   value={split.name}
                   onChange={e => updateCustomSplit(split.id, 'name', e.target.value)}
                   placeholder="Title (e.g. Olive Oil split)"
+                  aria-label="Split title"
                 />
                 <input
                   type="text"
-                  className="form-input"
-                  style={{ flex: 2, padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                  className="form-input form-input--compact split-card__value"
                   value={split.value}
                   onChange={e => updateCustomSplit(split.id, 'value', e.target.value)}
                   placeholder="Instruction split"
+                  aria-label="Split instruction"
                 />
-                <button className="btn-remove" onClick={() => removeCustomSplit(split.id)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <button className="btn-remove split-card__remove" onClick={() => removeCustomSplit(split.id)} aria-label="Remove split">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                   </svg>
                 </button>
               </div>
               {hasOverrides && (
-                <div style={{ fontSize: '0.75rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.4rem', paddingLeft: '0.2rem' }}>
+                <div className="split-card__note">
                   <span>⚠️ Overridden on some days.</span>
-                  <button
-                    onClick={() => resetAllDailyOverridesForSplit(split.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#c084fc',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      padding: 0,
-                      fontSize: '0.75rem',
-                      fontWeight: 600
-                    }}
-                  >
+                  <button className="link-button" onClick={() => resetAllDailyOverridesForSplit(split.id)}>
                     Reset all days to use global value
                   </button>
                 </div>
