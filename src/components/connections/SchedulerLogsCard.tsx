@@ -19,32 +19,32 @@ export default function SchedulerLogsCard({ schedulerState }: SchedulerLogsCardP
         Scheduler Status Logs
       </h3>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.85rem' }}>
-        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Last Sent Date</div>
-          <div style={{ fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>{schedulerState.lastSentDate || 'Never'}</div>
+      <div className="info-tiles">
+        <div className="info-tile">
+          <div className="info-tile__label">Last Sent Date</div>
+          <div className="info-tile__value">{schedulerState.lastSentDate || 'Never'}</div>
         </div>
 
-        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Retry Attempts</div>
-          <div style={{ fontWeight: 700, color: schedulerState.retryCount > 0 ? 'var(--accent-rose)' : '#fff', marginTop: '0.25rem' }}>
+        <div className="info-tile">
+          <div className="info-tile__label">Retry Attempts</div>
+          <div className="info-tile__value" style={{ color: schedulerState.retryCount > 0 ? 'var(--accent-rose)' : '#fff' }}>
             {schedulerState.retryCount}
           </div>
         </div>
 
         {schedulerState.retryCount > 0 && (
-          <div style={{ gridColumn: 'span 2', background: 'rgba(244, 63, 94, 0.05)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
-            <div style={{ color: 'var(--accent-rose)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700 }}>Next Auto Retry</div>
-            <div style={{ fontWeight: 700, color: '#fff', marginTop: '0.25rem' }}>
+          <div className="info-tile info-tile--wide info-tile--danger">
+            <div className="info-tile__label" style={{ color: 'var(--accent-rose)' }}>Next Auto Retry</div>
+            <div className="info-tile__value">
               {new Date(schedulerState.nextRetryTime).toLocaleString()}
             </div>
           </div>
         )}
 
         {schedulerState.lastError && (
-          <div style={{ gridColumn: 'span 2', background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)', color: '#fda4af' }}>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>Last Error Log</div>
-            <div style={{ marginTop: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+          <div className="info-tile info-tile--wide">
+            <div className="info-tile__label">Last Error Log</div>
+            <div className="info-tile__log">
               {schedulerState.lastError}
             </div>
           </div>

@@ -44,16 +44,20 @@ export default function SchedulerCard({ whatsapp }: SchedulerCardProps) {
       </h3>
 
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={schedulerState.isEnabled}
           className={`switch-container ${schedulerState.isEnabled ? 'checked' : ''}`}
+          style={{ background: 'none', border: 'none', padding: 0, color: 'inherit' }}
           onClick={() => {
             setSchedulerState(prev => ({ ...prev, isEnabled: !prev.isEnabled }));
             setIsSchedulerDirty(true);
           }}
         >
-          <div className="switch-control"></div>
+          <span className="switch-control"></span>
           <span className="form-label" style={{ margin: 0, cursor: 'pointer' }}>Enable Automated Sending</span>
-        </div>
+        </button>
       </div>
 
       <div className="input-row" style={{ marginBottom: '1rem' }}>
@@ -134,10 +138,9 @@ export default function SchedulerCard({ whatsapp }: SchedulerCardProps) {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+      <div className="settings-actions">
         <button
           className="btn-primary"
-          style={{ flex: 1, padding: '0.6rem 1rem', fontSize: '0.85rem' }}
           onClick={saveSchedulerSettings}
           disabled={isSavingScheduler}
         >
@@ -146,7 +149,7 @@ export default function SchedulerCard({ whatsapp }: SchedulerCardProps) {
 
         <button
           className="btn-secondary"
-          style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.8rem', border: '1px solid var(--accent-cyan)', color: 'var(--accent-cyan)' }}
+          style={{ border: '1px solid var(--accent-cyan)', color: 'var(--accent-cyan)' }}
           onClick={() => handleSendTestMessage('myself')}
           disabled={testSendStatus.status === 'sending' || whatsappState.status !== 'ready' || !schedulerState.userRecipientId}
         >
@@ -155,7 +158,7 @@ export default function SchedulerCard({ whatsapp }: SchedulerCardProps) {
 
         <button
           className="btn-secondary"
-          style={{ flex: 1, padding: '0.6rem 0.5rem', fontSize: '0.8rem', border: '1px solid var(--accent-purple)' }}
+          style={{ border: '1px solid var(--accent-purple)' }}
           onClick={() => handleSendTestMessage('cook')}
           disabled={testSendStatus.status === 'sending' || whatsappState.status !== 'ready' || !schedulerState.recipientId}
         >
@@ -164,28 +167,13 @@ export default function SchedulerCard({ whatsapp }: SchedulerCardProps) {
       </div>
 
       {!schedulerState.recipientId && !schedulerState.userRecipientId && whatsappState.status === 'ready' && (
-        <div style={{
-          marginTop: '1rem',
-          fontSize: '0.8rem',
-          padding: '0.5rem 0.75rem',
-          borderRadius: '6px',
-          color: 'var(--accent-rose)',
-          background: 'rgba(244, 63, 94, 0.08)',
-          border: '1px solid rgba(244, 63, 94, 0.15)'
-        }}>
+        <div className="callout callout--danger">
           ⚠️ Select at least one recipient (Cook or Myself) above to enable test sending.
         </div>
       )}
 
       {testSendStatus.message && (
-        <div style={{
-          marginTop: '1rem',
-          fontSize: '0.8rem',
-          padding: '0.5rem 0.75rem',
-          borderRadius: '6px',
-          color: testSendStatus.status === 'success' ? '#6ee7b7' : testSendStatus.status === 'error' ? '#fca5a5' : 'var(--text-secondary)',
-          background: testSendStatus.status === 'success' ? 'rgba(16, 185, 129, 0.1)' : testSendStatus.status === 'error' ? 'rgba(244, 63, 94, 0.1)' : 'rgba(255,255,255,0.03)'
-        }}>
+        <div className={`callout ${testSendStatus.status === 'success' ? 'callout--success' : testSendStatus.status === 'error' ? 'callout--danger' : 'callout--neutral'}`}>
           {testSendStatus.message}
         </div>
       )}

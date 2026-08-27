@@ -62,8 +62,8 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
         ))}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h4 style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 700 }}>
+      <div className="builder-subheading">
+        <h4 className="builder-section-title" style={{ marginBottom: 0 }}>
           Ingredients for {activeDay} ({getDayVariantName(config.dailyVariables[activeDay] || [], config.meals.filter(m => !m.disabled))})
         </h4>
       </div>
@@ -84,9 +84,9 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
         + Add Ingredient to {activeDay}
       </button>
 
-      <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', margin: '1.5rem 0' }} />
+      <hr className="hr-soft" />
 
-      <h4 style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+      <h4 className="builder-section-title">
         Cook Seasoning &amp; Instructions Splits for {activeDay}
       </h4>
 
@@ -99,9 +99,9 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
           const ownerMeal = (config.meals || []).find(m => m.id === globalSplit.mealId);
 
           return (
-            <div key={globalSplit.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+            <div key={globalSplit.id} className="split-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', minWidth: 0 }}>
                   {globalSplit.name}
                   {ownerMeal && (
                     <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.72rem', marginLeft: '0.4rem' }}>
@@ -121,18 +121,7 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
                     {isCustomized ? 'Customized' : 'Global Default'}
                   </span>
                   {isCustomized && (
-                    <button
-                      onClick={() => resetDailySplit(activeDay, globalSplit.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#c084fc',
-                        fontSize: '0.7rem',
-                        cursor: 'pointer',
-                        textDecoration: 'underline',
-                        padding: 0
-                      }}
-                    >
+                    <button className="link-button" onClick={() => resetDailySplit(activeDay, globalSplit.id)}>
                       Reset to default
                     </button>
                   )}
@@ -140,8 +129,7 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
               </div>
               <input
                 type="text"
-                className="form-input"
-                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                className="form-input form-input--compact"
                 value={currentValue}
                 onChange={e => updateDailySplit(activeDay, globalSplit.id, e.target.value)}
                 placeholder={`Default: ${globalSplit.value}`}

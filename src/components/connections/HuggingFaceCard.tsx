@@ -42,7 +42,7 @@ export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCard
           <line x1="6" y1="18" x2="6.01" y2="18" />
         </svg>
         <span>WhatsApp Worker (Oracle VM)</span>
-        <span className={`whatsapp-status-badge ${badgeClass}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', marginLeft: 'auto' }}>
+        <span className={`whatsapp-status-badge ${badgeClass}`} style={{ marginLeft: 'auto' }}>
           {badgeLabel}
         </span>
       </h3>
@@ -54,24 +54,16 @@ export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCard
       </div>
 
       {hfDetails && (
-        <div style={{
-          marginTop: '1rem',
-          fontSize: '0.8rem',
-          padding: '0.75rem',
-          borderRadius: '8px',
-          background: 'rgba(0,0,0,0.2)',
-          border: '1px solid rgba(255,255,255,0.03)',
-          color: 'var(--text-secondary)'
-        }}>
+        <div className="info-tile info-tile--wide" style={{ marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
           <div style={{ fontWeight: 700, color: '#fff', marginBottom: '0.25rem' }}>Worker:</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', overflowWrap: 'anywhere' }}>
             <span>💻 Host: {hfDetails.hardware}</span>
             <span>🛠️ Runtime: {hfDetails.sdk}</span>
           </div>
         </div>
       )}
 
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '1rem', lineHeight: '1.4' }}>
+      <p className="note-text" style={{ marginTop: '1rem' }}>
         ℹ️ Deploys automatically on every push to <code>main</code> (GitHub Actions → Oracle VM). No keep-alive needed — the VM never sleeps.
       </p>
     </section>

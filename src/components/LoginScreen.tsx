@@ -12,8 +12,8 @@ export default function LoginScreen({ passwordInput, setPasswordInput, loginErro
     <div className="login-overlay">
       <form onSubmit={onSubmit} className="login-card">
         <div className="login-logo">🔒</div>
-        <h2 style={{ marginBottom: '0.5rem', fontWeight: 800 }}>AI Diet Maker</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+        <h2 className="login-title">AI Diet Maker</h2>
+        <p className="login-subtitle">
           Enter the password to access your diet dashboard
         </p>
 
@@ -25,7 +25,6 @@ export default function LoginScreen({ passwordInput, setPasswordInput, loginErro
             name="appPassword"
             autoComplete="current-password"
             className="form-input"
-            style={{ padding: '0.75rem 1rem' }}
             placeholder="••••••••"
             value={passwordInput}
             onChange={e => setPasswordInput(e.target.value)}
@@ -34,7 +33,7 @@ export default function LoginScreen({ passwordInput, setPasswordInput, loginErro
         </div>
 
         {loginError && (
-          <div style={{ color: 'var(--accent-rose)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          <div className="login-error">
             {loginError}
           </div>
         )}
