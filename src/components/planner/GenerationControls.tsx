@@ -140,7 +140,7 @@ export default function GenerationControls({
         <div className="generation-actions__row">
           <button
             className="btn-primary"
-            disabled={isGenerating || isBatchGenerating || isCacheLoading}
+            disabled={isGenerating || isCacheLoading}
             onClick={() => onGenerate(false)}
           >
             {isGenerating ? (
@@ -166,7 +166,7 @@ export default function GenerationControls({
           {cacheStatus[currentCacheDay] && (
             <button
               className="btn-regenerate"
-              disabled={isGenerating || isBatchGenerating || isCacheLoading}
+              disabled={isGenerating || isCacheLoading}
               onClick={() => onGenerate(true)}
               title="Skip cache and regenerate fresh"
             >

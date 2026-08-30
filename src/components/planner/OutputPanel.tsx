@@ -80,6 +80,25 @@ function dayChipState(status: CacheEntryStatus | undefined, progress: DayProgres
   return { bg: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)', label: abbr, busy };
 }
 
+function formatErrorMessage(msg: string): string {
+  if (!msg) return '';
+  try {
+    const parsed = JSON.parse(msg);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.error && typeof parsed.error === 'object') {
+        const status = parsed.error.status ? `[${parsed.error.status}] ` : '';
+        const code = parsed.error.code ? `(${parsed.error.code}) ` : '';
+        const details = parsed.error.message || JSON.stringify(parsed.error);
+        return `${status}${code}${details}`.trim();
+      }
+      if (parsed.message) return parsed.message;
+    }
+  } catch {
+    // Plain string error
+  }
+  return msg;
+}
+
 export default function OutputPanel({
   selectedDay,
   onSelectDay,
@@ -98,7 +117,7 @@ export default function OutputPanel({
   onRegenerateDay,
   hidden = false
 }: OutputPanelProps) {
-  const isBusy = isGenerating || isBatchGenerating;
+  const isCurrentDayBusy = isGenerating || dayProgress[selectedDay] === 'checking';
   // Days differ in whether they carry thinking output — fall back to the plan
   // tab instead of rendering an empty panel after switching days.
   const activeTab: OutputTab = outputTab === 'thoughts' && !thinkingText ? 'user' : outputTab;
@@ -137,7 +156,7 @@ export default function OutputPanel({
                 </button>
                 <button
                   className="day-chip-regen"
-                  disabled={busy || isBatchGenerating}
+                  disabled={busy}
                   onClick={() => onRegenerateDay(day)}
                   title={
                     busy
@@ -157,18 +176,25 @@ export default function OutputPanel({
 
         {/* Quick action for the day on screen: generate it, or redo it fresh */}
         <div className="output-toolbar__actions">
-          {!outputText && !isGenerating ? (
+          {!outputText && !isCurrentDayBusy ? (
             <button
               className="btn-primary btn-primary--sm"
-              disabled={isBatchGenerating}
-              onClick={() => onGenerate(false)}
+              disabled={isCurrentDayBusy}
+              onClick={() => errorMsg ? onRegenerateDay(selectedDay) : onGenerate(false)}
             >
-              Generate {selectedDay}
+              {errorMsg ? (
+                <>
+                  <RegenerateIcon size={12} />
+                  Retry {selectedDay.substring(0, 3)}
+                </>
+              ) : (
+                `Generate ${selectedDay}`
+              )}
             </button>
           ) : (
             <button
               className="btn-regenerate btn-regenerate--sm"
-              disabled={isBusy}
+              disabled={isCurrentDayBusy}
               onClick={() => onRegenerateDay(selectedDay)}
               title={`Regenerate ${selectedDay} — ignores the cached plan`}
             >
@@ -213,19 +239,19 @@ export default function OutputPanel({
           </button>
         </div>
 
-        {isGenerating && (
+        {isCurrentDayBusy && (
           <div className="output-status">
             <div className="spinner spinner--xs"></div>
             <span style={{ opacity: 0.9 }}>Generating {selectedDay}...</span>
           </div>
         )}
-        {isBatchGenerating && !isGenerating && (
+        {isBatchGenerating && !isCurrentDayBusy && (
           <div className="output-status">
             <div className="spinner spinner--xs"></div>
             <span style={{ opacity: 0.9 }}>Generating All 7 Days...</span>
           </div>
         )}
-        {isCachedResponse && !isBusy && outputText && (
+        {isCachedResponse && !isCurrentDayBusy && outputText && (
           <div className="cache-badge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
@@ -238,17 +264,30 @@ export default function OutputPanel({
 
       {errorMsg && (
         <div className="error-banner">
-          <div className="error-banner__title">Generation Error</div>
-          {errorMsg}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            <div className="error-banner__title" style={{ margin: 0 }}>Generation Error ({selectedDay})</div>
+            <button
+              className="btn-regenerate btn-regenerate--sm"
+              disabled={isCurrentDayBusy}
+              onClick={() => onRegenerateDay(selectedDay)}
+              style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+            >
+              <RegenerateIcon size={12} />
+              Retry {selectedDay}
+            </button>
+          </div>
+          <div style={{ wordBreak: 'break-word', fontSize: '0.85rem' }}>
+            {formatErrorMessage(errorMsg)}
+          </div>
         </div>
       )}
 
       <div className="output-body">
-        {isBusy && !outputText && !thinkingText ? (
+        {isCurrentDayBusy && !outputText && !thinkingText ? (
           <div className="loading-container" style={{ flex: 1 }}>
             <div className="spinner"></div>
             <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-              {isGenerating ? `Gemini is calculating plan for ${selectedDay}...` : 'Generating all 7 days in parallel...'}
+              Gemini is calculating plan for {selectedDay}...
             </p>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
           </div>
@@ -300,21 +339,24 @@ export default function OutputPanel({
           </div>
         ) : (
           <div className="placeholder-container">
-            <div className="placeholder-icon">📋</div>
+            <div className="placeholder-icon">{errorMsg ? '⚠️' : '📋'}</div>
             <h3 className="placeholder-title">
-              No Plan Generated for {selectedDay} Yet
+              {errorMsg ? `Generation Failed for ${selectedDay}` : `No Plan Generated for ${selectedDay} Yet`}
             </h3>
             <p className="placeholder-text">
-              Tap below to generate a calculated diet plan for {selectedDay}, or generate all 7 days at once.
+              {errorMsg
+                ? `An error occurred while calculating the diet plan for ${selectedDay}. Click below to retry.`
+                : `Tap below to generate a calculated diet plan for ${selectedDay}, or generate all 7 days at once.`}
             </p>
 
             <div className="placeholder-actions">
               <button
                 className="btn-primary"
-                disabled={isBusy}
-                onClick={() => onGenerate(false)}
+                disabled={isCurrentDayBusy}
+                onClick={() => errorMsg ? onRegenerateDay(selectedDay) : onGenerate(false)}
               >
-                Generate {selectedDay} Plan
+                {errorMsg ? <RegenerateIcon size={14} /> : null}
+                {errorMsg ? `Retry ${selectedDay} Plan` : `Generate ${selectedDay} Plan`}
               </button>
               <button
                 className="btn-secondary btn-batch"

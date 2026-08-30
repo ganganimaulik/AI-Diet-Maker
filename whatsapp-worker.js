@@ -1069,6 +1069,20 @@ async function callGeminiAPI(c, prompt) {
 // -------------------------------------------------------------
 function sanitizeGenerationError(error, configDoc) {
   let message = (error && error.message) ? error.message : String(error || 'Internal Server Error');
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.error && typeof parsed.error === 'object') {
+        const status = parsed.error.status ? `[${parsed.error.status}] ` : '';
+        const code = parsed.error.code ? `(${parsed.error.code}) ` : '';
+        const details = parsed.error.message || JSON.stringify(parsed.error);
+        message = `${status}${code}${details}`.trim();
+      } else if (parsed.message) {
+        message = parsed.message;
+      }
+    }
+  } catch (_) {}
+
   // Provider errors are persisted for the returning browser; never let a
   // credential echo into that durable field.
   const secrets = [
