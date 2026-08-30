@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { compilePromptText } from '@/lib/compile-prompt';
-import { Config, DayOutput, DayProgress, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayOutput, DayProgress, GenerationJob, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
 import { useConfigActions } from '@/hooks/useConfigActions';
 import { useWhatsApp } from '@/hooks/useWhatsApp';
 import { useDietCache } from '@/hooks/useDietCache';
@@ -20,6 +20,35 @@ import WhatsAppConnectionCard from '@/components/connections/WhatsAppConnectionC
 import HuggingFaceCard from '@/components/connections/HuggingFaceCard';
 import SchedulerCard from '@/components/connections/SchedulerCard';
 import SchedulerLogsCard from '@/components/connections/SchedulerLogsCard';
+
+const JOB_POLL_INTERVAL_MS = 3000;
+
+const isActiveJob = (job: GenerationJob) => job.status === 'queued' || job.status === 'running';
+
+const normalizeGenerationJob = (value: unknown): GenerationJob | null => {
+  if (!value || typeof value !== 'object') return null;
+  const job = value as Partial<GenerationJob>;
+  if (
+    typeof job.jobId !== 'string' ||
+    typeof job.day !== 'string' ||
+    !job.jobId ||
+    !DAYS_OF_WEEK.includes(job.day) ||
+    !['queued', 'running', 'completed', 'failed'].includes(job.status || '')
+  ) {
+    return null;
+  }
+
+  return {
+    jobId: job.jobId,
+    day: job.day,
+    status: job.status as GenerationJob['status'],
+    responseText: typeof job.responseText === 'string' ? job.responseText : '',
+    thinkingText: typeof job.thinkingText === 'string' ? job.thinkingText : '',
+    error: typeof job.error === 'string' ? job.error : '',
+    cacheable: job.cacheable !== false,
+    isCurrentConfig: job.isCurrentConfig !== false
+  };
+};
 
 export default function Home() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
@@ -47,6 +76,14 @@ export default function Home() {
   // Mirrors of state that async generation closures need to read live
   const dayProgressRef = useRef<Record<string, DayProgress>>({});
   const selectedDayRef = useRef('MONDAY');
+  const pollingJobsRef = useRef<Record<string, { jobId: string; promise: Promise<GenerationJob>; presentOnCompletion: boolean }>>({});
+  const activeJobIdsRef = useRef<Record<string, string>>({});
+  const presentedJobIdsRef = useRef(new Set<string>());
+  const finalizedJobIdsRef = useRef(new Set<string>());
+  const batchDaysRef = useRef(new Set<string>());
+  const hasRestoredJobsRef = useRef(false);
+  const isPageActiveRef = useRef(true);
+  const pollingEpochRef = useRef(0);
 
   const markDayProgress = (day: string, status: DayProgress) => {
     dayProgressRef.current = { ...dayProgressRef.current, [day]: status };
@@ -84,7 +121,6 @@ export default function Home() {
     cacheStatus,
     fetchCacheStatus,
     checkCache,
-    saveToCache,
     clearCache
   } = cache;
 
@@ -108,6 +144,7 @@ export default function Home() {
     } catch (e) {
       console.error('Error saving config:', e);
       alert('Failed to save configuration to database.');
+      throw e;
     } finally {
       setIsSavingConfig(false);
     }
@@ -130,6 +167,7 @@ export default function Home() {
 
     if (configData.config) {
       const normalized = normalizeConfig(configData.config);
+      selectedDayRef.current = normalized.selectedGenerationDay || 'MONDAY';
       setConfig(normalized);
       setSavedConfig(normalized);
     } else {
@@ -139,6 +177,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DEFAULT_CONFIG)
       });
+      selectedDayRef.current = DEFAULT_CONFIG.selectedGenerationDay || 'MONDAY';
       setConfig(DEFAULT_CONFIG);
       setSavedConfig(DEFAULT_CONFIG);
     }
@@ -148,6 +187,7 @@ export default function Home() {
 
   // Check login and fetch config on mount
   useEffect(() => {
+    isPageActiveRef.current = true;
     const checkAuthAndLoad = async () => {
       try {
         const authRes = await fetch('/api/auth/check');
@@ -168,6 +208,9 @@ export default function Home() {
     };
 
     checkAuthAndLoad();
+    return () => {
+      isPageActiveRef.current = false;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -199,6 +242,14 @@ export default function Home() {
       await fetch('/api/auth/login', { method: 'DELETE' });
       setIsAuthenticatedState(false);
       setSavedConfig(null);
+      hasRestoredJobsRef.current = false;
+      pollingEpochRef.current += 1;
+      pollingJobsRef.current = {};
+      activeJobIdsRef.current = {};
+      batchDaysRef.current.clear();
+      dayProgressRef.current = {};
+      setDayProgress({});
+      setIsBatchGenerating(false);
     } catch (e) {
       console.error('Logout error:', e);
     }
@@ -281,8 +332,234 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.selectedGenerationDay, isMounted, isAuthenticatedState]);
 
+  const finishBatchDay = (day: string) => {
+    if (!batchDaysRef.current.delete(day)) return;
+    setIsBatchGenerating(batchDaysRef.current.size > 0);
+  };
+
+  const presentGenerationJob = (job: GenerationJob) => {
+    if (presentedJobIdsRef.current.has(job.jobId)) return;
+    presentedJobIdsRef.current.add(job.jobId);
+    selectedDayRef.current = job.day;
+    setConfig(prev => prev.selectedGenerationDay === job.day
+      ? prev
+      : { ...prev, selectedGenerationDay: job.day });
+    setCurrentView('planner');
+    setLayoutMode('results');
+  };
+
+  const applyGenerationJob = (job: GenerationJob, present = false) => {
+    if (!job.isCurrentConfig) return;
+
+    const day = job.day;
+    const hasOutput = !!(job.responseText || job.thinkingText);
+    if (hasOutput || job.status === 'completed') {
+      setDayOutputs(prev => {
+        const nextOutput: DayOutput = {
+          text: job.responseText,
+          thinking: job.thinkingText,
+          isCached: job.status === 'completed' && job.cacheable
+        };
+        const existing = prev[day];
+        if (
+          existing?.text === nextOutput.text &&
+          existing?.thinking === nextOutput.thinking &&
+          existing?.isCached === nextOutput.isCached
+        ) {
+          return prev;
+        }
+        return { ...prev, [day]: nextOutput };
+      });
+    }
+
+    if (isActiveJob(job)) {
+      activeJobIdsRef.current[day] = job.jobId;
+      markDayProgress(day, 'generating');
+      setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
+    } else {
+      if (activeJobIdsRef.current[day] === job.jobId) {
+        delete activeJobIdsRef.current[day];
+      }
+
+      if (job.status === 'completed' && job.responseText) {
+        markDayProgress(day, 'done');
+        setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
+        if (job.cacheable && !finalizedJobIdsRef.current.has(job.jobId)) {
+          finalizedJobIdsRef.current.add(job.jobId);
+          void fetchCacheStatus();
+        }
+      } else {
+        markDayProgress(day, 'error');
+        setDayErrors(prev => ({
+          ...prev,
+          [day]: job.error || 'The model returned an empty response.'
+        }));
+      }
+    }
+
+    if (selectedDayRef.current === day) {
+      if (job.responseText) {
+        setOutputTab('user');
+      } else if (job.thinkingText) {
+        setOutputTab('thoughts');
+      }
+    }
+
+    if (present) presentGenerationJob(job);
+  };
+
+  const fetchGenerationJob = async (day: string): Promise<GenerationJob | null> => {
+    const res = await fetch(`/api/generate?day=${encodeURIComponent(day)}`, {
+      cache: 'no-store'
+    });
+    const data: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      const error = data && typeof data === 'object' && 'error' in data
+        ? String((data as { error: unknown }).error)
+        : `Unable to check generation status (${res.status}).`;
+      throw new Error(error);
+    }
+    if (!data || typeof data !== 'object' || !('job' in data)) return null;
+    return normalizeGenerationJob((data as { job: unknown }).job);
+  };
+
+  const trackGenerationJob = (
+    initialJob: GenerationJob,
+    presentOnCompletion = false
+  ): Promise<GenerationJob> => {
+    applyGenerationJob(initialJob, presentOnCompletion && !isActiveJob(initialJob));
+    if (!isActiveJob(initialJob)) return Promise.resolve(initialJob);
+
+    const existing = pollingJobsRef.current[initialJob.day];
+    if (existing && existing.jobId === initialJob.jobId) {
+      existing.presentOnCompletion ||= presentOnCompletion;
+      return existing.promise;
+    }
+
+    const day = initialJob.day;
+    const epoch = pollingEpochRef.current;
+    const entry = {
+      jobId: initialJob.jobId,
+      promise: Promise.resolve(initialJob),
+      presentOnCompletion
+    };
+
+    entry.promise = (async () => {
+      let latestJob = initialJob;
+      try {
+        while (isActiveJob(latestJob)) {
+          await new Promise(resolve => window.setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+          if (!isPageActiveRef.current || pollingEpochRef.current !== epoch) return latestJob;
+
+          let polledJob: GenerationJob | null = null;
+          try {
+            polledJob = await fetchGenerationJob(day);
+          } catch (error) {
+            // A transient network failure must not turn a still-running durable
+            // server job into a client-side generation failure.
+            console.warn(`Unable to poll generation job for ${day}; retrying.`, error);
+            continue;
+          }
+
+          if (!polledJob) continue;
+          if (!polledJob.isCurrentConfig) {
+            if (activeJobIdsRef.current[day] === latestJob.jobId) {
+              delete activeJobIdsRef.current[day];
+              clearDayProgress(day);
+            }
+            return polledJob;
+          }
+
+          latestJob = polledJob;
+          entry.jobId = polledJob.jobId;
+          applyGenerationJob(
+            polledJob,
+            entry.presentOnCompletion && !isActiveJob(polledJob)
+          );
+        }
+        return latestJob;
+      } finally {
+        if (pollingJobsRef.current[day] === entry) {
+          delete pollingJobsRef.current[day];
+        }
+        if (!isActiveJob(latestJob)) finishBatchDay(day);
+      }
+    })();
+
+    pollingJobsRef.current[day] = entry;
+    return entry.promise;
+  };
+
+  const restoreGenerationJobs = async () => {
+    try {
+      const res = await fetch('/api/generate', { cache: 'no-store' });
+      const data: unknown = await res.json().catch(() => null);
+      if (!res.ok || !data || typeof data !== 'object') return;
+
+      const rawJobs = 'jobs' in data && Array.isArray((data as { jobs: unknown }).jobs)
+        ? (data as { jobs: unknown[] }).jobs
+        : 'job' in data
+          ? [(data as { job: unknown }).job]
+          : [];
+      const jobs = rawJobs
+        .map(normalizeGenerationJob)
+        .filter((job): job is GenerationJob => !!job && job.isCurrentConfig);
+
+      // GET returns newest jobs first. Keep one current job per day, except
+      // that a job already being tracked by this tab wins over a stale list row.
+      const jobsByDay = new Map<string, GenerationJob>();
+      for (const job of jobs) {
+        const existing = jobsByDay.get(job.day);
+        const trackedId = activeJobIdsRef.current[job.day];
+        if (!existing || job.jobId === trackedId) jobsByDay.set(job.day, job);
+      }
+      const currentJobs = [...jobsByDay.values()];
+      if (currentJobs.length === 0) return;
+
+      const activeJobs = currentJobs.filter(isActiveJob);
+      if (batchDaysRef.current.size === 0 && activeJobs.length > 1) {
+        activeJobs.forEach(job => batchDaysRef.current.add(job.day));
+        setIsBatchGenerating(true);
+      }
+
+      const unpresentedJobs = currentJobs.filter(job => !presentedJobIdsRef.current.has(job.jobId));
+      const jobToPresent = unpresentedJobs.find(job => job.day === selectedDayRef.current)
+        || unpresentedJobs.find(job => job.status === 'completed' && !!job.responseText)
+        || unpresentedJobs.find(isActiveJob)
+        || unpresentedJobs[0];
+
+      for (const job of currentJobs) {
+        applyGenerationJob(job, job === jobToPresent);
+        if (isActiveJob(job)) {
+          void trackGenerationJob(job, job === jobToPresent).catch(error => {
+            console.error(`Error tracking restored generation for ${job.day}:`, error);
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring generation jobs:', error);
+    }
+  };
+
+  // Restore durable jobs after the authenticated config has loaded, and do
+  // another reconciliation as soon as a backgrounded tab becomes visible.
+  useEffect(() => {
+    if (isAuthenticatedState !== true || !savedConfig) return;
+    if (!hasRestoredJobsRef.current) {
+      hasRestoredJobsRef.current = true;
+      void restoreGenerationJobs();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void restoreGenerationJobs();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticatedState, savedConfig]);
+
   // Run AI Generation for one day. The target day is pinned when the request
-  // starts, so a second day can be launched while this one is still streaming.
+  // starts, so a second day can be launched while this one is still running.
   // `targetDay` regenerates a day other than the selected one; `configOverride`
   // lets a caller that just changed the config generate against the new value
   // instead of the stale render closure.
@@ -389,98 +666,25 @@ export default function Home() {
           enterpriseApiKey: cfg.enterpriseApiKey,
           enterpriseProjectId: cfg.enterpriseProjectId,
           enterpriseLocation: cfg.enterpriseLocation || 'global',
-          enterpriseServiceAccountJson: cfg.enterpriseServiceAccountJson
+          enterpriseServiceAccountJson: cfg.enterpriseServiceAccountJson,
+          day,
+          cacheable: !useCustomPrompt
         })
       });
-
+      const data: unknown = await res.json().catch(() => null);
       if (!res.ok) {
-        let errorMessage = 'Server responded with an error.';
-        try {
-          const errorData = await res.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch {}
+        const errorMessage = data && typeof data === 'object' && 'error' in data
+          ? String((data as { error: unknown }).error)
+          : 'Server responded with an error.';
         throw new Error(errorMessage);
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable.');
-      }
+      const job = data && typeof data === 'object' && 'job' in data
+        ? normalizeGenerationJob((data as { job: unknown }).job)
+        : null;
+      if (!job) throw new Error('Server did not return a valid generation job.');
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let currentText = '';
-      let currentThought = '';
-      let hasSwitchedToThoughts = false;
-      let hasSwitchedToUser = false;
-
-      // Apply one parsed SSE event to this day's output slot
-      const applyEvent = (parsed: { error?: string; thought?: string; text?: string }) => {
-        if (parsed.error) {
-          throw new Error(parsed.error);
-        }
-        if (parsed.thought) {
-          currentThought += parsed.thought;
-          setDayOutput(day, currentText, currentThought, false);
-          if (!hasSwitchedToThoughts) {
-            hasSwitchedToThoughts = true;
-            // Only steer the tab if this day is the one on screen
-            if (selectedDayRef.current === day) {
-              setOutputTab('thoughts');
-            }
-          }
-        }
-        if (parsed.text) {
-          currentText += parsed.text;
-          setDayOutput(day, currentText, currentThought, false);
-          if (!hasSwitchedToUser) {
-            hasSwitchedToUser = true;
-            if (selectedDayRef.current === day) {
-              setOutputTab('user');
-            }
-          }
-        }
-      };
-
-      const processLine = (line: string, silent: boolean) => {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) return;
-        const dataStr = trimmed.slice(5).trim();
-        let parsed;
-        try {
-          parsed = JSON.parse(dataStr);
-        } catch (err) {
-          if (!silent) console.error('Error parsing SSE line:', err);
-          return;
-        }
-        applyEvent(parsed);
-      };
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          processLine(line, false);
-        }
-      }
-
-      processLine(buffer, true);
-
-      if (!currentText) {
-        throw new Error('The model returned an empty response.');
-      }
-
-      markDayProgress(day, 'done');
-
-      // Save to cache after successful generation (only for non-custom prompts)
-      if (!useCustomPrompt) {
-        saveToCache(day, currentText, currentThought);
-      }
+      await trackGenerationJob(job, true);
 
     } catch (e) {
       console.error(e);
@@ -562,6 +766,7 @@ export default function Home() {
 
     // A day already generating on its own keeps running; don't duplicate it
     const daysToRun = DAYS_OF_WEEK.filter(day => !isDayBusy(day));
+    daysToRun.forEach(day => batchDaysRef.current.add(day));
     daysToRun.forEach(day => markDayProgress(day, 'generating'));
     setDayErrors(prev => {
       const next = { ...prev };
@@ -601,63 +806,25 @@ export default function Home() {
             enterpriseApiKey: config.enterpriseApiKey,
             enterpriseProjectId: config.enterpriseProjectId,
             enterpriseLocation: config.enterpriseLocation || 'global',
-            enterpriseServiceAccountJson: config.enterpriseServiceAccountJson
+            enterpriseServiceAccountJson: config.enterpriseServiceAccountJson,
+            day,
+            cacheable: true
           })
         });
-
+        const data: unknown = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(`Failed generation for ${day}`);
+          const errorMessage = data && typeof data === 'object' && 'error' in data
+            ? String((data as { error: unknown }).error)
+            : `Failed generation for ${day}`;
+          throw new Error(errorMessage);
         }
 
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error('Response body not readable');
+        const job = data && typeof data === 'object' && 'job' in data
+          ? normalizeGenerationJob((data as { job: unknown }).job)
+          : null;
+        if (!job) throw new Error(`Server did not return a valid generation job for ${day}.`);
 
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let dayText = '';
-        let dayThought = '';
-        let dayError = '';
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data:')) continue;
-            try {
-              const parsed = JSON.parse(trimmed.slice(5).trim());
-              if (parsed.error) dayError = parsed.error;
-              if (parsed.thought) dayThought += parsed.thought;
-              if (parsed.text) dayText += parsed.text;
-            } catch {}
-          }
-        }
-
-        if (buffer.trim().startsWith('data:')) {
-          try {
-            const parsed = JSON.parse(buffer.trim().slice(5).trim());
-            if (parsed.error) dayError = parsed.error;
-            if (parsed.thought) dayThought += parsed.thought;
-            if (parsed.text) dayText += parsed.text;
-          } catch {}
-        }
-
-        // Surface the server's reason and keep a partial stream out of the cache.
-        if (dayError) throw new Error(dayError);
-
-        if (dayText) {
-          await saveToCache(day, dayText, dayThought);
-          markDayProgress(day, 'done');
-          setDayOutput(day, dayText, dayThought, true);
-        } else {
-          setDayErrors(prev => ({ ...prev, [day]: 'The model returned an empty response.' }));
-          markDayProgress(day, 'error');
-        }
+        await trackGenerationJob(job);
       } catch (err) {
         console.error(`Error generating ${day}:`, err);
         setDayErrors(prev => ({
@@ -665,10 +832,13 @@ export default function Home() {
           [day]: err instanceof Error && err.message ? err.message : `Failed to generate ${day}.`
         }));
         markDayProgress(day, 'error');
+      } finally {
+        finishBatchDay(day);
       }
     });
 
     await Promise.all(promises);
+    batchDaysRef.current.clear();
     setIsBatchGenerating(false);
     await fetchCacheStatus();
   };

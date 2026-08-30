@@ -37,6 +37,14 @@ const {
   extractFireworksResponse,
   parseFireworksErrorText
 } = require('./src/lib/fireworks.js');
+const {
+  HEARTBEAT_INTERVAL_MS,
+  claimNextQueuedJob,
+  requeueStaleJobs,
+  heartbeatJob,
+  completeJob,
+  failJob
+} = require('./src/lib/generation-runner.js');
 
 // RemoteAuth.disconnect() normally DELETES the session from the remote store,
 // and whatsapp-web.js calls it internally on any non-accepted connection state
@@ -223,7 +231,7 @@ if (!MONGODB_URI) {
 // -------------------------------------------------------------
 // SCHEMAS & MODELS (shared with the Next.js app via src/lib/models.js)
 // -------------------------------------------------------------
-const { WhatsAppState, Contact, Scheduler, Config, CachedResponse } = require('./src/lib/models.js');
+const { WhatsAppState, Contact, Scheduler, Config, CachedResponse, GenerationJob } = require('./src/lib/models.js');
 
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
@@ -252,6 +260,15 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     console.log('Reset scheduler retry status on startup.');
   } catch (err) {
     console.error('Failed to reset scheduler retry status on startup:', err);
+  }
+
+  // A previous worker run may have died mid-generation, leaving jobs stuck in
+  // 'running' with an expired lease. Return them to the queue so they retry.
+  try {
+    const requeued = await requeueStaleJobs(GenerationJob);
+    if (requeued > 0) console.log(`Requeued ${requeued} stale generation job(s) on startup.`);
+  } catch (err) {
+    console.error('Failed to requeue stale generation jobs on startup:', err);
   }
 
   store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
@@ -482,6 +499,9 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   // Guard flag to prevent overlapping scheduler executions
   let isSchedulerRunning = false;
 
+  // Guard flag so the generation loop runs one job at a time
+  let isGenerationRunning = false;
+
   // Start Scheduler Loop (check every 60 seconds)
   setInterval(async () => {
     if (isSchedulerRunning) {
@@ -495,6 +515,19 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       isSchedulerRunning = false;
     }
   }, 60000);
+
+  // Start Generation Loop (poll every 10 seconds). This is the always-on runner
+  // for dashboard AI requests — off the serverless path, so a long generation
+  // cannot hit Vercel's per-invocation timeout. One job at a time.
+  setInterval(async () => {
+    if (isGenerationRunning) return;
+    isGenerationRunning = true;
+    try {
+      await runNextGenerationJob();
+    } finally {
+      isGenerationRunning = false;
+    }
+  }, 10000);
 
 }).catch(err => {
   console.error('Failed to connect to MongoDB:', err);
@@ -1025,6 +1058,97 @@ async function callGeminiAPI(c, prompt) {
     const { text, thought, finishReason } = extractResponseText(data);
     assertGeminiFinishReason(finishReason);
     return { text, thinking: thought };
+  }
+}
+
+// -------------------------------------------------------------
+// DASHBOARD GENERATION RUNNER
+// Claims queued GenerationJob docs written by /api/generate and executes them
+// here — off the serverless path, so a long generation cannot hit Vercel's
+// per-invocation timeout. Runs non-streaming against the latest Config.
+// -------------------------------------------------------------
+function sanitizeGenerationError(error, configDoc) {
+  let message = (error && error.message) ? error.message : String(error || 'Internal Server Error');
+  // Provider errors are persisted for the returning browser; never let a
+  // credential echo into that durable field.
+  const secrets = [
+    process.env.GEMINI_API_KEY,
+    process.env.API_KEY,
+    process.env.FIREWORKS_API_KEY,
+    configDoc && configDoc.apiKey,
+    configDoc && configDoc.fireworksApiKey,
+    configDoc && configDoc.enterpriseApiKey,
+    configDoc && configDoc.enterpriseServiceAccountJson
+  ];
+  for (const secret of secrets) {
+    if (secret && String(secret).length >= 8) message = message.split(String(secret)).join('[redacted]');
+  }
+  return message;
+}
+
+async function runNextGenerationJob() {
+  const job = await claimNextQueuedJob(GenerationJob);
+  if (!job) return;
+
+  const leaseId = job.leaseId;
+  console.log(`Claimed generation job ${job.jobId} for ${job.day} (attempt ${job.attempts}).`);
+
+  let configDoc = null;
+  const heartbeatTimer = setInterval(() => {
+    heartbeatJob(GenerationJob, job.jobId, leaseId).catch(err => {
+      console.error(`Heartbeat failed for generation job ${job.jobId}:`, err);
+    });
+  }, HEARTBEAT_INTERVAL_MS);
+
+  try {
+    configDoc = await Config.findOne();
+    if (!configDoc) throw new Error('No configuration found for this generation job.');
+
+    // Run against the LATEST config, not the snapshot stored on the job. The
+    // prompt is the job's, but provider/model/keys follow current settings.
+    console.log(`Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}...`);
+    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt);
+
+    if (!text || !text.trim()) {
+      throw new Error('The model returned an empty response.');
+    }
+
+    await completeJob(GenerationJob, job.jobId, leaseId, {
+      responseText: text,
+      thinkingText: thinking || ''
+    });
+
+    // Persist to the per-day cache only when this job was cacheable. Use the
+    // snapshot's hash so /api/cache marks it stale if the config changed
+    // mid-generation instead of blessing an old prompt with a new hash.
+    if (job.cacheable) {
+      try {
+        await CachedResponse.findOneAndUpdate(
+          { day: job.day },
+          {
+            $set: {
+              configHash: job.configHash,
+              responseText: text,
+              thinkingText: thinking || '',
+              generatedAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+        console.log(`Cached diet plan for ${job.day}.`);
+      } catch (cacheErr) {
+        console.error(`Failed to cache generation result for ${job.day} (non-fatal):`, cacheErr);
+      }
+    }
+    console.log(`Generation job ${job.jobId} for ${job.day} completed.`);
+  } catch (error) {
+    const message = sanitizeGenerationError(error, configDoc);
+    console.error(`Generation job ${job.jobId} for ${job.day} failed:`, message);
+    await failJob(GenerationJob, job.jobId, leaseId, message).catch(err => {
+      console.error(`Failed to mark generation job ${job.jobId} as failed:`, err);
+    });
+  } finally {
+    clearInterval(heartbeatTimer);
   }
 }
 

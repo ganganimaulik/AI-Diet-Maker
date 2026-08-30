@@ -169,6 +169,37 @@ export interface ICachedResponse {
   updatedAt: Date;
 }
 
+export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface IGenerationJob {
+  jobId: string;
+  day: string;
+  status: GenerationJobStatus;
+  prompt: string;
+  provider: string;
+  model: string;
+  thinkingLevel: string;
+  maxTokens: number;
+  reasoningEffort: string;
+  enterpriseAuthMethod: string;
+  enterpriseProjectId: string;
+  enterpriseLocation: string;
+  configHash: string;
+  cacheable: boolean;
+  responseText: string;
+  thinkingText: string;
+  error: string;
+  leaseId: string;
+  leaseExpiresAt: Date | null;
+  heartbeatAt: Date | null;
+  requestedAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  attempts: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const models = require('./models.js');
 
@@ -177,3 +208,4 @@ export const WhatsAppState: Model<IWhatsAppState> = models.WhatsAppState;
 export const Contact: Model<IContact> = models.Contact;
 export const Scheduler: Model<IScheduler> = models.Scheduler;
 export const CachedResponse: Model<ICachedResponse> = models.CachedResponse;
+export const GenerationJob: Model<IGenerationJob> = models.GenerationJob;

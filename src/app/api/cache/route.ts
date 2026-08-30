@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbConnect, Config, CachedResponse } from '@/lib/db';
+import { dbConnect, Config, CachedResponse, GenerationJob } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 import { computeConfigHash } from '@/lib/config-hash';
 
@@ -80,13 +80,30 @@ export async function DELETE(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const day = searchParams.get('day');
+    const terminalJobs = { status: { $in: ['completed', 'failed'] as const } };
 
     if (day) {
-      await CachedResponse.deleteOne({ day: day.toUpperCase() });
-      return NextResponse.json({ success: true, deleted: day.toUpperCase() });
+      const dayKey = day.toUpperCase();
+      const [cacheResult, jobResult] = await Promise.all([
+        CachedResponse.deleteOne({ day: dayKey }),
+        GenerationJob.deleteMany({ day: dayKey, ...terminalJobs })
+      ]);
+      return NextResponse.json({
+        success: true,
+        deleted: dayKey,
+        deletedCount: cacheResult.deletedCount,
+        deletedJobCount: jobResult.deletedCount
+      });
     } else {
-      const result = await CachedResponse.deleteMany({});
-      return NextResponse.json({ success: true, deletedCount: result.deletedCount });
+      const [cacheResult, jobResult] = await Promise.all([
+        CachedResponse.deleteMany({}),
+        GenerationJob.deleteMany(terminalJobs)
+      ]);
+      return NextResponse.json({
+        success: true,
+        deletedCount: cacheResult.deletedCount,
+        deletedJobCount: jobResult.deletedCount
+      });
     }
   } catch (error) {
     console.error('Error in cache DELETE:', error);

@@ -17,6 +17,7 @@ const eslintConfig = defineConfig([
     "src/lib/compute-config-hash.js",
     "src/lib/models.js",
     "src/lib/gemini.js",
+    "src/lib/generation-runner.js",
     ".wwebjs_auth/**",
   ]),
 ]);

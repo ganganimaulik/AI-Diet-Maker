@@ -116,6 +116,20 @@ export interface DayOutput {
   isCached: boolean;
 }
 
+export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+/** Durable server-side generation job returned by /api/generate. */
+export interface GenerationJob {
+  jobId: string;
+  day: string;
+  status: GenerationJobStatus;
+  responseText: string;
+  thinkingText: string;
+  error: string;
+  cacheable: boolean;
+  isCurrentConfig: boolean;
+}
+
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
   provider: 'gemini-enterprise',

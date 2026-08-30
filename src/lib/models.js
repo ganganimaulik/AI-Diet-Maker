@@ -139,17 +139,60 @@ const CachedResponseSchema = new Schema({
 // Ensure one cached response per day
 CachedResponseSchema.index({ day: 1 }, { unique: true });
 
+// 6. Persisted dashboard generation state. There is one current job per day;
+// starting a new job replaces that day's terminal record, while an active job
+// is returned idempotently. API credentials deliberately do not belong here.
+const GenerationJobSchema = new Schema({
+  jobId: { type: String, required: true },
+  day: { type: String, required: true },
+  status: {
+    type: String,
+    enum: ['queued', 'running', 'completed', 'failed'],
+    default: 'queued'
+  },
+  // The prompt must survive a serverless restart so a later status poll can
+  // resume an abandoned job. select:false keeps it out of ordinary reads and
+  // API serialization; the runner opts in explicitly.
+  prompt: { type: String, required: true, select: false },
+  provider: { type: String, default: 'google-ai-studio' },
+  model: { type: String, default: 'gemini-3.7-flash' },
+  thinkingLevel: { type: String, default: 'default' },
+  maxTokens: { type: Number, default: 0 },
+  reasoningEffort: { type: String, default: 'default' },
+  enterpriseAuthMethod: { type: String, default: 'api-key' },
+  enterpriseProjectId: { type: String, default: '' },
+  enterpriseLocation: { type: String, default: 'global' },
+  configHash: { type: String, required: true },
+  cacheable: { type: Boolean, default: true },
+  responseText: { type: String, default: '' },
+  thinkingText: { type: String, default: '' },
+  error: { type: String, default: '' },
+  leaseId: { type: String, default: '', select: false },
+  leaseExpiresAt: { type: Date, default: null },
+  heartbeatAt: { type: Date, default: null },
+  requestedAt: { type: Date, default: Date.now },
+  startedAt: { type: Date, default: null },
+  completedAt: { type: Date, default: null },
+  attempts: { type: Number, default: 0 }
+}, { timestamps: true });
+
+GenerationJobSchema.index({ day: 1 }, { unique: true });
+GenerationJobSchema.index({ jobId: 1 }, { unique: true });
+GenerationJobSchema.index({ status: 1, leaseExpiresAt: 1 });
+
 // Compile models (reuse existing compilations across hot reloads)
 const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppState', WhatsAppStateSchema);
 const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
 const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', SchedulerSchema);
 const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
+const GenerationJob = mongoose.models.GenerationJob || mongoose.model('GenerationJob', GenerationJobSchema);
 
 module.exports = {
   Config,
   WhatsAppState,
   Contact,
   Scheduler,
-  CachedResponse
+  CachedResponse,
+  GenerationJob
 };

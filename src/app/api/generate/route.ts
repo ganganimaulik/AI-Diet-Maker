@@ -1,268 +1,173 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
-import { GoogleGenAI } from '@google/genai';
-
 import {
-  assertGeminiFinishReason,
-  extractPartsText,
-  extractResponseText,
-  buildGenerationPayload,
-  normalizeThinkingLevel,
-  buildStudioEndpoint,
-  buildEnterpriseEndpoint,
-  parseGeminiErrorText,
-  type GeminiPart
-} from '@/lib/gemini-helpers';
+  Config,
+  GenerationJob,
+  dbConnect,
+  type IConfig,
+  type IGenerationJob
+} from '@/lib/db';
+import { computeConfigHash } from '@/lib/config-hash';
 
-import {
-  FIREWORKS_API_URL,
-  buildFireworksPayload,
-  createFireworksStreamExtractor,
-  parseFireworksErrorText
-} from '@/lib/fireworks-helpers';
+import { requeueStaleJobs } from '@/lib/generation-runner';
 
-// Fireworks reasoning models stream for minutes; the platform default
-// (10-15s on Vercel) would kill the function part-way through a plan.
-export const maxDuration = 300;
+// Generation no longer executes in this serverless function. POST persists a
+// durable GenerationJob and the always-on whatsapp-worker process claims and
+// runs it (see src/lib/generation-runner.js), so a long plan cannot hit
+// Vercel's per-invocation timeout. This route only enqueues and reports status.
 
-interface StreamChunk {
-  text: string;
-  thought: string;
-  finishReason?: string;
+const VALID_DAYS = new Set([
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY'
+]);
+const ACTIVE_JOB_STATUSES = ['queued', 'running'] as const;
+
+interface GenerationRequestBody {
+  day?: unknown;
+  prompt?: unknown;
+  model?: unknown;
+  thinkingLevel?: unknown;
+  maxTokens?: unknown;
+  reasoningEffort?: unknown;
+  provider?: unknown;
+  cacheable?: unknown;
+  enterpriseAuthMethod?: unknown;
+  enterpriseProjectId?: unknown;
+  enterpriseLocation?: unknown;
 }
 
-/** Pulls { text, thought } out of one provider's decoded SSE payload. */
-type ChunkExtractor = (data: unknown) => StreamChunk;
+interface PublicGenerationJob {
+  jobId: string;
+  day: string;
+  status: IGenerationJob['status'];
+  responseText: string;
+  thinkingText: string;
+  error: string;
+  cacheable: boolean;
+  isCurrentConfig: boolean;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
 
-/** Parse one SSE `data:` payload into { text, thought }, or null if empty. */
-function parseSSEData(dataStr: string, extract: ChunkExtractor): StreamChunk | null {
-  if (dataStr === '[DONE]') return null;
-  const data = JSON.parse(dataStr);
-  const { text, thought, finishReason } = extract(data);
-  if (text || thought || finishReason) {
-    return { text, thought, finishReason };
+function stringValue(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function normalizeDay(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const day = value.trim().toUpperCase();
+  return VALID_DAYS.has(day) ? day : null;
+}
+
+function normalizeMaxTokens(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+function dateString(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function isDuplicateKeyError(error: unknown): error is { code: number } {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;
+}
+
+function isCurrentConfig(job: IGenerationJob, config: IConfig | null): boolean {
+  if (!config) return false;
+  try {
+    return job.configHash === computeConfigHash(config, job.day);
+  } catch {
+    return false;
   }
-  return null;
 }
 
-async function* parseSSEResponse(response: Response, extract: ChunkExtractor = extractResponseText) {
-  const reader = response.body?.getReader();
-  if (!reader) return;
-  const decoder = new TextDecoder();
-  let buffer = '';
+function serializeJob(job: IGenerationJob, config: IConfig | null): PublicGenerationJob {
+  return {
+    jobId: job.jobId,
+    day: job.day,
+    status: job.status,
+    responseText: job.responseText || '',
+    thinkingText: job.thinkingText || '',
+    error: job.error || '',
+    cacheable: !!job.cacheable,
+    isCurrentConfig: isCurrentConfig(job, config),
+    // requestedAt represents the current logical job when the per-day Mongo
+    // document has been reused after a previous terminal generation.
+    createdAt: dateString(job.requestedAt) || dateString(job.createdAt) || new Date(0).toISOString(),
+    updatedAt: dateString(job.updatedAt) || dateString(job.requestedAt) || new Date(0).toISOString(),
+    startedAt: dateString(job.startedAt),
+    completedAt: dateString(job.completedAt)
+  };
+}
 
-  const parseLine = (line: string): StreamChunk | null => {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) return null;
-    try {
-      return parseSSEData(trimmed.slice(5).trim(), extract);
-    } catch (e) {
-      console.error('Error parsing SSE chunk:', trimmed, e);
-      return null;
-    }
+async function createOrReuseJob(
+  day: string,
+  configHash: string,
+  body: GenerationRequestBody,
+  config: IConfig
+) {
+  const active = await GenerationJob.findOne({
+    day,
+    status: { $in: ACTIVE_JOB_STATUSES }
+  });
+  if (active) return active;
+
+  const now = new Date();
+  const maxTokens = normalizeMaxTokens(body.maxTokens ?? config.maxTokens);
+  const jobValues = {
+    jobId: randomUUID(),
+    day,
+    status: 'queued' as const,
+    prompt: stringValue(body.prompt),
+    provider: stringValue(body.provider, config.provider || 'google-ai-studio'),
+    model: stringValue(body.model, config.model || 'gemini-3.7-flash'),
+    thinkingLevel: stringValue(body.thinkingLevel, config.thinkingLevel || 'default'),
+    maxTokens,
+    reasoningEffort: stringValue(body.reasoningEffort, config.reasoningEffort || 'default'),
+    enterpriseAuthMethod: stringValue(body.enterpriseAuthMethod, config.enterpriseAuthMethod || 'api-key'),
+    enterpriseProjectId: stringValue(body.enterpriseProjectId, config.enterpriseProjectId || ''),
+    enterpriseLocation: stringValue(body.enterpriseLocation, config.enterpriseLocation || 'global'),
+    configHash,
+    cacheable: body.cacheable !== false,
+    responseText: '',
+    thinkingText: '',
+    error: '',
+    leaseId: '',
+    leaseExpiresAt: null,
+    heartbeatAt: null,
+    requestedAt: now,
+    startedAt: null,
+    completedAt: null,
+    attempts: 0
   };
 
   try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const chunk = parseLine(line);
-        if (chunk) yield chunk;
-      }
-    }
-
-    const tailChunk = parseLine(buffer);
-    if (tailChunk) yield tailChunk;
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-async function* getChunks(
-  provider: string,
-  apiKey: string,
-  model: string,
-  prompt: string,
-  thinkingLevel: string,
-  enterpriseAuthMethod: string,
-  enterpriseApiKey: string,
-  enterpriseProjectId: string,
-  enterpriseLocation: string,
-  enterpriseServiceAccountJson: string,
-  fireworksApiKey: string,
-  maxTokens: number,
-  reasoningEffort: string
-) {
-  if (provider === 'fireworks') {
-    // Already fully resolved by the caller; never fall back to the Gemini key.
-    if (!fireworksApiKey) {
-      throw new Error('Fireworks API Key is required. Please set it in Settings or FIREWORKS_API_KEY environment variable.');
-    }
-
-    const payload = buildFireworksPayload(model, prompt, {
-      temperature: 0.1,
-      stream: true,
-      maxTokens,
-      reasoningEffort
-    });
-    const response = await fetch(FIREWORKS_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${fireworksApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(parseFireworksErrorText(errorText, 'Failed to generate content from Fireworks API.'));
-    }
-
-    const extract = createFireworksStreamExtractor();
-    let finishReason = '';
-    for await (const chunk of parseSSEResponse(response, extract)) {
-      if (chunk.finishReason) finishReason = chunk.finishReason;
-      if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
-    }
-
-    // Drain any <think> tag or block left buffered when the stream ended.
-    const tail = extract.flush();
-    if (tail.text || tail.thought) yield { text: tail.text, thought: tail.thought };
-
-    if (finishReason === 'length') {
-      throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Raise "Max Output Tokens" in API settings, lower the reasoning effort, or try a shorter prompt.');
-    }
-  } else if (provider === 'gemini-enterprise') {
-    if (enterpriseAuthMethod === 'api-key') {
-      const activeEnterpriseApiKey = enterpriseApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
-      if (!activeEnterpriseApiKey) {
-        throw new Error('Agent Platform API Key is required when API Key authentication is selected.');
-      }
-      if (!enterpriseProjectId) {
-        throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
-      }
-
-      const payload = buildGenerationPayload(prompt, thinkingLevel, { maxOutputTokens: maxTokens });
-      const endpoint = buildEnterpriseEndpoint(
-        enterpriseProjectId,
-        enterpriseLocation,
-        model,
-        activeEnterpriseApiKey,
-        { stream: true }
-      );
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+    return await GenerationJob.findOneAndUpdate(
+      { day, status: { $nin: ACTIVE_JOB_STATUSES } },
+      { $set: jobValues },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    // Two simultaneous requests can both observe no active job. The unique day
+    // index elects one; the loser returns the winner idempotently.
+    if (isDuplicateKeyError(error)) {
+      const winner = await GenerationJob.findOne({
+        day,
+        status: { $in: ACTIVE_JOB_STATUSES }
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini Enterprise API.'));
-      }
-
-      let enterpriseFinishReason = '';
-      for await (const chunk of parseSSEResponse(response)) {
-        if (chunk.finishReason) enterpriseFinishReason = chunk.finishReason;
-        if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
-      }
-      // Surface truncation instead of caching half a plan.
-      assertGeminiFinishReason(enterpriseFinishReason);
-    } else {
-      if (enterpriseAuthMethod === 'service-account' && !enterpriseServiceAccountJson) {
-        throw new Error('Service Account JSON is required when Service Account authentication is selected.');
-      }
-      if (!enterpriseProjectId) {
-        throw new Error('GCP Project ID is required for Gemini Enterprise Agent Platform.');
-      }
-
-      let googleAuthOptions: Record<string, unknown> | undefined = undefined;
-      if (enterpriseAuthMethod === 'service-account') {
-        try {
-          googleAuthOptions = {
-            credentials: JSON.parse(enterpriseServiceAccountJson)
-          };
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          throw new Error(`Invalid Service Account JSON: ${errMsg}`);
-        }
-      }
-
-      const ai = new GoogleGenAI({
-        vertexai: true,
-        project: enterpriseProjectId,
-        location: enterpriseLocation || 'global',
-        googleAuthOptions
-      });
-
-      const configObj: Record<string, unknown> = {
-        temperature: 0.1,
-      };
-
-      if (Number(maxTokens) > 0) {
-        configObj.maxOutputTokens = Number(maxTokens);
-      }
-
-      const sdkThinkingLevel = normalizeThinkingLevel(thinkingLevel);
-      if (sdkThinkingLevel) {
-        configObj.thinkingConfig = {
-          thinkingLevel: sdkThinkingLevel
-        };
-      }
-
-      const responseStream = await ai.models.generateContentStream({
-        model: model,
-        contents: prompt,
-        config: configObj
-      });
-
-      let sdkFinishReason = '';
-      for await (const chunk of responseStream) {
-        const candidate = chunk.candidates?.[0];
-        if (candidate?.finishReason) sdkFinishReason = String(candidate.finishReason);
-        const parts = (candidate?.content?.parts as GeminiPart[]) || [];
-        const { text, thought } = extractPartsText(parts);
-        if (text || thought) {
-          yield { text, thought };
-        }
-      }
-      assertGeminiFinishReason(sdkFinishReason);
+      if (winner) return winner;
     }
-  } else {
-    if (!apiKey) {
-      throw new Error('Gemini API Key is required. Please set it in the configuration.');
-    }
-
-    const payload = buildGenerationPayload(prompt, thinkingLevel, { maxOutputTokens: maxTokens });
-    const response = await fetch(buildStudioEndpoint(model, apiKey, { stream: true }), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini API.'));
-    }
-
-    let studioFinishReason = '';
-    for await (const chunk of parseSSEResponse(response)) {
-      if (chunk.finishReason) studioFinishReason = chunk.finishReason;
-      if (chunk.text || chunk.thought) yield { text: chunk.text, thought: chunk.thought };
-    }
-    assertGeminiFinishReason(studioFinishReason);
+    throw error;
   }
 }
 
@@ -272,84 +177,79 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const {
-      prompt,
-      model = 'gemini-3.7-flash',
-      thinkingLevel = 'default',
-      maxTokens = 0,
-      reasoningEffort = 'default',
-      provider = 'google-ai-studio',
-      fireworksApiKey = '',
-      enterpriseAuthMethod = 'api-key',
-      enterpriseApiKey = '',
-      enterpriseProjectId = '',
-      enterpriseLocation = 'global',
-      enterpriseServiceAccountJson = ''
-    } = body;
+    const body = await req.json() as GenerationRequestBody;
+    const day = normalizeDay(body.day);
+    if (!day) {
+      return NextResponse.json({ error: 'A valid generation day is required.' }, { status: 400 });
+    }
+    if (!stringValue(body.prompt).trim()) {
+      return NextResponse.json({ error: 'Prompt is required.' }, { status: 400 });
+    }
 
-    const apiKey = req.headers.get('x-api-key') || body.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    // Fireworks credentials only — the Gemini key must never be sent to fireworks.ai.
-    const activeFireworksKey = req.headers.get('x-fireworks-api-key') || fireworksApiKey || process.env.FIREWORKS_API_KEY || '';
+    await dbConnect();
+    const config = await Config.findOne();
+    if (!config) {
+      return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
+    }
 
-    if (!prompt) {
+    const configHash = computeConfigHash(config, day);
+    // Persist the job as queued; the whatsapp-worker claims and executes it.
+    const job = await createOrReuseJob(day, configHash, body, config);
+
+    return NextResponse.json(
+      { job: serializeJob(job, config) },
+      { status: 202, headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error) {
+    console.error('Error queueing generation job:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    if (!(await isAuthenticated())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const requestedDay = searchParams.get('day');
+    const day = requestedDay === null ? null : normalizeDay(requestedDay);
+    if (requestedDay !== null && !day) {
+      return NextResponse.json({ error: 'A valid generation day is required.' }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    // If the worker died mid-run, its jobs sit in 'running' with an expired
+    // lease. Return them to the queue here so they resume once the worker is
+    // back, then read the (now corrected) state.
+    await requeueStaleJobs(GenerationJob).catch((error: unknown) => {
+      console.error('Failed to requeue stale generation jobs:', error);
+    });
+
+    const [config, jobs] = await Promise.all([
+      Config.findOne(),
+      day
+        ? GenerationJob.find({ day }).sort({ requestedAt: -1 })
+        : GenerationJob.find({}).sort({ requestedAt: -1 })
+    ]);
+
+    if (day) {
       return NextResponse.json(
-        { error: 'Prompt is required.' },
-        { status: 400 }
+        { job: jobs[0] ? serializeJob(jobs[0], config) : null },
+        { headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder();
-        const sendEvent = (data: unknown) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-        };
-
-        try {
-          const generator = getChunks(
-            provider,
-            apiKey,
-            model,
-            prompt,
-            thinkingLevel,
-            enterpriseAuthMethod,
-            enterpriseApiKey,
-            enterpriseProjectId,
-            enterpriseLocation,
-            enterpriseServiceAccountJson,
-            activeFireworksKey,
-            maxTokens,
-            reasoningEffort
-          );
-
-          for await (const chunk of generator) {
-            sendEvent(chunk);
-          }
-        } catch (error) {
-          console.error('Streaming error in API route:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-          sendEvent({ error: errorMessage });
-        } finally {
-          controller.close();
-        }
-      }
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-      },
-    });
-
-  } catch (error) {
-    console.error('Error in generate API route:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
+      { jobs: jobs.map((job) => serializeJob(job, config)) },
+      { headers: { 'Cache-Control': 'no-store' } }
     );
+  } catch (error) {
+    console.error('Error loading generation jobs:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

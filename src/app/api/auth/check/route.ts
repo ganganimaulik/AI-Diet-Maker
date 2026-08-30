@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const authenticated = await isAuthenticated();
     return NextResponse.json({ authenticated });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ authenticated: false, error: 'Failed to verify session' });
   }
 }
