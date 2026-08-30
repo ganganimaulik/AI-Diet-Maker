@@ -349,36 +349,60 @@ export default function Home() {
   };
 
   const applyGenerationJob = (job: GenerationJob, present = false) => {
-    if (!job.isCurrentConfig) return;
-
     const day = job.day;
-    const hasOutput = !!(job.responseText || job.thinkingText);
-    if (hasOutput || job.status === 'completed') {
-      setDayOutputs(prev => {
-        const nextOutput: DayOutput = {
-          text: job.responseText,
-          thinking: job.thinkingText,
-          isCached: job.status === 'completed' && job.cacheable
-        };
-        const existing = prev[day];
-        if (
-          existing?.text === nextOutput.text &&
-          existing?.thinking === nextOutput.thinking &&
-          existing?.isCached === nextOutput.isCached
-        ) {
-          return prev;
-        }
-        return { ...prev, [day]: nextOutput };
-      });
-    }
 
+    // In-flight progress is always shown — a running job is real regardless of
+    // whether the config drifted after it was queued. isCurrentConfig only
+    // decides whether a *terminal* result is trusted/cached, not whether an
+    // active generation is visible.
     if (isActiveJob(job)) {
+      const hasPartial = !!(job.responseText || job.thinkingText);
+      if (hasPartial) {
+        setDayOutputs(prev => {
+          const nextOutput: DayOutput = {
+            text: job.responseText,
+            thinking: job.thinkingText,
+            isCached: false
+          };
+          const existing = prev[day];
+          if (existing?.text === nextOutput.text && existing?.thinking === nextOutput.thinking && !existing.isCached) {
+            return prev;
+          }
+          return { ...prev, [day]: nextOutput };
+        });
+      }
       activeJobIdsRef.current[day] = job.jobId;
       markDayProgress(day, 'generating');
       setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
     } else {
       if (activeJobIdsRef.current[day] === job.jobId) {
         delete activeJobIdsRef.current[day];
+      }
+
+      // A stale finished job neither overwrites a newer cached output nor gets
+      // surfaced as that day's plan — the config moved on after it was queued.
+      if (!job.isCurrentConfig) {
+        return;
+      }
+
+      const hasOutput = !!(job.responseText || job.thinkingText);
+      if (hasOutput || job.status === 'completed') {
+        setDayOutputs(prev => {
+          const nextOutput: DayOutput = {
+            text: job.responseText,
+            thinking: job.thinkingText,
+            isCached: job.status === 'completed' && job.cacheable
+          };
+          const existing = prev[day];
+          if (
+            existing?.text === nextOutput.text &&
+            existing?.thinking === nextOutput.thinking &&
+            existing?.isCached === nextOutput.isCached
+          ) {
+            return prev;
+          }
+          return { ...prev, [day]: nextOutput };
+        });
       }
 
       if (job.status === 'completed' && job.responseText) {
@@ -462,14 +486,10 @@ export default function Home() {
           }
 
           if (!polledJob) continue;
-          if (!polledJob.isCurrentConfig) {
-            if (activeJobIdsRef.current[day] === latestJob.jobId) {
-              delete activeJobIdsRef.current[day];
-              clearDayProgress(day);
-            }
-            return polledJob;
-          }
 
+          // Keep tracking an active job even if the config drifted after it was
+          // queued: the run still completes server-side, and whether its result
+          // is surfaced is decided on completion (applyGenerationJob), not here.
           latestJob = polledJob;
           entry.jobId = polledJob.jobId;
           applyGenerationJob(
@@ -501,9 +521,14 @@ export default function Home() {
         : 'job' in data
           ? [(data as { job: unknown }).job]
           : [];
+      // Keep every well-formed job that is still active — an in-flight
+      // generation is always worth showing — but only surface a terminal job's
+      // result when it was produced against the current config. A stale
+      // completed/failed job is left for the cache layer to adjudicate.
       const jobs = rawJobs
         .map(normalizeGenerationJob)
-        .filter((job): job is GenerationJob => !!job && job.isCurrentConfig);
+        .filter((job): job is GenerationJob => !!job)
+        .filter(job => isActiveJob(job) || job.isCurrentConfig);
 
       // GET returns newest jobs first. Keep one current job per day, except
       // that a job already being tracked by this tab wins over a stale list row.
