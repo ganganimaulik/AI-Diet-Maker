@@ -75,6 +75,7 @@ export default function Home() {
 
   // Mirrors of state that async generation closures need to read live
   const dayProgressRef = useRef<Record<string, DayProgress>>({});
+  const dayOutputsRef = useRef<Record<string, DayOutput>>({});
   const selectedDayRef = useRef('MONDAY');
   const pollingJobsRef = useRef<Record<string, { jobId: string; promise: Promise<GenerationJob>; presentOnCompletion: boolean }>>({});
   const activeJobIdsRef = useRef<Record<string, string>>({});
@@ -91,6 +92,7 @@ export default function Home() {
   };
 
   const setDayOutput = (day: string, text: string, thinking: string, isCached: boolean) => {
+    dayOutputsRef.current = { ...dayOutputsRef.current, [day]: { text, thinking, isCached } };
     setDayOutputs(prev => ({ ...prev, [day]: { text, thinking, isCached } }));
   };
 
@@ -103,7 +105,7 @@ export default function Home() {
 
   const isDayBusy = (day: string) => {
     const status = dayProgressRef.current[day];
-    return status === 'checking' || status === 'generating';
+    return status === 'checking' || status === 'queued' || status === 'generating';
   };
 
   // Authentication and Save states
@@ -350,6 +352,9 @@ export default function Home() {
 
   const applyGenerationJob = (job: GenerationJob, present = false) => {
     const day = job.day;
+    const previousOutput = dayOutputsRef.current[day];
+    const hadText = !!previousOutput?.text;
+    const hadThinking = !!previousOutput?.thinking;
 
     // In-flight progress is always shown — a running job is real regardless of
     // whether the config drifted after it was queued. isCurrentConfig only
@@ -368,11 +373,13 @@ export default function Home() {
           if (existing?.text === nextOutput.text && existing?.thinking === nextOutput.thinking && !existing.isCached) {
             return prev;
           }
-          return { ...prev, [day]: nextOutput };
+          const next = { ...prev, [day]: nextOutput };
+          dayOutputsRef.current = next;
+          return next;
         });
       }
       activeJobIdsRef.current[day] = job.jobId;
-      markDayProgress(day, 'generating');
+      markDayProgress(day, job.status === 'queued' ? 'queued' : 'generating');
       setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
     } else {
       if (activeJobIdsRef.current[day] === job.jobId) {
@@ -401,7 +408,9 @@ export default function Home() {
           ) {
             return prev;
           }
-          return { ...prev, [day]: nextOutput };
+          const next = { ...prev, [day]: nextOutput };
+          dayOutputsRef.current = next;
+          return next;
         });
       }
 
@@ -421,10 +430,20 @@ export default function Home() {
       }
     }
 
+    // Auto-select the tab only on initial transitions or explicit presentation,
+    // never yank the user away from their manual tab selection during polling.
     if (selectedDayRef.current === day) {
-      if (job.responseText) {
+      if (present) {
+        if (job.responseText) {
+          setOutputTab('user');
+        } else if (job.thinkingText) {
+          setOutputTab('thoughts');
+        }
+      } else if (!hadText && job.responseText) {
+        // Plan text first became available: switch to plan view
         setOutputTab('user');
-      } else if (job.thinkingText) {
+      } else if (!hadThinking && job.thinkingText && !job.responseText) {
+        // Thinking first began: switch to thoughts view
         setOutputTab('thoughts');
       }
     }
@@ -792,7 +811,7 @@ export default function Home() {
     // A day already generating on its own keeps running; don't duplicate it
     const daysToRun = DAYS_OF_WEEK.filter(day => !isDayBusy(day));
     daysToRun.forEach(day => batchDaysRef.current.add(day));
-    daysToRun.forEach(day => markDayProgress(day, 'generating'));
+    daysToRun.forEach(day => markDayProgress(day, 'queued'));
     setDayErrors(prev => {
       const next = { ...prev };
       daysToRun.forEach(day => { next[day] = ''; });
@@ -1018,6 +1037,7 @@ export default function Home() {
             onGenerateAllDays={handleGenerateAllDays}
             onRegenerateDay={handleRegenerateDay}
             hidden={layoutMode === 'builder'}
+            provider={config.provider}
           />
         </main>
         </>

@@ -107,7 +107,7 @@ export interface ContactEntry {
 export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
 /** Generation state of a single day. Tracked per day so days can run concurrently. */
-export type DayProgress = 'checking' | 'generating' | 'done' | 'error';
+export type DayProgress = 'checking' | 'queued' | 'generating' | 'done' | 'error';
 
 /** Streamed / cached response held for one day. */
 export interface DayOutput {

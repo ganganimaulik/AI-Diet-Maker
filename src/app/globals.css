@@ -2497,6 +2497,22 @@ input[type="radio"]:disabled {
   to { transform: rotate(360deg); }
 }
 
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.08);
+  }
+}
+
+.queued-hourglass {
+  display: inline-block;
+  animation: pulse 2s ease-in-out infinite;
+}
+
 .placeholder-container {
   display: flex;
   flex-direction: column;

@@ -25,15 +25,18 @@ const { compilePromptText } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 const {
   assertGeminiFinishReason,
+  extractPartsText,
   extractResponseText,
   buildGenerationPayload,
   normalizeThinkingLevel,
   buildStudioEndpoint,
-  buildEnterpriseEndpoint
+  buildEnterpriseEndpoint,
+  parseGeminiErrorText
 } = require('./src/lib/gemini.js');
 const {
   FIREWORKS_API_URL,
   buildFireworksPayload,
+  createFireworksStreamExtractor,
   extractFireworksResponse,
   parseFireworksErrorText
 } = require('./src/lib/fireworks.js');
@@ -911,8 +914,52 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
   }
 }
 
-// Helper: Call AI API (Fireworks or Google Gemini)
-async function callGeminiAPI(c, prompt) {
+// SSE Stream Parser for web ReadableStreams in Node.js
+async function* parseSSEResponse(response, customExtractor) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (customExtractor) {
+            const chunk = customExtractor(parsed);
+            if (chunk.text || chunk.thought || chunk.finishReason) {
+              yield chunk;
+            }
+          } else {
+            const chunk = extractResponseText(parsed);
+            if (chunk.text || chunk.thought || chunk.finishReason) {
+              yield chunk;
+            }
+          }
+        } catch {
+          // Ignore partial/malformed JSON in SSE line
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Stream AI response chunks from Fireworks, Gemini Enterprise, or Google AI Studio
+async function* streamAIChunks(c, prompt) {
   const model = c.model === 'custom' ? c.customModel : c.model;
 
   if (c.provider === 'fireworks') {
@@ -923,7 +970,7 @@ async function callGeminiAPI(c, prompt) {
 
     const payload = buildFireworksPayload(model, prompt, {
       temperature: 0.1,
-      stream: false,
+      stream: true,
       maxTokens: c.maxTokens || 0,
       reasoningEffort: c.reasoningEffort || 'default'
     });
@@ -938,16 +985,22 @@ async function callGeminiAPI(c, prompt) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Fireworks API returned error (${response.status}): ${parseFireworksErrorText(errorText)}`);
+      throw new Error(parseFireworksErrorText(errorText, 'Failed to generate content from Fireworks API.'));
     }
 
-    const data = await response.json();
-    const { text, thought, finishReason } = extractFireworksResponse(data);
+    const extract = createFireworksStreamExtractor();
+    let finishReason = '';
+    for await (const chunk of parseSSEResponse(response, extract)) {
+      if (chunk.finishReason) finishReason = chunk.finishReason;
+      if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
+    }
+
+    const tail = extract.flush();
+    if (tail.text || tail.thought) yield { text: tail.text, thinking: tail.thought };
+
     if (finishReason === 'length') {
       throw new Error('Fireworks stopped early: the response hit the max_tokens limit, so this plan is incomplete. Raise "Max Output Tokens" in API settings or lower the reasoning effort.');
     }
-    return { text, thinking: thought };
-
   } else if (c.provider === 'gemini-enterprise') {
     if (c.enterpriseAuthMethod === 'api-key') {
       const enterpriseApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || c.enterpriseApiKey;
@@ -959,7 +1012,13 @@ async function callGeminiAPI(c, prompt) {
       }
 
       const payload = buildGenerationPayload(prompt, c.thinkingLevel, { maxOutputTokens: c.maxTokens || 0 });
-      const endpoint = buildEnterpriseEndpoint(c.enterpriseProjectId, c.enterpriseLocation, model, enterpriseApiKey);
+      const endpoint = buildEnterpriseEndpoint(
+        c.enterpriseProjectId,
+        c.enterpriseLocation,
+        model,
+        enterpriseApiKey,
+        { stream: true }
+      );
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -971,16 +1030,16 @@ async function callGeminiAPI(c, prompt) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Gemini Enterprise API returned error (${response.status}): ${errorText}`);
+        throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini Enterprise API.'));
       }
 
-      const data = await response.json();
-      const { text, thought, finishReason } = extractResponseText(data);
-      assertGeminiFinishReason(finishReason);
-      return { text, thinking: thought };
-
+      let enterpriseFinishReason = '';
+      for await (const chunk of parseSSEResponse(response)) {
+        if (chunk.finishReason) enterpriseFinishReason = chunk.finishReason;
+        if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
+      }
+      assertGeminiFinishReason(enterpriseFinishReason);
     } else {
-      // Service Account or ADC auth using @google/genai SDK
       if (c.enterpriseAuthMethod === 'service-account' && !c.enterpriseServiceAccountJson) {
         throw new Error('Service Account JSON is required when Service Account authentication is selected.');
       }
@@ -1023,15 +1082,23 @@ async function callGeminiAPI(c, prompt) {
         };
       }
 
-      const sdkResponse = await ai.models.generateContent({
+      const responseStream = await ai.models.generateContentStream({
         model: model,
         contents: prompt,
         config: configObj
       });
 
-      const { text, thought, finishReason } = extractResponseText(sdkResponse);
-      assertGeminiFinishReason(finishReason);
-      return { text, thinking: thought };
+      let sdkFinishReason = '';
+      for await (const chunk of responseStream) {
+        const candidate = chunk.candidates?.[0];
+        if (candidate?.finishReason) sdkFinishReason = String(candidate.finishReason);
+        const parts = candidate?.content?.parts || [];
+        const { text, thought } = extractPartsText(parts);
+        if (text || thought) {
+          yield { text, thinking: thought };
+        }
+      }
+      assertGeminiFinishReason(sdkFinishReason);
     }
   } else {
     // Default: Google AI Studio API
@@ -1041,7 +1108,7 @@ async function callGeminiAPI(c, prompt) {
     }
 
     const payload = buildGenerationPayload(prompt, c.thinkingLevel, { maxOutputTokens: c.maxTokens || 0 });
-    const response = await fetch(buildStudioEndpoint(model, apiKey), {
+    const response = await fetch(buildStudioEndpoint(model, apiKey, { stream: true }), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1051,21 +1118,34 @@ async function callGeminiAPI(c, prompt) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Gemini API returned error (${response.status}): ${errorText}`);
+      throw new Error(parseGeminiErrorText(errorText, 'Failed to generate content from Gemini API.'));
     }
 
-    const data = await response.json();
-    const { text, thought, finishReason } = extractResponseText(data);
-    assertGeminiFinishReason(finishReason);
-    return { text, thinking: thought };
+    let studioFinishReason = '';
+    for await (const chunk of parseSSEResponse(response)) {
+      if (chunk.finishReason) studioFinishReason = chunk.finishReason;
+      if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
+    }
+    assertGeminiFinishReason(studioFinishReason);
   }
+}
+
+// Helper: Call AI API (Fireworks or Google Gemini) with optional streaming progress callback
+async function callGeminiAPI(c, prompt, onChunk) {
+  let fullText = '';
+  let fullThinking = '';
+  for await (const chunk of streamAIChunks(c, prompt)) {
+    if (chunk.text) fullText += chunk.text;
+    if (chunk.thinking) fullThinking += chunk.thinking;
+    if (onChunk) onChunk({ text: fullText, thinking: fullThinking, chunk });
+  }
+  return { text: fullText, thinking: fullThinking };
 }
 
 // -------------------------------------------------------------
 // DASHBOARD GENERATION RUNNER
 // Claims queued GenerationJob docs written by /api/generate and executes them
-// here — off the serverless path, so a long generation cannot hit Vercel's
-// per-invocation timeout. Runs non-streaming against the latest Config.
+// here — off the serverless path, streaming progress live to MongoDB.
 // -------------------------------------------------------------
 function sanitizeGenerationError(error, configDoc) {
   let message = (error && error.message) ? error.message : String(error || 'Internal Server Error');
@@ -1108,8 +1188,15 @@ async function runNextGenerationJob() {
   console.log(`Claimed generation job ${job.jobId} for ${job.day} (attempt ${job.attempts}).`);
 
   let configDoc = null;
+  let latestText = '';
+  let latestThinking = '';
+  let lastCheckpointTime = Date.now();
+
   const heartbeatTimer = setInterval(() => {
-    heartbeatJob(GenerationJob, job.jobId, leaseId).catch(err => {
+    heartbeatJob(GenerationJob, job.jobId, leaseId, {
+      responseText: latestText,
+      thinkingText: latestThinking
+    }).catch(err => {
       console.error(`Heartbeat failed for generation job ${job.jobId}:`, err);
     });
   }, HEARTBEAT_INTERVAL_MS);
@@ -1118,10 +1205,25 @@ async function runNextGenerationJob() {
     configDoc = await Config.findOne();
     if (!configDoc) throw new Error('No configuration found for this generation job.');
 
-    // Run against the LATEST config, not the snapshot stored on the job. The
-    // prompt is the job's, but provider/model/keys follow current settings.
     console.log(`Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}...`);
-    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt);
+
+    const onChunk = ({ text, thinking }) => {
+      latestText = text;
+      latestThinking = thinking;
+      const now = Date.now();
+      // Throttle DB checkpoints to once every 2.5 seconds
+      if (now - lastCheckpointTime >= 2500) {
+        lastCheckpointTime = now;
+        heartbeatJob(GenerationJob, job.jobId, leaseId, {
+          responseText: latestText,
+          thinkingText: latestThinking
+        }).catch(err => {
+          console.error(`Checkpoint failed for ${job.day}:`, err);
+        });
+      }
+    };
+
+    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt, onChunk);
 
     if (!text || !text.trim()) {
       throw new Error('The model returned an empty response.');
@@ -1158,7 +1260,10 @@ async function runNextGenerationJob() {
   } catch (error) {
     const message = sanitizeGenerationError(error, configDoc);
     console.error(`Generation job ${job.jobId} for ${job.day} failed:`, message);
-    await failJob(GenerationJob, job.jobId, leaseId, message).catch(err => {
+    await failJob(GenerationJob, job.jobId, leaseId, message, {
+      responseText: latestText,
+      thinkingText: latestThinking
+    }).catch(err => {
       console.error(`Failed to mark generation job ${job.jobId} as failed:`, err);
     });
   } finally {

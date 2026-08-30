@@ -23,6 +23,13 @@ interface OutputPanelProps {
   onGenerateAllDays: () => void;
   onRegenerateDay: (day: string) => void;
   hidden?: boolean;
+  provider?: string;
+}
+
+function formatProviderLabel(provider?: string): string {
+  if (provider === 'fireworks') return 'Fireworks';
+  if (provider === 'gemini-enterprise') return 'Gemini Enterprise';
+  return 'Gemini';
 }
 
 function RegenerateIcon({ size = 12 }: { size?: number }) {
@@ -72,6 +79,9 @@ function DayCopyButton({ text }: { text: string }) {
 /** Chip colouring for one day, driven by its cache entry and live progress. */
 function dayChipState(status: CacheEntryStatus | undefined, progress: DayProgress | undefined, day: string) {
   const abbr = day.substring(0, 3);
+  if (progress === 'queued') {
+    return { bg: 'rgba(234, 179, 8, 0.18)', color: '#facc15', label: `⏳ ${abbr}`, busy: true };
+  }
   const busy = progress === 'generating' || progress === 'checking';
   if (busy) return { bg: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', label: `⌛ ${abbr}`, busy };
   if (progress === 'error') return { bg: 'rgba(244, 63, 94, 0.2)', color: '#fda4af', label: `❌ ${abbr}`, busy };
@@ -115,9 +125,12 @@ export default function OutputPanel({
   onGenerate,
   onGenerateAllDays,
   onRegenerateDay,
-  hidden = false
+  hidden = false,
+  provider
 }: OutputPanelProps) {
-  const isCurrentDayBusy = isGenerating || dayProgress[selectedDay] === 'checking';
+  const isCurrentDayQueued = dayProgress[selectedDay] === 'queued';
+  const isCurrentDayBusy = isGenerating || isCurrentDayQueued || dayProgress[selectedDay] === 'checking';
+  const providerName = formatProviderLabel(provider);
   // Days differ in whether they carry thinking output — fall back to the plan
   // tab instead of rendering an empty panel after switching days.
   const activeTab: OutputTab = outputTab === 'thoughts' && !thinkingText ? 'user' : outputTab;
@@ -239,7 +252,13 @@ export default function OutputPanel({
           </button>
         </div>
 
-        {isCurrentDayBusy && (
+        {isCurrentDayQueued && (
+          <div className="output-status" style={{ color: '#facc15' }}>
+            <span style={{ fontSize: '0.85rem' }}>⏳</span>
+            <span style={{ opacity: 0.9 }}>{selectedDay} Queued (Waiting in line)...</span>
+          </div>
+        )}
+        {isCurrentDayBusy && !isCurrentDayQueued && (
           <div className="output-status">
             <div className="spinner spinner--xs"></div>
             <span style={{ opacity: 0.9 }}>Generating {selectedDay}...</span>
@@ -285,17 +304,31 @@ export default function OutputPanel({
       <div className="output-body">
         {isCurrentDayBusy && !outputText && !thinkingText ? (
           <div className="loading-container" style={{ flex: 1 }}>
-            <div className="spinner"></div>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-              Gemini is calculating plan for {selectedDay}...
-            </p>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
+            {isCurrentDayQueued ? (
+              <>
+                <div className="queued-hourglass" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⏳</div>
+                <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {selectedDay} is queued (waiting in line)...
+                </p>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Will automatically start calculating once earlier days complete
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="spinner"></div>
+                <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {providerName} is calculating plan for {selectedDay}...
+                </p>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
+              </>
+            )}
           </div>
         ) : outputText || thinkingText ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             {activeTab === 'thoughts' && thinkingText && (
               <div className="thinking-box">
-                <div className="thinking-title">Gemini Thinking Output ({selectedDay})</div>
+                <div className="thinking-title">{providerName} Thinking Output ({selectedDay})</div>
                 <div className="thinking-text">
                   {thinkingText}
                 </div>
