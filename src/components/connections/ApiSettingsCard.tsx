@@ -222,13 +222,13 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
             >
               <option value="accounts/fireworks/models/deepseek-v4-pro">DeepSeek V4 Pro (Reasoning)</option>
               <option value="accounts/fireworks/models/deepseek-v4-flash-0731">DeepSeek V4 Flash</option>
+              <option value="accounts/fireworks/models/llama4-maverick-instruct-basic">Llama 4 Maverick Instruct (401B)</option>
               <option value="accounts/fireworks/models/kimi-k3">Kimi K3 (Reasoning)</option>
-              <option value="accounts/fireworks/models/glm-5p2">GLM 5.2 (Reasoning)</option>
-              <option value="accounts/fireworks/models/minimax-m3">MiniMax M3</option>
-              <option value="accounts/fireworks/models/gpt-oss-120b">GPT OSS 120B</option>
+              <option value="accounts/fireworks/models/glm-5p3">GLM 5.3 (Reasoning)</option>
+              <option value="accounts/fireworks/models/glm-5p3-flash">GLM 5.3 Flash</option>
               <option value="accounts/fireworks/models/qwen3p8-max">Qwen 3.8 Max</option>
-              <option value="accounts/fireworks/models/deepseek-r1">DeepSeek R1 (Reasoning)</option>
-              <option value="accounts/fireworks/models/llama-v3p3-70b-instruct">Llama 3.3 70B Instruct</option>
+              <option value="accounts/fireworks/models/qwen3p7-plus">Qwen 3.7 Plus (Reasoning)</option>
+              <option value="accounts/fireworks/models/minimax-m3">MiniMax M3</option>
               <option value="custom">Custom Model Name</option>
             </select>
           ) : (
