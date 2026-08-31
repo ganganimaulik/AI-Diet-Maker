@@ -502,8 +502,40 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   // Guard flag to prevent overlapping scheduler executions
   let isSchedulerRunning = false;
 
-  // Guard flag so the generation loop runs one job at a time
-  let isGenerationRunning = false;
+  // Dashboard generations are independent per day, so keep enough execution
+  // slots open for the entire week instead of serializing the durable queue.
+  const MAX_CONCURRENT_GENERATION_JOBS = 7;
+  const GENERATION_POLL_INTERVAL_MS = 1000;
+  const activeGenerationTasks = new Set();
+  let isGenerationDispatching = false;
+
+  async function dispatchGenerationJobs() {
+    if (isGenerationDispatching) return;
+
+    const availableSlots = MAX_CONCURRENT_GENERATION_JOBS - activeGenerationTasks.size;
+    if (availableSlots <= 0) return;
+
+    isGenerationDispatching = true;
+    try {
+      const queuedJobs = await GenerationJob.countDocuments({ status: 'queued' });
+      const jobsToStart = Math.min(availableSlots, queuedJobs);
+
+      for (let index = 0; index < jobsToStart; index += 1) {
+        const task = runNextGenerationJob()
+          .catch(err => {
+            console.error('Generation dispatcher failed to run a queued job:', err);
+          })
+          .finally(() => {
+            activeGenerationTasks.delete(task);
+          });
+        activeGenerationTasks.add(task);
+      }
+    } catch (err) {
+      console.error('Generation dispatcher failed to inspect the queue:', err);
+    } finally {
+      isGenerationDispatching = false;
+    }
+  }
 
   // Start Scheduler Loop (check every 60 seconds)
   setInterval(async () => {
@@ -519,18 +551,11 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     }
   }, 60000);
 
-  // Start Generation Loop (poll every 10 seconds). This is the always-on runner
-  // for dashboard AI requests — off the serverless path, so a long generation
-  // cannot hit Vercel's per-invocation timeout. One job at a time.
-  setInterval(async () => {
-    if (isGenerationRunning) return;
-    isGenerationRunning = true;
-    try {
-      await runNextGenerationJob();
-    } finally {
-      isGenerationRunning = false;
-    }
-  }, 10000);
+  // Keep the durable runner off the serverless path while allowing all seven
+  // day plans to execute at once. Atomic job claims still prevent duplicates
+  // if multiple worker instances overlap during a deployment.
+  dispatchGenerationJobs();
+  setInterval(dispatchGenerationJobs, GENERATION_POLL_INTERVAL_MS);
 
 }).catch(err => {
   console.error('Failed to connect to MongoDB:', err);

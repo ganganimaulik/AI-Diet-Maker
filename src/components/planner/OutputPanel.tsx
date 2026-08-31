@@ -308,10 +308,10 @@ export default function OutputPanel({
               <>
                 <div className="queued-hourglass" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⏳</div>
                 <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {selectedDay} is queued (waiting in line)...
+                  Starting {selectedDay} generation...
                 </p>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Will automatically start calculating once earlier days complete
+                  All requested days are launched in parallel
                 </span>
               </>
             ) : (
