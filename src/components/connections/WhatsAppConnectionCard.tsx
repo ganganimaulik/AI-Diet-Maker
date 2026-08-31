@@ -50,7 +50,7 @@ export default function WhatsAppConnectionCard({ whatsappState, isResettingWhats
 
       {whatsappState.status === 'disconnected' && (
         <p className="note-text" style={{ fontSize: '0.85rem', margin: '0.5rem 0' }}>
-          The WhatsApp background worker is starting up. If this message remains after 30 seconds, please check the Hugging Face space log.
+          The WhatsApp background worker is starting up. If this message remains after 30 seconds, please check the worker logs.
         </p>
       )}
 

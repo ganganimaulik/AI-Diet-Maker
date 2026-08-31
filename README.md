@@ -10,7 +10,7 @@ pinned: false
 
 # 🥗 AI Diet Maker & WhatsApp Automation
 
-An intelligent, full-stack nutrition planning dashboard and automated WhatsApp delivery system. **AI Diet Maker** leverages Google Gemini (`gemini-3.7-flash` with reasoning/thinking support) to generate precise, macro- and micro-balanced daily meal plans, and delivers customized instructions directly to you and your cook via WhatsApp.
+An intelligent, full-stack nutrition planning dashboard and automated WhatsApp delivery system. **AI Diet Maker** leverages Google Gemini (`gemini-3.7-flash` with reasoning/thinking support) or Fireworks.ai (e.g., DeepSeek V4 Pro, Kimi K3, GLM 5.3) to generate precise, macro- and micro-balanced daily meal plans, and delivers customized instructions directly to you and your cook via WhatsApp.
 
 ---
 
@@ -24,10 +24,10 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Daily Variables & Custom Splits**: Customize day-by-day variations (Monday–Sunday) for vegetables, carbs, and custom seasoning/salt splits.
 - **Live System Prompt Preview**: Real-time prompt compiler with side-by-side prompt inspection and custom prompt override capabilities.
 
-### 🧠 Gemini AI Generation & Smart Caching
-- **Gemini AI Integration**: Supports Google AI Studio (API Key) and Gemini Enterprise / Vertex AI (API Key, Service Account JSON, or ADC).
-- **Thinking Level Support**: Pick a Gemini 3 thinking depth (`default`/`low`/`medium`/`high`, sent as `thinkingConfig.thinkingLevel`) with live preview of the AI's internal thought process.
-- **Output & Reasoning Controls**: Set **Max Output Tokens** per provider (blank = provider default: 16,384 on Fireworks, the model's own limit on Gemini) and pick a **Reasoning Effort** (`none`/`low`/`medium`/`high`, sent as `reasoning_effort`) for Fireworks reasoning models — both apply to dashboard generation and the WhatsApp worker.
+### 🧠 Gemini & Fireworks AI Generation & Smart Caching
+- **Multi-Provider AI Support**: Supports Google AI Studio (API Key), Gemini Enterprise / Vertex AI (API Key, Service Account JSON, or ADC), and Fireworks.ai (OpenAI-compatible inference).
+- **Thinking Level & Reasoning Support**: Pick a Gemini 3 thinking depth (`default`/`low`/`medium`/`high`, sent as `thinkingConfig.thinkingLevel`) or Fireworks reasoning effort (`none`/`low`/`medium`/`high`), with live preview of the AI's internal thought process.
+- **Output & Reasoning Controls**: Set **Max Output Tokens** per provider (blank = provider default: 16,384 on Fireworks, the model's own limit on Gemini) and pick a **Reasoning Effort** for Fireworks reasoning models — both apply to dashboard generation and the WhatsApp worker.
 - **Structured Dual-Part Output**:
   - **Part 1 (User Plan)**: Complete nutrition tables, macros (protein, carbs, fat, fiber), micro-nutrients (sodium, potassium), and meal schedules.
   - **Part 2 (Cook Instructions)**: Clean, cook-friendly preparation instructions, ingredient weights, and seasoning splits in clear language.
@@ -209,7 +209,13 @@ An automated GitHub Actions workflow is provided in `.github/workflows/deploy-or
 3. Configure `~/worker.env` on the remote VM containing `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider).
 4. Pushing changes to `main` touching worker files automatically builds and redeploys the Docker container.
 
-#### Option B: Hugging Face Spaces (Docker SDK)
+#### Option B: GCP VM Deployment (Manual Rollback Path)
+A workflow is provided in `.github/workflows/deploy-gcp.yml` as a manual rollback path:
+1. Configure a GCP VM with Node.js and PM2.
+2. Set GitHub repository secrets: `GCP_HOST`, `GCP_USER`, `GCP_SSH_KEY`.
+3. Dispatch `.github/workflows/deploy-gcp.yml` manually via GitHub Actions.
+
+#### Option C: Hugging Face Spaces (Docker SDK)
 The repository includes a `Dockerfile` compatible with Hugging Face Spaces:
 1. Create a new Docker Space on Hugging Face.
 2. Set repository secrets in GitHub:
@@ -217,7 +223,7 @@ The repository includes a `Dockerfile` compatible with Hugging Face Spaces:
 3. Run or enable `.github/workflows/sync-to-hub.yml` to automatically push and build on Hugging Face Spaces.
 4. Add `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider) in the Space's Settings secrets.
 
-#### Option C: Standalone Docker Run
+#### Option D: Standalone Docker Run
 To build and run the worker on any server or local Docker daemon:
 
 ```bash
@@ -253,7 +259,7 @@ docker run -d \
 │   ├── components/
 │   │   ├── AppHeader.tsx       # App navigation header & save triggers
 │   │   ├── LoginScreen.tsx     # Authentication modal
-│   │   ├── connections/        # WhatsApp, Gemini API, Scheduler, & Hugging Face cards
+│   │   ├── connections/        # WhatsApp, AI Settings, Scheduler, & Worker Status cards
 │   │   └── planner/            # Diet builder, meal editor, daily variables, output panels
 │   ├── hooks/
 │   │   ├── useConfigActions.ts # Meal & split CRUD operations
@@ -263,8 +269,14 @@ docker run -d \
 │       ├── auth.ts             # Password authentication & cookie helpers
 │       ├── compile-prompt.js   # Dynamic prompt compiler & template engine
 │       ├── compute-config-hash.js # Deterministic configuration hash generator
+│       ├── config-hash.ts      # TypeScript wrapper for config hashing
 │       ├── db.ts               # Mongoose connection manager
-│       ├── gemini.js           # Gemini API client & response parsers
+│       ├── fireworks-helpers.ts # Fireworks API configuration helper
+│       ├── fireworks.js        # Shared Fireworks API client & payload builder
+│       ├── gemini-helpers.ts   # Gemini client helper functions
+│       ├── gemini.js           # Shared Gemini API client & response parsers
+│       ├── generation-runner.js # Model generation orchestrator for dashboard & worker
+│       ├── generation-runner.ts # TypeScript interface wrapper for generation runner
 │       ├── markdown.ts         # Markdown formatter & Part 1/Part 2 extractor
 │       ├── models.js           # Mongoose schemas (Config, Scheduler, WhatsAppState, etc.)
 │       └── types.ts            # TypeScript interfaces & default diet configuration
