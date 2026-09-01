@@ -1820,6 +1820,7 @@ input[type="radio"]:disabled {
 }
 
 .day-status-chip.is-busy { background: rgba(192, 132, 252, 0.2); color: #c084fc; }
+.day-status-chip.is-verifying { background: rgba(103, 232, 249, 0.18); color: #67e8f9; }
 .day-status-chip.is-error { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
 .day-status-chip.is-valid { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
 .day-status-chip.is-stale { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
@@ -3427,4 +3428,695 @@ input[type="radio"]:disabled {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* -------------------------------------------------------------
+   AUTOMATIC VERIFICATION RETRIES
+   A plan that needed three tries is a different thing from one that passed
+   first time, so every attempt stays visible, with the findings that got it
+   rejected one click away.
+   ------------------------------------------------------------- */
+
+.retry-summary {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.4;
+  background: rgba(103, 232, 249, 0.08);
+  border: 1px solid rgba(103, 232, 249, 0.22);
+  color: #a5f3fc;
+}
+
+.retry-summary.is-resolved {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+}
+
+.retry-summary.is-exhausted {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+}
+
+.verify-attempts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.verify-attempts.is-pass { border-color: rgba(16, 185, 129, 0.28); }
+.verify-attempts.is-fail { border-color: rgba(244, 63, 94, 0.3); }
+
+.verify-attempts__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.verify-attempts__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.verify-attempts__headline {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.verify-attempts__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.verify-attempt {
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid var(--text-muted);
+  overflow: hidden;
+}
+
+.verify-attempt.is-passed { border-left-color: #34d399; }
+.verify-attempt.is-failed { border-left-color: var(--accent-rose); }
+.verify-attempt.is-error { border-left-color: var(--accent-amber); }
+.verify-attempt.is-running { border-left-color: #67e8f9; }
+
+.verify-attempt__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.verify-attempt__row:disabled {
+  cursor: default;
+}
+
+.verify-attempt__row:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.verify-attempt__icon {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+}
+
+.verify-attempt__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.verify-attempt__counts {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verify-attempt__chevron {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.verify-attempt__detail {
+  padding: 0 0.6rem 0.55rem;
+}
+
+/* ============================================================
+   Diet Assistant — chat view
+
+   The transcript is the only scrolling region: the panel takes a
+   bounded height so the composer stays put while answers stream in,
+   rather than the whole page growing under the user's thumb.
+   ============================================================ */
+
+.assistant-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--stack-gap);
+  align-items: start;
+  min-width: 0;
+}
+
+.assistant-chat {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  height: clamp(24rem, calc(100dvh - 17rem), 40rem);
+}
+
+.assistant-chat__header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem var(--panel-pad);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.assistant-chat__header .panel-title {
+  font-size: 0.95rem;
+  margin-right: auto;
+}
+
+.assistant-chat__badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-green);
+  background: var(--accent-green-glow);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  white-space: nowrap;
+}
+
+.assistant-chat__history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.assistant-chat__history-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--panel-border-hover);
+}
+
+/* At 375px the header has no room for History + title + badge on one row, and
+   the title is the part worth keeping legible. */
+.assistant-chat__history-label {
+  display: none;
+}
+
+.assistant-chat__header .panel-title {
+  white-space: nowrap;
+}
+
+@media (min-width: 480px) {
+  .assistant-chat__history-label {
+    display: inline;
+  }
+}
+
+/* ---- Transcript ---- */
+
+.assistant-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 1rem var(--panel-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.assistant-loading {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.assistant-empty {
+  margin: auto 0;
+  text-align: center;
+}
+
+.assistant-empty__lead {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 34rem;
+  margin: 0 auto 1.25rem;
+}
+
+.assistant-empty__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.suggestion-chip {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.suggestion-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.assistant-error {
+  color: #fca5a5;
+  background: rgba(244, 63, 94, 0.08);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+/* ---- Bubbles ---- */
+
+.chat-row {
+  display: flex;
+  min-width: 0;
+}
+
+.chat-row--user {
+  justify-content: flex-end;
+}
+
+.chat-bubble {
+  min-width: 0;
+  max-width: 92%;
+  border-radius: 14px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.chat-bubble--user {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-bubble--assistant {
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  max-width: 100%;
+  flex: 1;
+}
+
+.chat-bubble__error {
+  color: #fca5a5;
+  margin: 0;
+}
+
+/* ---- Live tool steps ---- */
+
+.chat-step {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0;
+}
+
+.chat-step--active {
+  color: var(--accent-cyan);
+}
+
+.chat-step__tick {
+  color: var(--accent-green);
+  font-size: 0.7rem;
+}
+
+.chat-step__pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  animation: assistant-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes assistant-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-step__pulse { animation: none; opacity: 0.8; }
+}
+
+/* ---- Stored lookup trace ---- */
+
+.tool-trace {
+  margin-bottom: 0.5rem;
+}
+
+.tool-trace__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tool-trace__toggle:hover {
+  color: var(--text-secondary);
+}
+
+.tool-trace__chevron {
+  transition: transform var(--transition-fast);
+}
+
+.tool-trace__chevron.open {
+  transform: rotate(90deg);
+}
+
+.tool-trace__failed {
+  color: var(--accent-rose);
+}
+
+.tool-trace__list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tool-trace__list li {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tool-trace__list li.failed .tool-trace__name {
+  color: var(--accent-rose);
+}
+
+.tool-trace__error {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+/* ---- Assistant markdown ---- */
+
+.chat-markdown > *:first-child { margin-top: 0; }
+.chat-markdown > *:last-child { margin-bottom: 0; }
+
+.chat-markdown p {
+  margin: 0 0 0.55rem;
+  word-break: break-word;
+}
+
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  margin: 1rem 0 0.4rem;
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.92rem;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 0 0 0.55rem;
+  padding-left: 1.2rem;
+}
+
+.chat-markdown li {
+  margin-bottom: 0.25rem;
+}
+
+.chat-markdown code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.chat-markdown pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  overflow-x: auto;
+  margin: 0 0 0.55rem;
+}
+
+.chat-markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.78rem;
+}
+
+.chat-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin: 0.9rem 0;
+}
+
+.chat-markdown .table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 0 0.6rem;
+}
+
+.chat-markdown table {
+  width: 100%;
+  min-width: 20rem;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chat-markdown th {
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  text-align: left;
+  font-weight: 700;
+  padding: 0.45rem 0.6rem;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.chat-markdown td {
+  padding: 0.45rem 0.6rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.chat-markdown tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---- Composer ---- */
+
+.assistant-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  padding: 0.75rem var(--panel-pad) calc(0.75rem + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.assistant-composer__input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  max-height: 8rem;
+  resize: none;
+  padding: 0.7rem 0.85rem;
+  font-family: inherit;
+  /* 16px keeps iOS Safari from zooming the viewport on focus. */
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.assistant-composer__input:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+  box-shadow: var(--input-focus-shadow);
+}
+
+.assistant-composer__input::placeholder {
+  color: var(--text-muted);
+}
+
+.assistant-composer__btn {
+  flex-shrink: 0;
+  min-height: var(--tap);
+  width: auto;
+  padding-inline: 1.1rem;
+}
+
+/* ---- Conversation list ---- */
+
+.assistant-threads {
+  display: none;
+  padding: 0.85rem;
+}
+
+.assistant-threads.open {
+  display: block;
+}
+
+.assistant-threads__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.assistant-threads__header .panel-title {
+  font-size: 0.9rem;
+}
+
+.assistant-threads__empty {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 0.5rem 0.2rem;
+}
+
+.assistant-threads__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.assistant-threads__list li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 8px;
+  transition: background var(--transition-fast);
+}
+
+.assistant-threads__list li:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.assistant-threads__list li.active {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.assistant-threads__item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  align-items: flex-start;
+  background: none;
+  border: none;
+  padding: 0.5rem 0.55rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.assistant-threads__title {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-threads__meta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+@media (min-width: 1024px) {
+  .assistant-grid {
+    grid-template-columns: 17rem minmax(0, 1fr);
+  }
+
+  /* Past conversations sit alongside the chat once there is room, so the
+     History toggle is only a phone affordance. */
+  .assistant-threads {
+    display: block;
+    position: sticky;
+    top: 1rem;
+  }
+
+  .assistant-chat__history-btn {
+    display: none;
+  }
+
+  .assistant-chat {
+    height: clamp(30rem, calc(100dvh - 15rem), 56rem);
+  }
+
+  .chat-bubble {
+    max-width: 85%;
+  }
+
+  .chat-bubble--assistant {
+    max-width: 100%;
+  }
 }

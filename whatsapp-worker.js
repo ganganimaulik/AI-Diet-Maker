@@ -47,11 +47,18 @@ const {
   claimNextQueuedJob,
   requeueStaleJobs,
   heartbeatJob,
+  startGenerationAttempt,
+  startVerificationPhase,
+  recordVerificationAttempt,
   completeJob,
   failJob,
   isCancelRequested,
   cancelJob
 } = require('./src/lib/generation-runner.js');
+const {
+  runPlanVerification,
+  buildRetryFeedback
+} = require('./src/lib/verification-runner.js');
 
 // RemoteAuth.disconnect() normally DELETES the session from the remote store,
 // and whatsapp-web.js calls it internally on any non-accepted connection state
@@ -238,7 +245,7 @@ if (!MONGODB_URI) {
 // -------------------------------------------------------------
 // SCHEMAS & MODELS (shared with the Next.js app via src/lib/models.js)
 // -------------------------------------------------------------
-const { WhatsAppState, Contact, Scheduler, Config, CachedResponse, GenerationJob } = require('./src/lib/models.js');
+const { WhatsAppState, Contact, Scheduler, Config, CachedResponse, GenerationJob, VerificationResult } = require('./src/lib/models.js');
 
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
@@ -1234,6 +1241,29 @@ function sanitizeGenerationError(error, configDoc) {
   return message;
 }
 
+// Cap on how much of one attempt's finding list is carried in the job document.
+// The full verdict for the plan that was kept lives in VerificationResult; the
+// per-attempt copies exist to explain a regeneration, not to be a second store.
+const MAX_STORED_ATTEMPT_ISSUES = 40;
+
+/** Compact one verification verdict into the job's attempt history. */
+function toAttemptRecord(attempt, record, planGeneratedAt) {
+  const review = (record && record.aiReview) || {};
+  return {
+    attempt,
+    status: record.ok ? 'passed' : 'failed',
+    errorCount: record.errorCount,
+    warningCount: record.warningCount,
+    issues: (record.issues || []).slice(0, MAX_STORED_ATTEMPT_ISSUES),
+    aiStatus: review.status || '',
+    aiVerdict: review.verdict || '',
+    aiSummary: review.summary || '',
+    error: '',
+    generatedAt: planGeneratedAt,
+    checkedAt: record.checkedAt || new Date()
+  };
+}
+
 async function runNextGenerationJob() {
   const job = await claimNextQueuedJob(GenerationJob);
   if (!job) return;
@@ -1275,46 +1305,165 @@ async function runNextGenerationJob() {
       });
   }, CANCEL_POLL_INTERVAL_MS);
 
+  // Every phase boundary is a cancellation point. The AI review swallows its
+  // own abort (a failed review is a status, not an exception), so verification
+  // needs this check explicitly or a cancelled job would roll into a retry.
+  const throwIfCancelled = async () => {
+    if (cancelObserved || await isCancelRequested(GenerationJob, job.jobId, leaseId).catch(() => false)) {
+      throw new GenerationCancelledError();
+    }
+  };
+
   try {
     configDoc = await Config.findOne();
     if (!configDoc) throw new Error('No configuration found for this generation job.');
 
-    console.log(`Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}...`);
+    // A non-cacheable run came from a hand-written prompt, so the checker —
+    // which re-derives everything from the *compiled* prompt — would be judging
+    // a plan against a brief it was never given. Those runs stay unverified.
+    const autoVerify = !!job.autoVerify && !!job.cacheable;
+    const maxAttempts = Math.max(1, Number(job.maxGenerationAttempts) || 1);
 
-    const onChunk = ({ text, thinking }) => {
-      if (cancelObserved) throw new GenerationCancelledError();
-      latestText = text;
-      latestThinking = thinking;
-      const now = Date.now();
-      // Throttle DB checkpoints to once every 2.5 seconds
-      if (now - lastCheckpointTime >= 2500) {
-        lastCheckpointTime = now;
-        heartbeatJob(GenerationJob, job.jobId, leaseId, {
-          responseText: latestText,
-          thinkingText: latestThinking
-        }).catch(err => {
-          console.error(`Checkpoint failed for ${job.day}:`, err);
-        });
+    // Resumed after a lease takeover: continue the retry budget, don't reset it.
+    // Clamped so a job that crashed on its last attempt still produces a plan
+    // (the claim cleared the streamed text) without labelling it "attempt 5 of 4".
+    let attempt = Math.min(
+      maxAttempts - 1,
+      Math.max(0, Number(job.generationAttempt) || 0)
+    );
+    let finalText = '';
+    let finalThinking = '';
+    let finalRecord = null;
+    let rejectedIssues = null;
+    let rejectedFeasibility = null;
+
+    for (;;) {
+      attempt += 1;
+      await throwIfCancelled();
+      await startGenerationAttempt(GenerationJob, job.jobId, leaseId, attempt);
+      latestText = '';
+      latestThinking = '';
+
+      // The base prompt is never mutated — each retry appends the previous
+      // attempt's findings to the pristine original, so feedback cannot pile up.
+      const prompt = rejectedIssues
+        ? job.prompt + buildRetryFeedback(job.day, attempt - 1, rejectedIssues, rejectedFeasibility)
+        : job.prompt;
+
+      console.log(
+        `Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}`
+        + ` (attempt ${attempt}/${autoVerify ? maxAttempts : 1})...`
+      );
+
+      const onChunk = ({ text, thinking }) => {
+        if (cancelObserved) throw new GenerationCancelledError();
+        latestText = text;
+        latestThinking = thinking;
+        const now = Date.now();
+        // Throttle DB checkpoints to once every 2.5 seconds
+        if (now - lastCheckpointTime >= 2500) {
+          lastCheckpointTime = now;
+          heartbeatJob(GenerationJob, job.jobId, leaseId, {
+            responseText: latestText,
+            thinkingText: latestThinking
+          }).catch(err => {
+            console.error(`Checkpoint failed for ${job.day}:`, err);
+          });
+        }
+      };
+
+      const { text, thinking } = await callGeminiAPI(configDoc, prompt, onChunk, cancelController.signal);
+
+      // A cancel that landed after the final chunk still wins over completion.
+      await throwIfCancelled();
+
+      if (!text || !text.trim()) {
+        throw new Error('The model returned an empty response.');
       }
-    };
 
-    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt, onChunk, cancelController.signal);
+      finalText = text;
+      finalThinking = thinking || '';
+      const attemptGeneratedAt = new Date();
 
-    // A cancel that landed after the final chunk still wins over completion.
-    if (cancelObserved || await isCancelRequested(GenerationJob, job.jobId, leaseId).catch(() => false)) {
-      throw new GenerationCancelledError();
-    }
+      if (!autoVerify) break;
 
-    if (!text || !text.trim()) {
-      throw new Error('The model returned an empty response.');
+      await startVerificationPhase(GenerationJob, job.jobId, leaseId, {
+        responseText: finalText,
+        thinkingText: finalThinking
+      });
+      console.log(`Verifying ${job.day} plan (attempt ${attempt}/${maxAttempts})...`);
+
+      let record = null;
+      let verifyError = '';
+      try {
+        record = await runPlanVerification(configDoc, job.day, finalText, {
+          aiReview: !!configDoc.verificationAiReview,
+          configHash: job.configHash,
+          signal: cancelController.signal
+        });
+      } catch (err) {
+        if (isGenerationCancelledError(err) || cancelObserved) throw err;
+        verifyError = sanitizeGenerationError(err, configDoc);
+      }
+      await throwIfCancelled();
+
+      if (!record) {
+        // Verification itself is broken (a malformed reference table, a bug):
+        // regenerating cannot fix that, so keep the plan and say what happened.
+        console.error(`Verification could not run for ${job.day}: ${verifyError}`);
+        await recordVerificationAttempt(GenerationJob, job.jobId, leaseId, {
+          attempt,
+          status: 'error',
+          errorCount: 0,
+          warningCount: 0,
+          issues: [],
+          error: verifyError || 'Verification could not run.',
+          generatedAt: attemptGeneratedAt,
+          checkedAt: new Date()
+        }).catch(err => {
+          console.error(`Failed to record verification attempt for ${job.day}:`, err);
+        });
+        break;
+      }
+
+      finalRecord = record;
+      await recordVerificationAttempt(
+        GenerationJob,
+        job.jobId,
+        leaseId,
+        toAttemptRecord(attempt, record, attemptGeneratedAt)
+      ).catch(err => {
+        console.error(`Failed to record verification attempt for ${job.day}:`, err);
+      });
+
+      if (record.ok) {
+        console.log(`${job.day} passed verification on attempt ${attempt}.`);
+        break;
+      }
+
+      if (attempt >= maxAttempts) {
+        console.warn(
+          `${job.day} still fails verification after ${attempt} attempt(s)`
+          + ` (${record.errorCount} error(s)); keeping the last plan.`
+        );
+        break;
+      }
+
+      console.warn(
+        `${job.day} failed verification on attempt ${attempt}`
+        + ` (${record.errorCount} error(s)); regenerating with the findings fed back.`
+      );
+      rejectedIssues = record.issues;
+      rejectedFeasibility = record.feasibility;
     }
 
     // Atomic: completion is only recorded when no cancel request has landed.
     // A false return means cancellation won the race — record the job as
     // cancelled and skip caching instead of blessing a cancelled run's result.
     const completed = await completeJob(GenerationJob, job.jobId, leaseId, {
-      responseText: text,
-      thinkingText: thinking || ''
+      responseText: finalText,
+      thinkingText: finalThinking,
+      verificationOk: finalRecord ? finalRecord.ok : null
     });
     if (!completed) {
       throw new GenerationCancelledError();
@@ -1324,15 +1473,16 @@ async function runNextGenerationJob() {
     // snapshot's hash so /api/cache marks it stale if the config changed
     // mid-generation instead of blessing an old prompt with a new hash.
     if (job.cacheable) {
+      const generatedAt = new Date();
       try {
         await CachedResponse.findOneAndUpdate(
           { day: job.day },
           {
             $set: {
               configHash: job.configHash,
-              responseText: text,
-              thinkingText: thinking || '',
-              generatedAt: new Date()
+              responseText: finalText,
+              thinkingText: finalThinking,
+              generatedAt
             }
           },
           { upsert: true }
@@ -1340,6 +1490,21 @@ async function runNextGenerationJob() {
         console.log(`Cached diet plan for ${job.day}.`);
       } catch (cacheErr) {
         console.error(`Failed to cache generation result for ${job.day} (non-fatal):`, cacheErr);
+      }
+
+      // The day's stored verdict describes the plan that was kept, so it is
+      // stamped with the cache entry that plan just became — otherwise the
+      // dashboard would read the fresh verdict as stale.
+      if (finalRecord) {
+        try {
+          await VerificationResult.findOneAndUpdate(
+            { day: job.day },
+            { $set: { ...finalRecord, planGeneratedAt: generatedAt } },
+            { upsert: true }
+          );
+        } catch (verifyErr) {
+          console.error(`Failed to store verification verdict for ${job.day} (non-fatal):`, verifyErr);
+        }
       }
     }
     console.log(`Generation job ${job.jobId} for ${job.day} completed.`);

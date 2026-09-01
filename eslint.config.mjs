@@ -20,6 +20,10 @@ const eslintConfig = defineConfig([
     "src/lib/generation-runner.js",
     "src/lib/verify-plan.js",
     "src/lib/ai-complete.js",
+    "src/lib/agent-tools.js",
+    "src/lib/agent-complete.js",
+    "src/lib/agent-prompt.js",
+    "src/lib/verification-runner.js",
     ".wwebjs_auth/**",
   ]),
 ]);

@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { compilePromptText } from '@/lib/compile-prompt';
-import { Config, DayOutput, DayProgress, GenerationJob, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayOutput, DayProgress, GenerationJob, VerificationAttempt, VerificationIssue, DEFAULT_CONFIG, normalizeConfig, stableStringify, DAYS_OF_WEEK } from '@/lib/types';
 import { useConfigActions } from '@/hooks/useConfigActions';
 import { useWhatsApp } from '@/hooks/useWhatsApp';
 import { useDietCache } from '@/hooks/useDietCache';
 import { useVerification } from '@/hooks/useVerification';
+import { useAssistant } from '@/hooks/useAssistant';
 import LoginScreen from '@/components/LoginScreen';
 import AppHeader from '@/components/AppHeader';
 import BuilderSidebar from '@/components/planner/BuilderSidebar';
@@ -21,10 +22,49 @@ import WhatsAppConnectionCard from '@/components/connections/WhatsAppConnectionC
 import HuggingFaceCard from '@/components/connections/HuggingFaceCard';
 import SchedulerCard from '@/components/connections/SchedulerCard';
 import SchedulerLogsCard from '@/components/connections/SchedulerLogsCard';
+import AssistantView from '@/components/assistant/AssistantView';
 
 const JOB_POLL_INTERVAL_MS = 3000;
 
 const isActiveJob = (job: GenerationJob) => job.status === 'queued' || job.status === 'running';
+
+const ATTEMPT_STATUSES = ['passed', 'failed', 'error', 'skipped'] as const;
+
+const normalizeVerificationIssue = (value: unknown): VerificationIssue | null => {
+  if (!value || typeof value !== 'object') return null;
+  const issue = value as Partial<VerificationIssue>;
+  if (typeof issue.message !== 'string' || !issue.message) return null;
+  return {
+    severity: issue.severity === 'error' ? 'error' : 'warning',
+    category: typeof issue.category === 'string' && issue.category ? issue.category : 'other',
+    message: issue.message,
+    source: issue.source === 'ai' ? 'ai' : 'math'
+  };
+};
+
+const normalizeVerificationAttempt = (value: unknown): VerificationAttempt | null => {
+  if (!value || typeof value !== 'object') return null;
+  const attempt = value as Partial<VerificationAttempt>;
+  const number = Number(attempt.attempt);
+  if (!Number.isFinite(number) || number < 1) return null;
+  return {
+    attempt: Math.floor(number),
+    status: ATTEMPT_STATUSES.includes(attempt.status as typeof ATTEMPT_STATUSES[number])
+      ? attempt.status as VerificationAttempt['status']
+      : 'failed',
+    errorCount: Number(attempt.errorCount) || 0,
+    warningCount: Number(attempt.warningCount) || 0,
+    issues: Array.isArray(attempt.issues)
+      ? attempt.issues.map(normalizeVerificationIssue).filter((issue): issue is VerificationIssue => !!issue)
+      : [],
+    aiStatus: typeof attempt.aiStatus === 'string' ? attempt.aiStatus : '',
+    aiVerdict: typeof attempt.aiVerdict === 'string' ? attempt.aiVerdict : '',
+    aiSummary: typeof attempt.aiSummary === 'string' ? attempt.aiSummary : '',
+    error: typeof attempt.error === 'string' ? attempt.error : '',
+    generatedAt: typeof attempt.generatedAt === 'string' ? attempt.generatedAt : null,
+    checkedAt: typeof attempt.checkedAt === 'string' ? attempt.checkedAt : null
+  };
+};
 
 const normalizeGenerationJob = (value: unknown): GenerationJob | null => {
   if (!value || typeof value !== 'object') return null;
@@ -43,19 +83,44 @@ const normalizeGenerationJob = (value: unknown): GenerationJob | null => {
     jobId: job.jobId,
     day: job.day,
     status: job.status as GenerationJob['status'],
+    phase: job.phase === 'verifying' ? 'verifying' : 'generating',
     responseText: typeof job.responseText === 'string' ? job.responseText : '',
     thinkingText: typeof job.thinkingText === 'string' ? job.thinkingText : '',
     error: typeof job.error === 'string' ? job.error : '',
     cacheable: job.cacheable !== false,
-    isCurrentConfig: job.isCurrentConfig !== false
+    isCurrentConfig: job.isCurrentConfig !== false,
+    autoVerify: job.autoVerify === true,
+    generationAttempt: Number(job.generationAttempt) || 0,
+    maxGenerationAttempts: Math.max(1, Number(job.maxGenerationAttempts) || 1),
+    verificationOk: typeof job.verificationOk === 'boolean' ? job.verificationOk : null,
+    verificationAttempts: Array.isArray(job.verificationAttempts)
+      ? job.verificationAttempts
+        .map(normalizeVerificationAttempt)
+        .filter((attempt): attempt is VerificationAttempt => !!attempt)
+      : []
   };
 };
+
+/**
+ * Whether two polls of the same job carry the same retry/verification state.
+ * Streamed text lives in dayOutputs, so the job record only needs to re-render
+ * when the run moves between attempts, phases or verdicts.
+ */
+const sameJobProgress = (a: GenerationJob | undefined, b: GenerationJob): boolean =>
+  !!a
+  && a.jobId === b.jobId
+  && a.status === b.status
+  && a.phase === b.phase
+  && a.generationAttempt === b.generationAttempt
+  && a.maxGenerationAttempts === b.maxGenerationAttempts
+  && a.verificationOk === b.verificationOk
+  && a.verificationAttempts.length === b.verificationAttempts.length;
 
 export default function Home() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
   const [savedConfig, setSavedConfig] = useState<Config | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [currentView, setCurrentView] = useState<'planner' | 'connections'>('planner');
+  const [currentView, setCurrentView] = useState<'planner' | 'assistant' | 'connections'>('planner');
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('builder');
   const [activeTab, setActiveTab] = useState<string>('global');
   const [activeDay, setActiveDay] = useState<string>('MONDAY');
@@ -71,6 +136,9 @@ export default function Home() {
   const [dayProgress, setDayProgress] = useState<Record<string, DayProgress>>({});
   const [dayOutputs, setDayOutputs] = useState<Record<string, DayOutput>>({});
   const [dayErrors, setDayErrors] = useState<Record<string, string>>({});
+  // The durable job behind each day, kept so the UI can show which generation
+  // attempt is running and what every earlier attempt was rejected for.
+  const [dayJobs, setDayJobs] = useState<Record<string, GenerationJob>>({});
   const [configErrorMsg, setConfigErrorMsg] = useState('');
   const [outputTab, setOutputTab] = useState<OutputTab>('user');
 
@@ -110,7 +178,7 @@ export default function Home() {
 
   const isDayBusy = (day: string) => {
     const status = dayProgressRef.current[day];
-    return status === 'checking' || status === 'queued' || status === 'generating';
+    return status === 'checking' || status === 'queued' || status === 'generating' || status === 'verifying';
   };
 
   // Authentication and Save states
@@ -167,6 +235,8 @@ export default function Home() {
   });
 
   const actions = useConfigActions(setConfig, setActiveTab);
+
+  const assistant = useAssistant(isAuthenticatedState);
 
   // Load config from the database into local state (shared by initial load & login)
   const loadConfig = async () => {
@@ -258,6 +328,7 @@ export default function Home() {
       cancelRequestedDaysRef.current.clear();
       dayProgressRef.current = {};
       setDayProgress({});
+      setDayJobs({});
       setIsBatchGenerating(false);
     } catch (e) {
       console.error('Logout error:', e);
@@ -286,6 +357,7 @@ export default function Home() {
   const thinkingText = currentOutput?.thinking || '';
   const isCachedResponse = !!currentOutput?.isCached;
   const isGenerating = dayProgress[currentDay] === 'generating';
+  const isAutoVerifying = dayProgress[currentDay] === 'verifying';
   const isCacheLoading = dayProgress[currentDay] === 'checking';
   const errorMsg = dayErrors[currentDay] || configErrorMsg;
 
@@ -309,6 +381,14 @@ export default function Home() {
     setDayErrors(prev => {
       const next = { ...prev };
       for (const d of day ? [day] : Object.keys(next)) delete next[d];
+      return next;
+    });
+
+    setDayJobs(prev => {
+      const next = { ...prev };
+      for (const d of day ? [day] : Object.keys(next)) {
+        if (!isDayBusy(d)) delete next[d];
+      }
       return next;
     });
 
@@ -363,6 +443,8 @@ export default function Home() {
     const hadText = !!previousOutput?.text;
     const hadThinking = !!previousOutput?.thinking;
 
+    setDayJobs(prev => (sameJobProgress(prev[day], job) ? prev : { ...prev, [day]: job }));
+
     // In-flight progress is always shown — a running job is real regardless of
     // whether the config drifted after it was queued. isCurrentConfig only
     // decides whether a *terminal* result is trusted/cached, not whether an
@@ -386,7 +468,10 @@ export default function Home() {
         });
       }
       activeJobIdsRef.current[day] = job.jobId;
-      markDayProgress(day, job.status === 'queued' ? 'queued' : 'generating');
+      markDayProgress(
+        day,
+        job.status === 'queued' ? 'queued' : job.phase === 'verifying' ? 'verifying' : 'generating'
+      );
       setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
     } else {
       if (activeJobIdsRef.current[day] === job.jobId) {
@@ -399,6 +484,12 @@ export default function Home() {
       if (job.status === 'cancelled') {
         clearDayProgress(day);
         setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
+        setDayJobs(prev => {
+          if (!prev[day]) return prev;
+          const next = { ...prev };
+          delete next[day];
+          return next;
+        });
         setDayOutputs(prev => {
           const existing = prev[day];
           if (!existing || existing.isCached) return prev;
@@ -444,6 +535,9 @@ export default function Home() {
         if (job.cacheable && !finalizedJobIdsRef.current.has(job.jobId)) {
           finalizedJobIdsRef.current.add(job.jobId);
           void fetchCacheStatus();
+          // The worker stores the verdict for the plan it kept, so pull it in
+          // rather than making the user click Verify on an already-checked day.
+          if (job.autoVerify) void verification.fetchVerifications();
         }
       } else {
         markDayProgress(day, 'error');
@@ -1073,6 +1167,7 @@ export default function Home() {
             setActiveTab('global');
           }
         }}
+        onSelectAssistant={() => setCurrentView('assistant')}
         onSelectConnections={() => setCurrentView('connections')}
         whatsappState={whatsapp.whatsappState}
         config={config}
@@ -1162,8 +1257,10 @@ export default function Home() {
                   cacheStatus={cacheStatus}
                   currentCacheDay={getCurrentCacheDay()}
                   isGenerating={isGenerating}
+                  isAutoVerifying={isAutoVerifying}
                   isBatchGenerating={isBatchGenerating}
                   dayProgress={dayProgress}
+                  dayJobs={dayJobs}
                   isCacheLoading={isCacheLoading}
                   onGenerate={handleGenerate}
                   onGenerateAllDays={handleGenerateAllDays}
@@ -1193,6 +1290,7 @@ export default function Home() {
             isGenerating={isGenerating}
             isBatchGenerating={isBatchGenerating}
             dayProgress={dayProgress}
+            dayJobs={dayJobs}
             isCachedResponse={isCachedResponse}
             onGenerate={handleGenerate}
             onGenerateAllDays={handleGenerateAllDays}
@@ -1207,6 +1305,8 @@ export default function Home() {
           />
         </main>
         </>
+      ) : currentView === 'assistant' ? (
+        <AssistantView assistant={assistant} />
       ) : (
         <main className="settings-dashboard-grid animate-fadeIn">
           <ApiSettingsCard

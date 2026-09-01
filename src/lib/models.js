@@ -76,6 +76,21 @@ const ConfigSchema = new Schema({
   verificationThinkingLevel: { type: String, default: 'default' },
   verificationReasoningEffort: { type: String, default: 'default' },
   verificationMaxTokens: { type: Number, default: 0 },
+  // Verify every generated plan automatically and regenerate it, with the
+  // findings fed back into the prompt, until it passes or the retries run out.
+  verificationAutoRetry: { type: Boolean, default: true },
+  // Regenerations after the first attempt, so a day costs at most
+  // 1 + verificationMaxRetries generations.
+  verificationMaxRetries: { type: Number, default: 3 },
+  // Chat assistant. Like the verification settings, '' means "reuse the
+  // generation provider/model", so an existing config keeps working untouched.
+  // Chat wants fast turnarounds over deep reasoning, so these usually differ.
+  agentProvider: { type: String, default: '' },
+  agentModel: { type: String, default: '' },
+  agentCustomModel: { type: String, default: '' },
+  agentThinkingLevel: { type: String, default: 'low' },
+  agentReasoningEffort: { type: String, default: 'default' },
+  agentMaxTokens: { type: Number, default: 8192 },
   global: {
     dailyCalorieTarget: { type: Number, default: 3200 },
     totalOliveOil: { type: Number, default: 18 },
@@ -182,7 +197,30 @@ const VerificationResultSchema = new Schema({
 
 VerificationResultSchema.index({ day: 1 }, { unique: true });
 
-// 7. Persisted dashboard generation state. There is one current job per day;
+// 7. One automatic verification pass inside a generation job. The job keeps
+// every attempt so the dashboard can show why a plan was regenerated, not just
+// the verdict on the plan that finally survived.
+const GenerationAttemptSchema = new Schema({
+  // 1-based generation attempt this verdict belongs to.
+  attempt: { type: Number, default: 1 },
+  // 'passed'  – the arithmetic pass found no errors
+  // 'failed'  – it found errors; the plan is regenerated if retries remain
+  // 'error'   – verification itself could not run (retrying would not help)
+  // 'skipped' – auto-verification was off, or the run was not cacheable
+  status: { type: String, enum: ['passed', 'failed', 'error', 'skipped'], default: 'failed' },
+  errorCount: { type: Number, default: 0 },
+  warningCount: { type: Number, default: 0 },
+  issues: [VerificationIssueSchema],
+  aiStatus: { type: String, default: '' },
+  aiVerdict: { type: String, default: '' },
+  aiSummary: { type: String, default: '' },
+  // Why verification could not run, for status 'error'.
+  error: { type: String, default: '' },
+  generatedAt: { type: Date, default: null },
+  checkedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
+// 8. Persisted dashboard generation state. There is one current job per day;
 // starting a new job replaces that day's terminal record, while an active job
 // is returned idempotently. API credentials deliberately do not belong here.
 const GenerationJobSchema = new Schema({
@@ -210,6 +248,21 @@ const GenerationJobSchema = new Schema({
   enterpriseLocation: { type: String, default: 'global' },
   configHash: { type: String, required: true },
   cacheable: { type: Boolean, default: true },
+  // Which half of the run is executing. The job stays 'running' throughout —
+  // verification and its retries are part of producing the plan, not a state
+  // after it — so the lease/claim queries never had to learn a new status.
+  phase: { type: String, enum: ['generating', 'verifying'], default: 'generating' },
+  // Verify each generated plan and regenerate on failure (snapshotted from the
+  // config at enqueue time so a mid-run settings change cannot alter the run).
+  autoVerify: { type: Boolean, default: false },
+  // 1-based count of generation passes done so far, and the ceiling on them.
+  // Kept across a lease takeover so a crashed worker resumes the retry budget
+  // rather than restarting it.
+  generationAttempt: { type: Number, default: 0 },
+  maxGenerationAttempts: { type: Number, default: 1 },
+  verificationAttempts: [GenerationAttemptSchema],
+  // Verdict on the plan this job finished with; null when it was never verified.
+  verificationOk: { type: Boolean, default: null },
   responseText: { type: String, default: '' },
   thinkingText: { type: String, default: '' },
   error: { type: String, default: '' },
@@ -226,6 +279,39 @@ GenerationJobSchema.index({ day: 1 }, { unique: true });
 GenerationJobSchema.index({ jobId: 1 }, { unique: true });
 GenerationJobSchema.index({ status: 1, leaseExpiresAt: 1 });
 
+// 9. Assistant chat. The assistant's own database access is read-only; these
+// are the rows the app writes on its behalf so a conversation survives a
+// reload. Deliberately outside the collections the assistant can read, so its
+// context never folds back into itself.
+const ChatToolStepSchema = new Schema({
+  name: { type: String, default: '' },
+  // Arguments as sent to the tool, for showing what was actually looked up.
+  args: { type: Schema.Types.Mixed, default: null },
+  ok: { type: Boolean, default: true },
+  error: { type: String, default: '' },
+  ms: { type: Number, default: 0 }
+}, { _id: false });
+
+const ChatMessageSchema = new Schema({
+  role: { type: String, enum: ['user', 'assistant'], required: true },
+  content: { type: String, default: '' },
+  // Database reads the assistant made while producing this message.
+  steps: [ChatToolStepSchema],
+  // Set when the turn failed; the message is kept so the transcript shows why.
+  error: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: false });
+
+const ChatThreadSchema = new Schema({
+  threadId: { type: String, required: true, unique: true },
+  // Derived from the first user message; renameable later.
+  title: { type: String, default: 'New chat' },
+  messages: [ChatMessageSchema],
+  lastMessageAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+ChatThreadSchema.index({ lastMessageAt: -1 });
+
 // Compile models (reuse existing compilations across hot reloads)
 const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppState', WhatsAppStateSchema);
@@ -234,6 +320,7 @@ const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', Sched
 const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
 const GenerationJob = mongoose.models.GenerationJob || mongoose.model('GenerationJob', GenerationJobSchema);
 const VerificationResult = mongoose.models.VerificationResult || mongoose.model('VerificationResult', VerificationResultSchema);
+const ChatThread = mongoose.models.ChatThread || mongoose.model('ChatThread', ChatThreadSchema);
 
 module.exports = {
   Config,
@@ -242,5 +329,6 @@ module.exports = {
   Scheduler,
   CachedResponse,
   GenerationJob,
-  VerificationResult
+  VerificationResult,
+  ChatThread
 };

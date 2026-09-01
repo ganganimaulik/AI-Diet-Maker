@@ -1,5 +1,5 @@
 'use client';
-import { Config, DayProgress, DayVerification, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayProgress, DayVerification, GenerationJob, DAYS_OF_WEEK } from '@/lib/types';
 import { getDayVariantName } from '@/lib/compile-prompt';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 
@@ -9,8 +9,11 @@ interface GenerationControlsProps {
   cacheStatus: Record<string, CacheEntryStatus>;
   currentCacheDay: string;
   isGenerating: boolean;
+  /** The selected day is in its automatic post-generation verification pass. */
+  isAutoVerifying: boolean;
   isBatchGenerating: boolean;
   dayProgress: Record<string, DayProgress>;
+  dayJobs: Record<string, GenerationJob>;
   isCacheLoading: boolean;
   onGenerate: (forceRegenerate: boolean) => void;
   onGenerateAllDays: () => void;
@@ -42,9 +45,16 @@ function VerifyIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+/** "2/4" attempt counter, empty unless the run actually verifies and retries. */
+function attemptCounter(job: GenerationJob | undefined): string {
+  if (!job || !job.autoVerify || job.maxGenerationAttempts <= 1) return '';
+  return ` ${Math.max(1, job.generationAttempt)}/${job.maxGenerationAttempts}`;
+}
+
 /** Maps a day's cache/progress state onto a chip modifier and short label. */
 function dayChipState(status: CacheEntryStatus | undefined, progress: DayProgress | undefined, day: string) {
   const abbr = day.substring(0, 3);
+  if (progress === 'verifying') return { cls: 'is-verifying', label: `🔍 ${abbr}` };
   if (progress === 'generating' || progress === 'checking') return { cls: 'is-busy', label: `⌛ ${abbr}` };
   if (progress === 'error') return { cls: 'is-error', label: `❌ ${abbr}` };
   if (status?.isValid) return { cls: 'is-valid', label: `✓ ${abbr}` };
@@ -58,8 +68,10 @@ export default function GenerationControls({
   cacheStatus,
   currentCacheDay,
   isGenerating,
+  isAutoVerifying,
   isBatchGenerating,
   dayProgress,
+  dayJobs,
   isCacheLoading,
   onGenerate,
   onGenerateAllDays,
@@ -77,7 +89,15 @@ export default function GenerationControls({
   // is cancellable too — the client aborts the flow before any job is created.
   const currentDayProgress = dayProgress[currentCacheDay];
   const isCurrentDayQueued = currentDayProgress === 'queued';
-  const isCurrentDayCancellable = isCurrentDayQueued || currentDayProgress === 'generating' || isCacheLoading;
+  const isCurrentDayCancellable = isCurrentDayQueued
+    || currentDayProgress === 'generating'
+    || currentDayProgress === 'verifying'
+    || isCacheLoading;
+  const currentJob = dayJobs[currentCacheDay];
+  const currentAttempts = currentJob?.verificationAttempts || [];
+  // A retry only exists once an attempt has been rejected, so the banner below
+  // stays out of the way on the common single-attempt run.
+  const retriedAttempts = currentAttempts.filter(attempt => attempt.status === 'failed');
 
   const timeAgo = cached ? (() => {
     // eslint-disable-next-line react-hooks/purity
@@ -150,9 +170,11 @@ export default function GenerationControls({
                 className={`day-status-chip ${cls} ${isCurrent ? 'is-current' : ''}`}
                 onClick={() => setSelectedGenerationDay(day)}
                 title={
-                  progress === 'generating' || progress === 'checking'
-                    ? `${day}: generating…`
-                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}${mark ? ` — ${mark.title}` : ''}`
+                  progress === 'verifying'
+                    ? `${day}: verifying the generated plan${attemptCounter(dayJobs[day])}…`
+                    : progress === 'generating' || progress === 'checking'
+                      ? `${day}: generating${attemptCounter(dayJobs[day])}…`
+                      : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}${mark ? ` — ${mark.title}` : ''}`
                 }
               >
                 {label}
@@ -191,13 +213,19 @@ export default function GenerationControls({
         <div className="generation-actions__row">
           <button
             className="btn-primary"
-            disabled={isGenerating || isCacheLoading || isCurrentDayQueued}
+            disabled={isGenerating || isAutoVerifying || isCacheLoading || isCurrentDayQueued}
             onClick={() => onGenerate(false)}
           >
-            {isGenerating ? (
+            {isAutoVerifying ? (
               <>
                 <div className="spinner spinner--inline"></div>
-                Generating {config.selectedGenerationDay || 'Day'}...
+                Verifying {config.selectedGenerationDay || 'Day'}{attemptCounter(currentJob)}...
+              </>
+            ) : isGenerating ? (
+              <>
+                <div className="spinner spinner--inline"></div>
+                {currentJob && currentJob.generationAttempt > 1 ? 'Regenerating' : 'Generating'}{' '}
+                {config.selectedGenerationDay || 'Day'}{attemptCounter(currentJob)}...
               </>
             ) : isCurrentDayQueued ? (
               <>
@@ -235,7 +263,7 @@ export default function GenerationControls({
           {cacheStatus[currentCacheDay] && !isCurrentDayCancellable && (
             <button
               className="btn-regenerate"
-              disabled={isGenerating || isCacheLoading}
+              disabled={isGenerating || isAutoVerifying || isCacheLoading}
               onClick={() => onGenerate(true)}
               title="Skip cache and regenerate fresh"
             >
@@ -291,6 +319,16 @@ export default function GenerationControls({
             )}
           </button>
         </div>
+
+        {retriedAttempts.length > 0 && (
+          <div className={`retry-summary ${currentJob?.verificationOk ? 'is-resolved' : 'is-exhausted'}`}>
+            {currentJob?.verificationOk
+              ? `🔁 ${currentCacheDay} was regenerated ${retriedAttempts.length}× before it passed verification`
+              : isCurrentDayCancellable
+                ? `🔁 ${currentCacheDay}: ${retriedAttempts.length} attempt(s) rejected so far — regenerating`
+                : `🔁 ${currentCacheDay} still failed after ${currentAttempts.length} attempt(s) — the last plan was kept`}
+          </div>
+        )}
 
         {verificationSummary && (
           <div className={`verify-summary ${verificationSummary.failing > 0 ? 'has-failures' : 'all-clear'}`}>

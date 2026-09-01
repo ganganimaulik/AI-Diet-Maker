@@ -34,6 +34,24 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Hash-Based MongoDB Caching**: Hashes full configuration state to cache generated plans per day. Unchanged days load instantaneously with zero API latency.
 - **Batch 7-Day Generation**: Generate all 7 days of the week in a single batch with live progress tracking.
 
+### ✅ Plan Verification & Automatic Retries
+- **Deterministic Arithmetic Checker**: Every number in a generated plan is re-derived from the same reference nutrition table the model was given — per-row and per-meal calories, macros, sodium/potassium, the Na:K ratio, AUTO weight bounds, and whether the cook's copy matches Part 1. No model is involved, so the checker cannot be talked out of a number.
+- **Automatic Post-Generation Verification**: Every generated plan is verified as part of the same durable job, before the run is reported as finished. Verification is not a separate step the user has to remember.
+- **Regenerate Until It Passes**: A plan the checker rejects is regenerated with the exact findings appended to the original prompt, up to a configurable retry budget (**3 retries by default**, so at most 4 generations per day). The loop stops the moment the arithmetic pass comes back clean. If the budget runs out, the last plan is kept and its failing verdict is shown rather than hidden.
+- **Full Retry History**: Every attempt — including the ones whose plans were thrown away — is stored on the generation job and shown per day in the dashboard's **Verification** tab, with the findings that got each attempt rejected one click away.
+- **Optional Second-Opinion AI Review**: A separately configurable provider/model can read the plan for instructions it ignored, unusable steps, and claims its own numbers do not support. Its findings are advisory: only the arithmetic pass decides pass/fail and therefore whether a retry happens.
+- **Honest Feedback**: When a configured target is physically unreachable for a day (e.g. no combination of the day's ingredients can hit the Na:K range), the retry prompt says so explicitly and instructs the model to report its real numbers instead of forcing them into range.
+
+### 💬 Diet Assistant (Read-Only Database Agent)
+- **Chat Grounded in Your Own Data**: A dedicated **Assistant** tab where you can ask about your meals, targets, any day's generated plan, or its verification verdict. Answers are built from tool calls against the live database, not from the model's memory of the conversation.
+- **Strictly Read-Only**: The assistant reaches the database through a tool layer that only ever runs `find` / `count`. There is no code path from chat to a write, a plan generation, or a WhatsApp send. When something needs changing it tells you what and where, and you make the change.
+- **Secrets Never Leave the Server**: API keys, the service-account JSON, the Hugging Face token and the WhatsApp login QR are redacted at every nesting depth before any document reaches the model — so "read the config" cannot become "read my credentials back to me".
+- **Query Guardrails**: Collections are whitelisted, expression operators (`$where`, `$function`, `$expr`, …) are refused, results are capped at 25 documents and 24 KB per call, and long plan text is truncated in generic queries so one wide read cannot flood the context.
+- **Visible Reasoning Trail**: Each lookup is streamed to the UI as it runs ("Reading the plan · MONDAY"), and stored with the answer as an expandable trace, so you can see exactly which records an answer came from.
+- **Stale-Aware**: Plans and verdicts carry the config hash they were produced under, and the assistant is told to flag an answer built on a plan the configuration has since moved past.
+- **Saved Conversations**: Threads persist in MongoDB, so past advice is still there after a reload. This is the only thing the assistant flow writes — and the app writes it, not the agent.
+- **Independently Configurable Model**: Like plan verification, the assistant defaults to reusing the generation provider/model but can point somewhere faster, since one question can mean several model calls in a row.
+
 ### 📲 WhatsApp Automation & Daily Scheduler
 - **Headless WhatsApp Client**: Built on `whatsapp-web.js` and Puppeteer running in a dedicated background worker.
 - **In-Dashboard QR Pairing**: Scan WhatsApp Web QR code directly from the web dashboard.
@@ -61,6 +79,9 @@ flowchart TD
         ConfigDoc[("Config & Settings")]
         SchedulerDoc[("Scheduler & Logs")]
         CacheDoc[("Cached AI Diet Plans")]
+        JobDoc[("Generation Jobs & Retry History")]
+        VerifyDoc[("Verification Verdicts")]
+        ChatDoc[("Assistant Chat Threads")]
         GridFS[("WhatsApp Remote Session (GridFS)")]
     end
 
@@ -79,10 +100,10 @@ flowchart TD
         CookPhone["Cook / Helper (Part 2: Cook Instructions)"]
     end
 
-    API <--> ConfigDoc & SchedulerDoc & CacheDoc
-    API -->|Prompt & Stream| GeminiFlash
-    WorkerScript <--> GridFS & ConfigDoc & SchedulerDoc & CacheDoc
-    WorkerScript -->|Prompt & Generate| GeminiFlash
+    API <--> ConfigDoc & SchedulerDoc & CacheDoc & JobDoc & VerifyDoc & ChatDoc
+    API -.->|"Assistant tool calls (read-only, secrets redacted)"| ConfigDoc & CacheDoc & VerifyDoc & JobDoc & SchedulerDoc
+    WorkerScript <--> GridFS & ConfigDoc & SchedulerDoc & CacheDoc & JobDoc & VerifyDoc
+    WorkerScript -->|Generate, verify, regenerate on a failed verdict| GeminiFlash
     WorkerScript --> PuppeteerEngine
     PuppeteerEngine -->|Daily Scheduled Dispatch| UserPhone & CookPhone
 ```
@@ -244,8 +265,10 @@ docker run -d \
 │   │   ├── api/
 │   │   │   ├── auth/           # Login & session check routes
 │   │   │   ├── cache/          # Diet plan response cache endpoints
+│   │   │   ├── chat/           # Assistant chat turns (SSE) & thread CRUD
 │   │   │   ├── config/         # Diet configuration load & save endpoints
-│   │   │   ├── generate/       # Gemini streaming generation API
+│   │   │   ├── generate/       # Durable generation job queue & status API
+│   │   │   ├── verify/         # Plan verification verdicts (manual "Verify" buttons)
 │   │   │   └── whatsapp/       # WhatsApp status, contacts, test sends, session reset
 │   │   ├── globals.css         # Global dark theme styling
 │   │   ├── layout.tsx          # Root layout
@@ -253,26 +276,38 @@ docker run -d \
 │   ├── components/
 │   │   ├── AppHeader.tsx       # App navigation header & save triggers
 │   │   ├── LoginScreen.tsx     # Authentication modal
+│   │   ├── assistant/          # Chat transcript, bubbles & tool-call trace
 │   │   ├── connections/        # WhatsApp, Gemini API, Scheduler, & Hugging Face cards
 │   │   └── planner/            # Diet builder, meal editor, daily variables, output panels
 │   ├── hooks/
+│   │   ├── useAssistant.ts     # Chat threads & streamed assistant turns
 │   │   ├── useConfigActions.ts # Meal & split CRUD operations
 │   │   ├── useDietCache.ts     # Diet plan caching & invalidation hooks
+│   │   ├── useVerification.ts  # Per-day verification verdicts & manual re-checks
 │   │   └── useWhatsApp.ts      # WhatsApp status & scheduler management hooks
 │   └── lib/
+│       ├── agent-complete.js   # Streaming tool-calling loop across all three providers
+│       ├── agent-prompt.js     # Assistant system prompt
+│       ├── agent-tools.js      # Read-only DB tools, redaction & query guardrails
+│       ├── agent.ts            # Typed wrapper over the assistant modules
 │       ├── auth.ts             # Password authentication & cookie helpers
 │       ├── compile-prompt.js   # Dynamic prompt compiler & template engine
 │       ├── compute-config-hash.js # Deterministic configuration hash generator
+│       ├── ai-complete.js      # Single-shot completion across all three providers
 │       ├── db.ts               # Mongoose connection manager
 │       ├── gemini.js           # Gemini API client & response parsers
-│       ├── markdown.ts         # Markdown formatter & Part 1/Part 2 extractor
-│       ├── models.js           # Mongoose schemas (Config, Scheduler, WhatsAppState, etc.)
-│       └── types.ts            # TypeScript interfaces & default diet configuration
+│       ├── generation-runner.js # Durable job lease / claim / attempt lifecycle helpers
+│       ├── markdown.ts         # Markdown formatters (plan Part 1/Part 2 split, chat)
+│       ├── models.js           # Mongoose schemas (Config, Scheduler, ChatThread, etc.)
+│       ├── types.ts            # TypeScript interfaces & default diet configuration
+│       ├── verification-runner.js # Verification pipeline & retry-feedback prompt
+│       └── verify-plan.js      # Deterministic arithmetic checker (no model involved)
 ├── .github/workflows/          # CI/CD deployment workflows (Oracle, GCP, HF Spaces)
 ├── Dockerfile                  # Worker container definition with Chromium dependencies
 ├── docker-entrypoint.sh        # Docker startup script with DNS resolver setup
 ├── package.json                # Project dependencies & scripts
-├── whatsapp-worker.js          # Standalone WhatsApp worker & scheduler daemon
+├── backups/                    # Sanitized MongoDB snapshots (no credentials)
+├── whatsapp-worker.js          # WhatsApp worker, scheduler daemon & generation runner
 └── README.md                   # Project documentation
 ```
 

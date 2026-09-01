@@ -58,6 +58,17 @@ export interface Config {
   verificationThinkingLevel?: string;
   verificationReasoningEffort?: string;
   verificationMaxTokens?: number;
+  /** Verify every generated plan and regenerate it until it passes. */
+  verificationAutoRetry?: boolean;
+  /** Regenerations allowed after the first attempt (0 = verify once, never retry). */
+  verificationMaxRetries?: number;
+  /** Chat assistant provider/model; blank = reuse the generation ones. */
+  agentProvider?: string;
+  agentModel?: string;
+  agentCustomModel?: string;
+  agentThinkingLevel?: string;
+  agentReasoningEffort?: string;
+  agentMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;
@@ -115,8 +126,12 @@ export interface ContactEntry {
 
 export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
-/** Generation state of a single day. Tracked per day so days can run concurrently. */
-export type DayProgress = 'checking' | 'queued' | 'generating' | 'done' | 'error';
+/**
+ * Generation state of a single day. Tracked per day so days can run
+ * concurrently. 'verifying' is part of the same server job as 'generating' —
+ * the plan is not finished until its verdict is in.
+ */
+export type DayProgress = 'checking' | 'queued' | 'generating' | 'verifying' | 'done' | 'error';
 
 /** Streamed / cached response held for one day. */
 export interface DayOutput {
@@ -127,16 +142,49 @@ export interface DayOutput {
 
 export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+/** Which half of a running job is executing right now. */
+export type GenerationJobPhase = 'generating' | 'verifying';
+
+/**
+ * One automatic verification pass inside a generation job. A job keeps the
+ * whole list, including attempts whose plans were thrown away, so the
+ * dashboard can show why a plan was regenerated.
+ */
+export interface VerificationAttempt {
+  attempt: number;
+  /** 'passed' | 'failed' (regenerated if retries remained) | 'error' (verification itself could not run) | 'skipped'. */
+  status: 'passed' | 'failed' | 'error' | 'skipped';
+  errorCount: number;
+  warningCount: number;
+  issues: VerificationIssue[];
+  aiStatus: string;
+  aiVerdict: string;
+  aiSummary: string;
+  error: string;
+  generatedAt: string | null;
+  checkedAt: string | null;
+}
+
 /** Durable server-side generation job returned by /api/generate. */
 export interface GenerationJob {
   jobId: string;
   day: string;
   status: GenerationJobStatus;
+  phase: GenerationJobPhase;
   responseText: string;
   thinkingText: string;
   error: string;
   cacheable: boolean;
   isCurrentConfig: boolean;
+  /** This run verifies each plan and regenerates until it passes. */
+  autoVerify: boolean;
+  /** 1-based generation pass currently running (0 before the first starts). */
+  generationAttempt: number;
+  /** Ceiling on generation passes: 1 + the configured retries. */
+  maxGenerationAttempts: number;
+  /** Verdict on the plan this job finished with; null when never verified. */
+  verificationOk: boolean | null;
+  verificationAttempts: VerificationAttempt[];
 }
 
 /** One finding from either the arithmetic checker or the review model. */
@@ -194,6 +242,42 @@ export interface DayVerification {
   isStale: boolean;
 }
 
+/** One read-only database lookup the assistant made while answering. */
+export interface ChatToolStep {
+  name: string;
+  args: unknown;
+  ok: boolean;
+  error: string;
+  ms: number;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  /** Lookups behind this answer, shown as an expandable trace. */
+  steps: ChatToolStep[];
+  /** Set when the turn failed; the message stays so the transcript shows why. */
+  error: string;
+  createdAt: string;
+}
+
+export interface ChatThreadSummary {
+  threadId: string;
+  title: string;
+  lastMessageAt: string;
+  messageCount: number;
+}
+
+/** Human wording for each assistant tool, shown while it runs. */
+export const TOOL_LABELS: Record<string, string> = {
+  db_schema: 'Checking what the database holds',
+  list_days: 'Checking which days have plans',
+  get_diet_config: 'Reading your diet setup',
+  get_day_plan: 'Reading the plan',
+  db_query: 'Querying the database',
+  db_count: 'Counting records'
+};
+
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
   provider: 'gemini-enterprise',
@@ -215,6 +299,14 @@ export const DEFAULT_CONFIG: Config = {
   verificationThinkingLevel: 'default',
   verificationReasoningEffort: 'default',
   verificationMaxTokens: 0,
+  verificationAutoRetry: true,
+  verificationMaxRetries: 3,
+  agentProvider: '',
+  agentModel: '',
+  agentCustomModel: '',
+  agentThinkingLevel: 'low',
+  agentReasoningEffort: 'default',
+  agentMaxTokens: 8192,
   huggingFaceToken: '',
   huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {

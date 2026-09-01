@@ -110,6 +110,17 @@ export interface IConfig {
   verificationThinkingLevel?: string;
   verificationReasoningEffort?: string;
   verificationMaxTokens?: number;
+  /** Verify each generated plan and regenerate it until it passes. */
+  verificationAutoRetry?: boolean;
+  /** Regenerations allowed after the first attempt. */
+  verificationMaxRetries?: number;
+  /** Chat assistant settings; blank provider/model reuses the generation ones. */
+  agentProvider?: string;
+  agentModel?: string;
+  agentCustomModel?: string;
+  agentThinkingLevel?: string;
+  agentReasoningEffort?: string;
+  agentMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;
@@ -200,10 +211,29 @@ export interface IVerificationResult {
 
 export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+/** Which half of a running job is executing right now. */
+export type GenerationJobPhase = 'generating' | 'verifying';
+
+/** One automatic verification pass inside a generation job. */
+export interface IGenerationVerificationAttempt {
+  attempt: number;
+  status: 'passed' | 'failed' | 'error' | 'skipped';
+  errorCount: number;
+  warningCount: number;
+  issues: IVerificationResult['issues'];
+  aiStatus: string;
+  aiVerdict: string;
+  aiSummary: string;
+  error: string;
+  generatedAt: Date | null;
+  checkedAt: Date | null;
+}
+
 export interface IGenerationJob {
   jobId: string;
   day: string;
   status: GenerationJobStatus;
+  phase: GenerationJobPhase;
   cancelRequested: boolean;
   prompt: string;
   provider: string;
@@ -216,6 +246,11 @@ export interface IGenerationJob {
   enterpriseLocation: string;
   configHash: string;
   cacheable: boolean;
+  autoVerify: boolean;
+  generationAttempt: number;
+  maxGenerationAttempts: number;
+  verificationAttempts: IGenerationVerificationAttempt[];
+  verificationOk: boolean | null;
   responseText: string;
   thinkingText: string;
   error: string;
@@ -230,6 +265,37 @@ export interface IGenerationJob {
   updatedAt: Date;
 }
 
+/** One database read the assistant made while answering. */
+export interface IChatToolStep {
+  name: string;
+  args: unknown;
+  ok: boolean;
+  error: string;
+  ms: number;
+}
+
+export interface IChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  steps: IChatToolStep[];
+  error: string;
+  createdAt: Date;
+}
+
+/**
+ * One assistant conversation. Written by the app on the assistant's behalf —
+ * the assistant's own database access stays read-only, and it cannot read this
+ * collection at all.
+ */
+export interface IChatThread {
+  threadId: string;
+  title: string;
+  messages: IChatMessage[];
+  lastMessageAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const models = require('./models.js');
 
@@ -240,3 +306,4 @@ export const Scheduler: Model<IScheduler> = models.Scheduler;
 export const CachedResponse: Model<ICachedResponse> = models.CachedResponse;
 export const GenerationJob: Model<IGenerationJob> = models.GenerationJob;
 export const VerificationResult: Model<IVerificationResult> = models.VerificationResult;
+export const ChatThread: Model<IChatThread> = models.ChatThread;

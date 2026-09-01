@@ -6,7 +6,8 @@ import {
   GenerationJob,
   dbConnect,
   type IConfig,
-  type IGenerationJob
+  type IGenerationJob,
+  type IGenerationVerificationAttempt
 } from '@/lib/db';
 import { computeConfigHash } from '@/lib/config-hash';
 
@@ -28,6 +29,11 @@ const VALID_DAYS = new Set([
 ]);
 const ACTIVE_JOB_STATUSES = ['queued', 'running'] as const;
 
+// Regenerations after the first attempt. The config can lower this, but never
+// past a ceiling — an unbounded retry loop is a bill, not a feature.
+const MAX_ALLOWED_RETRIES = 5;
+const DEFAULT_MAX_RETRIES = 3;
+
 interface GenerationRequestBody {
   day?: unknown;
   prompt?: unknown;
@@ -37,6 +43,7 @@ interface GenerationRequestBody {
   reasoningEffort?: unknown;
   provider?: unknown;
   cacheable?: unknown;
+  autoVerify?: unknown;
   enterpriseAuthMethod?: unknown;
   enterpriseProjectId?: unknown;
   enterpriseLocation?: unknown;
@@ -46,15 +53,35 @@ interface PublicGenerationJob {
   jobId: string;
   day: string;
   status: IGenerationJob['status'];
+  phase: IGenerationJob['phase'];
   responseText: string;
   thinkingText: string;
   error: string;
   cacheable: boolean;
   isCurrentConfig: boolean;
+  autoVerify: boolean;
+  generationAttempt: number;
+  maxGenerationAttempts: number;
+  verificationOk: boolean | null;
+  verificationAttempts: PublicVerificationAttempt[];
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+interface PublicVerificationAttempt {
+  attempt: number;
+  status: IGenerationVerificationAttempt['status'];
+  errorCount: number;
+  warningCount: number;
+  issues: IGenerationVerificationAttempt['issues'];
+  aiStatus: string;
+  aiVerdict: string;
+  aiSummary: string;
+  error: string;
+  generatedAt: string | null;
+  checkedAt: string | null;
 }
 
 function stringValue(value: unknown, fallback = ''): string {
@@ -70,6 +97,13 @@ function normalizeDay(value: unknown): string | null {
 function normalizeMaxTokens(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+/** Retries allowed after the first generation, clamped to a sane ceiling. */
+function normalizeMaxRetries(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_RETRIES;
+  return Math.min(MAX_ALLOWED_RETRIES, Math.max(0, Math.floor(parsed)));
 }
 
 function dateString(value: Date | string | null | undefined): string | null {
@@ -91,16 +125,38 @@ function isCurrentConfig(job: IGenerationJob, config: IConfig | null): boolean {
   }
 }
 
+function serializeAttempt(attempt: IGenerationVerificationAttempt): PublicVerificationAttempt {
+  return {
+    attempt: attempt.attempt,
+    status: attempt.status,
+    errorCount: attempt.errorCount || 0,
+    warningCount: attempt.warningCount || 0,
+    issues: attempt.issues || [],
+    aiStatus: attempt.aiStatus || '',
+    aiVerdict: attempt.aiVerdict || '',
+    aiSummary: attempt.aiSummary || '',
+    error: attempt.error || '',
+    generatedAt: dateString(attempt.generatedAt),
+    checkedAt: dateString(attempt.checkedAt)
+  };
+}
+
 function serializeJob(job: IGenerationJob, config: IConfig | null): PublicGenerationJob {
   return {
     jobId: job.jobId,
     day: job.day,
     status: job.status,
+    phase: job.phase || 'generating',
     responseText: job.responseText || '',
     thinkingText: job.thinkingText || '',
     error: job.error || '',
     cacheable: !!job.cacheable,
     isCurrentConfig: isCurrentConfig(job, config),
+    autoVerify: !!job.autoVerify,
+    generationAttempt: job.generationAttempt || 0,
+    maxGenerationAttempts: job.maxGenerationAttempts || 1,
+    verificationOk: typeof job.verificationOk === 'boolean' ? job.verificationOk : null,
+    verificationAttempts: (job.verificationAttempts || []).map(serializeAttempt),
     // requestedAt represents the current logical job when the per-day Mongo
     // document has been reused after a previous terminal generation.
     createdAt: dateString(job.requestedAt) || dateString(job.createdAt) || new Date(0).toISOString(),
@@ -124,6 +180,12 @@ async function createOrReuseJob(
 
   const now = new Date();
   const maxTokens = normalizeMaxTokens(body.maxTokens ?? config.maxTokens);
+  // A hand-written prompt is judged against a brief the checker never saw, so
+  // those runs are never auto-verified regardless of the setting.
+  const cacheable = body.cacheable !== false;
+  const autoVerify = cacheable && (typeof body.autoVerify === 'boolean'
+    ? body.autoVerify
+    : config.verificationAutoRetry !== false);
   const jobValues = {
     jobId: randomUUID(),
     day,
@@ -138,7 +200,13 @@ async function createOrReuseJob(
     enterpriseProjectId: stringValue(body.enterpriseProjectId, config.enterpriseProjectId || ''),
     enterpriseLocation: stringValue(body.enterpriseLocation, config.enterpriseLocation || 'global'),
     configHash,
-    cacheable: body.cacheable !== false,
+    cacheable,
+    autoVerify,
+    maxGenerationAttempts: autoVerify ? 1 + normalizeMaxRetries(config.verificationMaxRetries) : 1,
+    phase: 'generating' as const,
+    generationAttempt: 0,
+    verificationAttempts: [],
+    verificationOk: null,
     cancelRequested: false,
     responseText: '',
     thinkingText: '',

@@ -1,5 +1,6 @@
 'use client';
-import { DayVerification, VerificationIssue, VerificationTotals } from '@/lib/types';
+import { useState } from 'react';
+import { DayVerification, GenerationJob, VerificationAttempt, VerificationIssue, VerificationTotals } from '@/lib/types';
 
 interface VerificationReportProps {
   day: string;
@@ -7,6 +8,10 @@ interface VerificationReportProps {
   isVerifying: boolean;
   error?: string;
   hasPlan: boolean;
+  /** The generation job behind this day, carrying its automatic retry history. */
+  job?: GenerationJob;
+  /** The day is inside an automatic post-generation verification pass. */
+  isAutoVerifying?: boolean;
   onVerify: () => void;
 }
 
@@ -70,12 +75,120 @@ function IssueList({ issues }: { issues: VerificationIssue[] }) {
   );
 }
 
+const ATTEMPT_LABELS: Record<VerificationAttempt['status'], { icon: string; text: string }> = {
+  passed: { icon: '✅', text: 'passed' },
+  failed: { icon: '❌', text: 'rejected — regenerated' },
+  error: { icon: '⚠️', text: 'could not be verified' },
+  skipped: { icon: '—', text: 'not verified' }
+};
+
+/**
+ * Every automatic attempt this plan went through, newest last. A plan that
+ * needed three tries is a different thing from one that passed first time,
+ * and the rejected attempts are the only record of why.
+ */
+function AttemptHistory({ day, job, isAutoVerifying }: {
+  day: string;
+  job: GenerationJob | undefined;
+  isAutoVerifying: boolean;
+}) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const attempts = job?.verificationAttempts || [];
+  if (!job?.autoVerify || (attempts.length === 0 && !isAutoVerifying)) return null;
+
+  const total = job.maxGenerationAttempts;
+  const passed = attempts.some(attempt => attempt.status === 'passed');
+  const rejected = attempts.filter(attempt => attempt.status === 'failed').length;
+  const exhausted = !passed && !isAutoVerifying && attempts.length >= total;
+
+  const headline = isAutoVerifying
+    ? `Verifying attempt ${Math.max(1, job.generationAttempt)} of ${total}…`
+    : passed
+      ? rejected === 0
+        ? 'Passed on the first attempt'
+        : `Passed on attempt ${attempts.length} of ${total} after ${rejected} regeneration${rejected === 1 ? '' : 's'}`
+      : exhausted
+        ? `Still failing after all ${attempts.length} attempt(s) — the last plan was kept`
+        : attempts.length > 0 && attempts[attempts.length - 1].status === 'error'
+          ? 'Verification could not run — the plan was kept unchecked'
+          : `${attempts.length} attempt(s) recorded`;
+
+  return (
+    <div className={`verify-attempts ${passed ? 'is-pass' : exhausted ? 'is-fail' : ''}`}>
+      <div className="verify-attempts__head">
+        <span className="verify-attempts__label">Automatic verification</span>
+        <span className="verify-attempts__headline">{headline}</span>
+      </div>
+
+      <ol className="verify-attempts__list">
+        {attempts.map(attempt => {
+          const meta = ATTEMPT_LABELS[attempt.status];
+          const isOpen = expanded === attempt.attempt;
+          const canExpand = attempt.issues.length > 0 || !!attempt.error;
+          return (
+            <li key={attempt.attempt} className={`verify-attempt is-${attempt.status}`}>
+              <button
+                className="verify-attempt__row"
+                onClick={() => setExpanded(isOpen ? null : attempt.attempt)}
+                disabled={!canExpand}
+                aria-expanded={isOpen}
+              >
+                <span className="verify-attempt__icon" aria-hidden="true">{meta.icon}</span>
+                <span className="verify-attempt__title">
+                  Attempt {attempt.attempt} of {total} {meta.text}
+                </span>
+                <span className="verify-attempt__counts">
+                  {attempt.status === 'error'
+                    ? attempt.error
+                    : `${attempt.errorCount} error${attempt.errorCount === 1 ? '' : 's'}`
+                      + (attempt.warningCount ? ` · ${attempt.warningCount} note${attempt.warningCount === 1 ? '' : 's'}` : '')}
+                </span>
+                {canExpand && <span className="verify-attempt__chevron" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>}
+              </button>
+
+              {isOpen && attempt.issues.length > 0 && (
+                <div className="verify-attempt__detail">
+                  <IssueList issues={attempt.issues} />
+                </div>
+              )}
+              {isOpen && !attempt.issues.length && attempt.error && (
+                <div className="verify-attempt__detail">
+                  <p className="verify-note is-warn">{attempt.error}</p>
+                </div>
+              )}
+            </li>
+          );
+        })}
+        {isAutoVerifying && (
+          <li className="verify-attempt is-running">
+            <span className="verify-attempt__row" aria-live="polite">
+              <span className="spinner spinner--inline"></span>
+              <span className="verify-attempt__title">
+                Attempt {Math.max(1, job.generationAttempt)} of {total} — checking {day} now
+              </span>
+            </span>
+          </li>
+        )}
+      </ol>
+
+      {exhausted && (
+        <p className="verify-note is-warn">
+          The retry budget is spent, so the last plan was kept as-is. Fix the findings in the
+          configuration, or regenerate {day} manually to try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function VerificationReport({
   day,
   verification,
   isVerifying,
   error,
   hasPlan,
+  job,
+  isAutoVerifying = false,
   onVerify
 }: VerificationReportProps) {
   if (isVerifying) {
@@ -91,20 +204,33 @@ export default function VerificationReport({
   }
 
   if (!verification) {
+    const hasAttempts = !!job?.autoVerify && (job.verificationAttempts.length > 0 || isAutoVerifying);
     return (
-      <div className="placeholder-container">
-        <div className="placeholder-icon">🔍</div>
-        <h3 className="placeholder-title">{day} has not been verified</h3>
-        <p className="placeholder-text">
-          {hasPlan
-            ? 'Re-derive every weight, calorie, macro and the Na:K ratio from the reference nutrition table and compare them against what the plan claims.'
-            : `Generate the ${day} plan first — there is nothing to verify yet.`}
-        </p>
-        {error && <div className="error-banner" style={{ marginTop: '0.75rem' }}>{error}</div>}
-        {hasPlan && (
-          <div className="placeholder-actions">
-            <button className="btn-primary" onClick={onVerify}>Verify {day}</button>
-          </div>
+      <div className={hasAttempts ? 'verify-report' : 'placeholder-container'}>
+        {hasAttempts ? (
+          <>
+            <AttemptHistory day={day} job={job} isAutoVerifying={isAutoVerifying} />
+            {error && <div className="error-banner">{error}</div>}
+            <p className="verify-note">
+              The full verdict for the plan that is kept appears here once this run finishes.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="placeholder-icon">🔍</div>
+            <h3 className="placeholder-title">{day} has not been verified</h3>
+            <p className="placeholder-text">
+              {hasPlan
+                ? 'Re-derive every weight, calorie, macro and the Na:K ratio from the reference nutrition table and compare them against what the plan claims.'
+                : `Generate the ${day} plan first — there is nothing to verify yet.`}
+            </p>
+            {error && <div className="error-banner" style={{ marginTop: '0.75rem' }}>{error}</div>}
+            {hasPlan && (
+              <div className="placeholder-actions">
+                <button className="btn-primary" onClick={onVerify}>Verify {day}</button>
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -137,6 +263,8 @@ export default function VerificationReport({
           Re-verify
         </button>
       </div>
+
+      <AttemptHistory day={day} job={job} isAutoVerifying={isAutoVerifying} />
 
       {verification.isStale && (
         <div className="verify-stale-banner">

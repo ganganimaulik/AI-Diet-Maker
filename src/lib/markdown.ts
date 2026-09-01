@@ -191,3 +191,136 @@ export function parseCookPlanDays(cookPlan: string) {
     content: d.content.join('\n').trim()
   })).filter(d => d.content.length > 0);
 }
+
+// -------------------------------------------------------------
+// CHAT MARKDOWN
+// -------------------------------------------------------------
+// renderMarkdown() above is shaped around a generated diet plan: it splits the
+// text at "PART 2: FOR MY COOK" and renders only the first half. Assistant
+// replies are ordinary prose, so they get their own renderer — one that keeps
+// the whole message and treats a numbered list as a list rather than a heading.
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const renderChatInline = (text: string) =>
+  escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+
+const parseChatRowCells = (row: string) => {
+  let inner = row.trim();
+  if (inner.startsWith('|')) inner = inner.slice(1);
+  if (inner.endsWith('|')) inner = inner.slice(0, -1);
+  return inner.split('|').map(c => c.trim());
+};
+
+const renderChatTable = (rows: string[]) => {
+  if (rows.length === 0) return '';
+  const html = ['<div class="table-scroll"><table>'];
+  rows.forEach((row, index) => {
+    // The |---|---| separator row carries alignment, not data.
+    if (index === 1 && /^[\s|:-]+$/.test(row)) return;
+    const cells = parseChatRowCells(row);
+    if (index === 0) {
+      html.push('<thead><tr>');
+      cells.forEach(cell => html.push(`<th>${renderChatInline(cell)}</th>`));
+      html.push('</tr></thead><tbody>');
+    } else {
+      html.push('<tr>');
+      cells.forEach(cell => html.push(`<td>${renderChatInline(cell)}</td>`));
+      html.push('</tr>');
+    }
+  });
+  html.push('</tbody></table></div>');
+  return html.join('\n');
+};
+
+/**
+ * Render one assistant message. Streaming means this runs on partial text, so
+ * every block type has to close cleanly at the end of whatever has arrived.
+ */
+export const renderChatMarkdown = (md: string): string => {
+  if (!md) return '';
+
+  const lines = md.split('\n');
+  const html: string[] = [];
+  let listType: 'ul' | 'ol' | null = null;
+  let tableRows: string[] = [];
+  let codeLines: string[] | null = null;
+
+  const closeList = () => {
+    if (listType) { html.push(`</${listType}>`); listType = null; }
+  };
+  const closeTable = () => {
+    if (tableRows.length > 0) { html.push(renderChatTable(tableRows)); tableRows = []; }
+  };
+  const openList = (type: 'ul' | 'ol') => {
+    if (listType === type) return;
+    closeList();
+    html.push(`<${type}>`);
+    listType = type;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (line.startsWith('```')) {
+      if (codeLines) {
+        html.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        codeLines = null;
+      } else {
+        closeList();
+        closeTable();
+        codeLines = [];
+      }
+      continue;
+    }
+    if (codeLines) { codeLines.push(rawLine); continue; }
+
+    if (!line) { closeList(); closeTable(); continue; }
+
+    if (line.startsWith('|')) {
+      closeList();
+      tableRows.push(line);
+      continue;
+    }
+    closeTable();
+
+    const heading = line.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      closeList();
+      const level = Math.min(4, heading[1].length + 2);
+      html.push(`<h${level}>${renderChatInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      openList('ul');
+      html.push(`<li>${renderChatInline(line.replace(/^[-*]\s+/, ''))}</li>`);
+      continue;
+    }
+
+    if (/^\d+[.)]\s+/.test(line)) {
+      openList('ol');
+      html.push(`<li>${renderChatInline(line.replace(/^\d+[.)]\s+/, ''))}</li>`);
+      continue;
+    }
+
+    if (/^(---+|\*\*\*+)$/.test(line)) {
+      closeList();
+      html.push('<hr />');
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${renderChatInline(line)}</p>`);
+  }
+
+  if (codeLines) html.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+  closeList();
+  closeTable();
+
+  return html.join('\n');
+};

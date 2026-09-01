@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { DayProgress, DayVerification, DAYS_OF_WEEK } from '@/lib/types';
+import { DayProgress, DayVerification, GenerationJob, DAYS_OF_WEEK } from '@/lib/types';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 import { renderMarkdown, getCookPlanOnly, parseCookPlanDays } from '@/lib/markdown';
 import VerificationReport from './VerificationReport';
@@ -19,6 +19,7 @@ interface OutputPanelProps {
   isGenerating: boolean;
   isBatchGenerating: boolean;
   dayProgress: Record<string, DayProgress>;
+  dayJobs: Record<string, GenerationJob>;
   isCachedResponse: boolean;
   onGenerate: (forceRegenerate?: boolean) => void;
   onGenerateAllDays: () => void;
@@ -114,11 +115,20 @@ function dayVerifyTitle(verification: DayVerification | undefined, isVerifying: 
   return verification.ok ? ' — verified' : ` — ${verification.errorCount} verification error(s)`;
 }
 
+/** "attempt 2 of 4" label, empty unless the run actually verifies and retries. */
+function attemptLabel(job: GenerationJob | undefined): string {
+  if (!job || !job.autoVerify || job.maxGenerationAttempts <= 1) return '';
+  return ` — attempt ${Math.max(1, job.generationAttempt)} of ${job.maxGenerationAttempts}`;
+}
+
 /** Chip colouring for one day, driven by its cache entry and live progress. */
 function dayChipState(status: CacheEntryStatus | undefined, progress: DayProgress | undefined, day: string) {
   const abbr = day.substring(0, 3);
   if (progress === 'queued') {
     return { bg: 'rgba(234, 179, 8, 0.18)', color: '#facc15', label: `⏳ ${abbr}`, busy: true };
+  }
+  if (progress === 'verifying') {
+    return { bg: 'rgba(103, 232, 249, 0.18)', color: '#67e8f9', label: `🔍 ${abbr}`, busy: true };
   }
   const busy = progress === 'generating' || progress === 'checking';
   if (busy) return { bg: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', label: `⌛ ${abbr}`, busy };
@@ -159,6 +169,7 @@ export default function OutputPanel({
   isGenerating,
   isBatchGenerating,
   dayProgress,
+  dayJobs,
   isCachedResponse,
   onGenerate,
   onGenerateAllDays,
@@ -172,7 +183,12 @@ export default function OutputPanel({
   onVerifyDay
 }: OutputPanelProps) {
   const isCurrentDayQueued = dayProgress[selectedDay] === 'queued';
-  const isCurrentDayBusy = isGenerating || isCurrentDayQueued || dayProgress[selectedDay] === 'checking';
+  const isCurrentDayVerifying = dayProgress[selectedDay] === 'verifying';
+  const isCurrentDayBusy = isGenerating
+    || isCurrentDayQueued
+    || isCurrentDayVerifying
+    || dayProgress[selectedDay] === 'checking';
+  const currentJob = dayJobs[selectedDay];
   const providerName = formatProviderLabel(provider);
   // Days differ in whether they carry thinking output — fall back to the plan
   // tab instead of rendering an empty panel after switching days.
@@ -205,9 +221,11 @@ export default function OutputPanel({
                   className="day-chip"
                   onClick={() => onSelectDay(day)}
                   title={
-                    busy
-                      ? `${day}: generating…`
-                      : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}${dayVerifyTitle(verifications[day], !!verifyingDays[day])}`
+                    dayProgress[day] === 'verifying'
+                      ? `${day}: verifying the generated plan${attemptLabel(dayJobs[day])}…`
+                      : busy
+                        ? `${day}: generating${attemptLabel(dayJobs[day])}…`
+                        : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}${dayVerifyTitle(verifications[day], !!verifyingDays[day])}`
                   }
                 >
                   {label}
@@ -349,10 +367,19 @@ export default function OutputPanel({
             <span style={{ opacity: 0.9 }}>{selectedDay} Queued (Waiting in line)...</span>
           </div>
         )}
-        {isCurrentDayBusy && !isCurrentDayQueued && (
+        {isCurrentDayVerifying && (
+          <div className="output-status" style={{ color: '#67e8f9' }}>
+            <div className="spinner spinner--xs"></div>
+            <span style={{ opacity: 0.9 }}>Verifying {selectedDay}{attemptLabel(currentJob)}...</span>
+          </div>
+        )}
+        {isCurrentDayBusy && !isCurrentDayQueued && !isCurrentDayVerifying && (
           <div className="output-status">
             <div className="spinner spinner--xs"></div>
-            <span style={{ opacity: 0.9 }}>Generating {selectedDay}...</span>
+            <span style={{ opacity: 0.9 }}>
+              {currentJob && currentJob.generationAttempt > 1 ? 'Regenerating' : 'Generating'} {selectedDay}
+              {attemptLabel(currentJob)}...
+            </span>
           </div>
         )}
         {isBatchGenerating && !isCurrentDayBusy && (
@@ -400,11 +427,23 @@ export default function OutputPanel({
             isVerifying={isVerifyingDay}
             error={verifyErrors[selectedDay]}
             hasPlan={!!outputText}
+            job={currentJob}
+            isAutoVerifying={isCurrentDayVerifying}
             onVerify={() => onVerifyDay(selectedDay)}
           />
         ) : isCurrentDayBusy && !outputText && !thinkingText ? (
           <div className="loading-container" style={{ flex: 1 }}>
-            {isCurrentDayQueued ? (
+            {isCurrentDayVerifying ? (
+              <>
+                <div className="spinner"></div>
+                <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  Verifying the {selectedDay} plan{attemptLabel(currentJob)}...
+                </p>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Re-deriving every weight, calorie and mineral from the reference table
+                </span>
+              </>
+            ) : isCurrentDayQueued ? (
               <>
                 <div className="queued-hourglass" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⏳</div>
                 <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>

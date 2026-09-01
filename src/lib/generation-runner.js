@@ -55,6 +55,10 @@ async function claimNextQueuedJob(GenerationJob) {
     {
       $set: {
         status: 'running',
+        // generationAttempt and verificationAttempts are deliberately NOT reset:
+        // a job requeued after a crashed worker resumes its retry budget instead
+        // of spending a fresh one.
+        phase: 'generating',
         leaseId,
         leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
         heartbeatAt: now,
@@ -125,6 +129,76 @@ async function heartbeatJob(GenerationJob, jobId, leaseId, partial = {}) {
 }
 
 /**
+ * Start a new generation attempt on a claimed job: record which attempt is
+ * running, flip back to the generating phase and clear the previous attempt's
+ * streamed text so the dashboard shows a fresh stream rather than the rejected
+ * plan. Returns false when the lease was lost.
+ */
+async function startGenerationAttempt(GenerationJob, jobId, leaseId, attempt) {
+  const now = new Date();
+  const result = await GenerationJob.updateOne(
+    { jobId, status: 'running', leaseId },
+    {
+      $set: {
+        phase: 'generating',
+        generationAttempt: attempt,
+        responseText: '',
+        thinkingText: '',
+        heartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS)
+      }
+    }
+  );
+  return result.matchedCount > 0;
+}
+
+/**
+ * Move a claimed job into its verification phase, checkpointing the plan that
+ * is about to be judged. Returns false when the lease was lost.
+ */
+async function startVerificationPhase(GenerationJob, jobId, leaseId, { responseText = '', thinkingText = '' } = {}) {
+  const now = new Date();
+  const result = await GenerationJob.updateOne(
+    { jobId, status: 'running', leaseId },
+    {
+      $set: {
+        phase: 'verifying',
+        responseText,
+        thinkingText,
+        heartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS)
+      }
+    }
+  );
+  return result.matchedCount > 0;
+}
+
+/**
+ * Append one attempt's verdict to the job's history. Appended rather than
+ * replaced so a reader always sees every attempt that was made, including the
+ * ones whose plans were thrown away.
+ */
+async function recordVerificationAttempt(GenerationJob, jobId, leaseId, attemptRecord) {
+  const now = new Date();
+  const result = await GenerationJob.updateOne(
+    { jobId, status: 'running', leaseId },
+    {
+      $push: { verificationAttempts: attemptRecord },
+      $set: {
+        // 'error'/'skipped' mean no verdict was reached, which is not the same
+        // as a failing one — those leave verificationOk null.
+        verificationOk: attemptRecord.status === 'passed' ? true
+          : attemptRecord.status === 'failed' ? false
+            : null,
+        heartbeatAt: now,
+        leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS)
+      }
+    }
+  );
+  return result.matchedCount > 0;
+}
+
+/**
  * Mark a job completed with its final text and release the lease.
  *
  * The update atomically requires that no cancellation has arrived, so a DELETE
@@ -133,13 +207,20 @@ async function heartbeatJob(GenerationJob, jobId, leaseId, partial = {}) {
  * completion was recorded; false means the job was cancelled mid-flight (or,
  * practically never, the lease was lost) and the caller must not cache.
  */
-async function completeJob(GenerationJob, jobId, leaseId, { responseText = '', thinkingText = '' } = {}) {
+async function completeJob(
+  GenerationJob,
+  jobId,
+  leaseId,
+  { responseText = '', thinkingText = '', verificationOk = null } = {}
+) {
   const now = new Date();
   const result = await GenerationJob.updateOne(
     { jobId, status: 'running', leaseId, cancelRequested: { $ne: true } },
     {
       $set: {
         status: 'completed',
+        phase: 'generating',
+        verificationOk,
         responseText,
         thinkingText,
         error: '',
@@ -209,6 +290,7 @@ async function cancelJob(GenerationJob, jobId, leaseId, { responseText = '', thi
     {
       $set: {
         status: 'cancelled',
+        phase: 'generating',
         responseText,
         thinkingText,
         error: 'Generation cancelled by user.',
@@ -229,6 +311,7 @@ async function failJob(GenerationJob, jobId, leaseId, errorMessage, { responseTe
     {
       $set: {
         status: 'failed',
+        phase: 'generating',
         responseText,
         thinkingText,
         error: errorMessage,
@@ -250,6 +333,9 @@ module.exports = {
   claimNextQueuedJob,
   requeueStaleJobs,
   heartbeatJob,
+  startGenerationAttempt,
+  startVerificationPhase,
+  recordVerificationAttempt,
   completeJob,
   failJob,
   requestCancelJob,

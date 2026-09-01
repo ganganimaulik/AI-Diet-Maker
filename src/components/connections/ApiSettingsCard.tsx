@@ -43,6 +43,26 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
     ? configuredVerificationEffort
     : 'default';
 
+  // The chat assistant inherits the same way the verification settings do, but
+  // usually is pointed somewhere faster: a chat turn makes several model calls.
+  const agentInheritsProvider = !config.agentProvider || config.agentProvider === config.provider;
+  const agentProvider = config.agentProvider || config.provider || 'google-ai-studio';
+  const selectedAgentModel = config.agentModel === 'custom'
+    ? config.agentCustomModel
+    : (config.agentModel || (agentInheritsProvider ? selectedFireworksModel : ''));
+  const supportedAgentEfforts = getReasoningEffortsForModel(selectedAgentModel);
+  const configuredAgentEffort = config.agentReasoningEffort || 'default';
+  const displayedAgentEffort = supportedAgentEfforts.includes(configuredAgentEffort)
+    ? configuredAgentEffort
+    : 'default';
+
+  // Retries after the first attempt; the API clamps to the same ceiling, so the
+  // picker never offers a value the server would silently reduce.
+  const rawAutoRetryLimit = Number(config.verificationMaxRetries ?? 3);
+  const autoRetryLimit = Number.isFinite(rawAutoRetryLimit)
+    ? Math.min(5, Math.max(0, Math.floor(rawAutoRetryLimit)))
+    : 3;
+
   // A saved effort can become invalid when the user changes models. Reset it
   // immediately so saving or generating cannot send a hidden unsupported value.
   useEffect(() => {
@@ -74,6 +94,15 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
       ? prev
       : { ...prev, verificationReasoningEffort: 'default' }));
   }, [verificationProvider, selectedVerificationModel, configuredVerificationEffort, setConfig]);
+
+  // And the same guard again for the assistant model.
+  useEffect(() => {
+    if (agentProvider !== 'fireworks') return;
+    if (getReasoningEffortsForModel(selectedAgentModel).includes(configuredAgentEffort)) return;
+    setConfig(prev => (prev.agentReasoningEffort === 'default'
+      ? prev
+      : { ...prev, agentReasoningEffort: 'default' }));
+  }, [agentProvider, selectedAgentModel, configuredAgentEffort, setConfig]);
 
   return (
     <section className="settings-group-card">
@@ -391,6 +420,40 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           <span>Also run a second-opinion AI review when verifying</span>
         </label>
 
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={config.verificationAutoRetry !== false}
+            onChange={e => setConfig(prev => ({ ...prev, verificationAutoRetry: e.target.checked }))}
+          />
+          <span>Verify automatically after generating, and regenerate until it passes</span>
+        </label>
+
+        {config.verificationAutoRetry !== false && (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Max Regeneration Retries</label>
+            <select
+              className="form-input"
+              value={String(autoRetryLimit)}
+              onChange={e => setConfig(prev => ({ ...prev, verificationMaxRetries: Number(e.target.value) }))}
+            >
+              <option value="0">0 — verify once, never regenerate</option>
+              <option value="1">1 retry (up to 2 generations per day)</option>
+              <option value="2">2 retries (up to 3 generations per day)</option>
+              <option value="3">3 retries (up to 4 generations per day)</option>
+              <option value="4">4 retries (up to 5 generations per day)</option>
+              <option value="5">5 retries (up to 6 generations per day)</option>
+            </select>
+            <p className="note-text">
+              A rejected plan is regenerated with the checker&apos;s exact findings appended to the
+              prompt, and the retries stop as soon as the arithmetic pass comes back clean. Each
+              retry is a full plan generation, so &ldquo;Generate All 7 Days&rdquo; can cost up to{' '}
+              {7 * (1 + autoRetryLimit)} generations in the worst case. If the budget runs out, the
+              last plan is kept and its failing verdict is shown on the day.
+            </p>
+          </div>
+        )}
+
         <div className="input-row">
           <div className="form-group">
             <label className="form-label">Verification Provider</label>
@@ -505,6 +568,132 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               }}
             />
             <p className="note-text">A review is short; the default keeps reasoning models from running long.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-subgroup assistant-settings">
+        <h4 className="settings-subgroup-title">
+          <span aria-hidden="true">💬</span> Chat Assistant
+        </h4>
+        <p className="note-text" style={{ marginTop: 0 }}>
+          Powers the Assistant tab. It answers by reading your configuration, plans and
+          verification verdicts straight from the database &mdash; read-only, with no way to change
+          anything or send a message. One question can take several model calls in a row, so a fast
+          model here beats a deep one.
+        </p>
+
+        <div className="input-row">
+          <div className="form-group">
+            <label className="form-label">Assistant Provider</label>
+            <select
+              className="form-input"
+              value={config.agentProvider || ''}
+              onChange={e => {
+                const nextProvider = e.target.value;
+                setConfig(prev => {
+                  const effective = nextProvider || prev.provider || 'google-ai-studio';
+                  const inherits = !nextProvider || nextProvider === prev.provider;
+                  const nextModel = inherits ? (prev.agentModel || '') : modelsForProvider(effective)[0].value;
+                  return {
+                    ...prev,
+                    agentProvider: nextProvider,
+                    agentModel: nextModel,
+                    agentReasoningEffort: 'default'
+                  };
+                });
+              }}
+            >
+              <option value="">
+                Same as generation ({PROVIDER_LABELS[config.provider || 'google-ai-studio'] || config.provider})
+              </option>
+              <option value="google-ai-studio">Google AI Studio (Gemini API)</option>
+              <option value="gemini-enterprise">Gemini Enterprise Agent Platform (Vertex AI)</option>
+              <option value="fireworks">Fireworks.ai (OpenAI-Compatible Inference)</option>
+            </select>
+            <p className="note-text">
+              The model must support tool calling, which every model in these lists does.
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Assistant Model</label>
+            <select
+              className="form-input"
+              value={config.agentModel || ''}
+              onChange={e => setConfig(prev => ({ ...prev, agentModel: e.target.value }))}
+            >
+              {agentInheritsProvider && (
+                <option value="">Same as generation model</option>
+              )}
+              {modelsForProvider(agentProvider).map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+              <option value="custom">Custom Model Name</option>
+            </select>
+          </div>
+        </div>
+
+        {config.agentModel === 'custom' && (
+          <div className="form-group">
+            <label className="form-label">Custom Assistant Model Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={config.agentCustomModel || ''}
+              onChange={e => setConfig(prev => ({ ...prev, agentCustomModel: e.target.value }))}
+              placeholder={agentProvider === 'fireworks' ? 'accounts/fireworks/models/...' : 'gemini-3.7-flash'}
+            />
+          </div>
+        )}
+
+        <div className="input-row">
+          {agentProvider === 'fireworks' ? (
+            <div className="form-group">
+              <label className="form-label">Assistant Reasoning Effort</label>
+              <select
+                className="form-input"
+                value={displayedAgentEffort}
+                onChange={e => setConfig(prev => ({ ...prev, agentReasoningEffort: e.target.value }))}
+                disabled={supportedAgentEfforts.length === 1}
+              >
+                {supportedAgentEfforts.map(effort => (
+                  <option key={effort} value={effort}>{REASONING_EFFORT_LABELS[effort] || effort}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Assistant Thinking Level</label>
+              <select
+                className="form-input"
+                value={config.agentThinkingLevel || 'default'}
+                onChange={e => setConfig(prev => ({ ...prev, agentThinkingLevel: e.target.value }))}
+              >
+                <option value="default">Model default (dynamic)</option>
+                <option value="low">Low (fastest, cheapest)</option>
+                <option value="medium">Medium</option>
+                <option value="high">High (deepest reasoning)</option>
+              </select>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Assistant Max Output Tokens</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="256"
+              className="form-input"
+              placeholder="Auto (8192)"
+              value={config.agentMaxTokens ? String(config.agentMaxTokens) : ''}
+              onChange={e => {
+                const parsed = parseInt(e.target.value, 10);
+                setConfig(prev => ({ ...prev, agentMaxTokens: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 }));
+              }}
+            />
+            <p className="note-text">Applies to each model call in a turn, not the whole answer.</p>
           </div>
         </div>
       </div>
