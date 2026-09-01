@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { DayProgress, DAYS_OF_WEEK } from '@/lib/types';
+import { DayProgress, DayVerification, DAYS_OF_WEEK } from '@/lib/types';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 import { renderMarkdown, getCookPlanOnly, parseCookPlanDays } from '@/lib/markdown';
+import VerificationReport from './VerificationReport';
 
-export type OutputTab = 'user' | 'cook' | 'thoughts';
+export type OutputTab = 'user' | 'cook' | 'thoughts' | 'verify';
 
 interface OutputPanelProps {
   selectedDay: string;
@@ -25,6 +26,10 @@ interface OutputPanelProps {
   onCancelDay: (day: string) => void;
   hidden?: boolean;
   provider?: string;
+  verifications: Record<string, DayVerification>;
+  verifyingDays: Record<string, boolean>;
+  verifyErrors: Record<string, string>;
+  onVerifyDay: (day: string) => void;
 }
 
 function formatProviderLabel(provider?: string): string {
@@ -38,6 +43,15 @@ function RegenerateIcon({ size = 12 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M1 4v6h6M23 20v-6h-6"/>
       <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+    </svg>
+  );
+}
+
+function VerifyIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4"/>
+      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
     </svg>
   );
 }
@@ -83,6 +97,21 @@ function DayCopyButton({ text }: { text: string }) {
       )}
     </button>
   );
+}
+
+/** Verification marker for a day chip: '' when the day was never verified. */
+function dayVerifyClass(verification: DayVerification | undefined, isVerifying: boolean): string {
+  if (isVerifying) return 'is-checking';
+  if (!verification) return '';
+  if (verification.isStale) return 'is-stale-check';
+  return verification.ok ? 'is-verified' : 'is-failed';
+}
+
+function dayVerifyTitle(verification: DayVerification | undefined, isVerifying: boolean): string {
+  if (isVerifying) return ' — verifying…';
+  if (!verification) return '';
+  if (verification.isStale) return ' — verified against an older plan';
+  return verification.ok ? ' — verified' : ` — ${verification.errorCount} verification error(s)`;
 }
 
 /** Chip colouring for one day, driven by its cache entry and live progress. */
@@ -136,7 +165,11 @@ export default function OutputPanel({
   onRegenerateDay,
   onCancelDay,
   hidden = false,
-  provider
+  provider,
+  verifications,
+  verifyingDays,
+  verifyErrors,
+  onVerifyDay
 }: OutputPanelProps) {
   const isCurrentDayQueued = dayProgress[selectedDay] === 'queued';
   const isCurrentDayBusy = isGenerating || isCurrentDayQueued || dayProgress[selectedDay] === 'checking';
@@ -144,6 +177,8 @@ export default function OutputPanel({
   // Days differ in whether they carry thinking output — fall back to the plan
   // tab instead of rendering an empty panel after switching days.
   const activeTab: OutputTab = outputTab === 'thoughts' && !thinkingText ? 'user' : outputTab;
+  const verification = verifications[selectedDay];
+  const isVerifyingDay = !!verifyingDays[selectedDay];
 
   return (
     <section className="glass-panel output-panel" style={{ display: hidden ? 'none' : 'flex' }}>
@@ -172,10 +207,13 @@ export default function OutputPanel({
                   title={
                     busy
                       ? `${day}: generating…`
-                      : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}`
+                      : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not generated'}${dayVerifyTitle(verifications[day], !!verifyingDays[day])}`
                   }
                 >
                   {label}
+                  {dayVerifyClass(verifications[day], !!verifyingDays[day]) && (
+                    <span className={`day-verify-dot ${dayVerifyClass(verifications[day], !!verifyingDays[day])}`} aria-hidden="true" />
+                  )}
                 </button>
                 {busy ? (
                   <button
@@ -240,6 +278,21 @@ export default function OutputPanel({
               Regenerate {selectedDay.substring(0, 3)}
             </button>
           )}
+
+          {!!outputText && !isCurrentDayBusy && (
+            <button
+              className="btn-verify btn-verify--sm"
+              disabled={isVerifyingDay}
+              onClick={() => {
+                setOutputTab('verify');
+                onVerifyDay(selectedDay);
+              }}
+              title={`Re-derive every number in the ${selectedDay} plan and compare it to what the plan claims`}
+            >
+              {isVerifyingDay ? <div className="spinner spinner--inline"></div> : <VerifyIcon size={12} />}
+              Verify {selectedDay.substring(0, 3)}
+            </button>
+          )}
         </div>
       </div>
 
@@ -274,6 +327,19 @@ export default function OutputPanel({
           >
             <span className="label-short">For Cook</span>
             <span className="label-long">Part 2: For Cook ({selectedDay})</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'verify'}
+            className={`output-tab ${activeTab === 'verify' ? 'active' : ''} ${verification && !verification.ok ? 'has-failure' : ''}`}
+            onClick={() => setOutputTab('verify')}
+          >
+            <span className="label-short">
+              Verify{verification ? (verification.ok ? ' ✓' : ` ✗${verification.errorCount}`) : ''}
+            </span>
+            <span className="label-long">
+              Verification ({selectedDay}){verification ? (verification.ok ? ' ✓' : ` — ${verification.errorCount} error(s)`) : ''}
+            </span>
           </button>
         </div>
 
@@ -327,7 +393,16 @@ export default function OutputPanel({
       )}
 
       <div className="output-body">
-        {isCurrentDayBusy && !outputText && !thinkingText ? (
+        {activeTab === 'verify' ? (
+          <VerificationReport
+            day={selectedDay}
+            verification={verification}
+            isVerifying={isVerifyingDay}
+            error={verifyErrors[selectedDay]}
+            hasPlan={!!outputText}
+            onVerify={() => onVerifyDay(selectedDay)}
+          />
+        ) : isCurrentDayBusy && !outputText && !thinkingText ? (
           <div className="loading-container" style={{ flex: 1 }}>
             {isCurrentDayQueued ? (
               <>

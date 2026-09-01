@@ -64,6 +64,18 @@ const ConfigSchema = new Schema({
   maxTokens: { type: Number, default: 0 },
   // 'default' = omit reasoning_effort from the request (Fireworks only)
   reasoningEffort: { type: String, default: 'default' },
+  // Plan verification. The arithmetic checker always runs and never calls a
+  // model; these settings only drive the optional second-opinion AI review,
+  // which may use a different provider/model than plan generation.
+  verificationAiReview: { type: Boolean, default: false },
+  // '' means "reuse the generation provider/model" so the review keeps working
+  // for configs saved before these fields existed.
+  verificationProvider: { type: String, default: '' },
+  verificationModel: { type: String, default: '' },
+  verificationCustomModel: { type: String, default: '' },
+  verificationThinkingLevel: { type: String, default: 'default' },
+  verificationReasoningEffort: { type: String, default: 'default' },
+  verificationMaxTokens: { type: Number, default: 0 },
   global: {
     dailyCalorieTarget: { type: Number, default: 3200 },
     totalOliveOil: { type: Number, default: 18 },
@@ -139,7 +151,38 @@ const CachedResponseSchema = new Schema({
 // Ensure one cached response per day
 CachedResponseSchema.index({ day: 1 }, { unique: true });
 
-// 6. Persisted dashboard generation state. There is one current job per day;
+// 6. Verification verdict for one day's cached plan.
+const VerificationIssueSchema = new Schema({
+  severity: { type: String, enum: ['error', 'warning'], default: 'error' },
+  category: { type: String, default: '' },
+  message: { type: String, default: '' },
+  // 'math' = the deterministic re-derivation, 'ai' = the review model's opinion.
+  source: { type: String, enum: ['math', 'ai'], default: 'math' }
+}, { _id: false });
+
+const VerificationResultSchema = new Schema({
+  day: { type: String, required: true },
+  // Hash of the config that produced the plan. A later config edit stales the
+  // verdict exactly as it stales the cached plan it was computed from.
+  configHash: { type: String, default: '' },
+  planGeneratedAt: { type: Date, default: null },
+  ok: { type: Boolean, default: false },
+  errorCount: { type: Number, default: 0 },
+  warningCount: { type: Number, default: 0 },
+  issues: [VerificationIssueSchema],
+  // Free-form result payloads; kept as Mixed so adding a computed field later
+  // does not need a migration.
+  computed: { type: Schema.Types.Mixed, default: null },
+  stated: { type: Schema.Types.Mixed, default: null },
+  feasibility: { type: Schema.Types.Mixed, default: null },
+  target: { type: Number, default: 0 },
+  aiReview: { type: Schema.Types.Mixed, default: null },
+  checkedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+VerificationResultSchema.index({ day: 1 }, { unique: true });
+
+// 7. Persisted dashboard generation state. There is one current job per day;
 // starting a new job replaces that day's terminal record, while an active job
 // is returned idempotently. API credentials deliberately do not belong here.
 const GenerationJobSchema = new Schema({
@@ -190,6 +233,7 @@ const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSche
 const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', SchedulerSchema);
 const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
 const GenerationJob = mongoose.models.GenerationJob || mongoose.model('GenerationJob', GenerationJobSchema);
+const VerificationResult = mongoose.models.VerificationResult || mongoose.model('VerificationResult', VerificationResultSchema);
 
 module.exports = {
   Config,
@@ -197,5 +241,6 @@ module.exports = {
   Contact,
   Scheduler,
   CachedResponse,
-  GenerationJob
+  GenerationJob,
+  VerificationResult
 };

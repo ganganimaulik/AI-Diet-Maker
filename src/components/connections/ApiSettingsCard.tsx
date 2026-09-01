@@ -2,6 +2,7 @@
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { Config } from '@/lib/types';
 import { getReasoningEffortsForModel } from '@/lib/fireworks-helpers';
+import { modelsForProvider, PROVIDER_LABELS } from '@/lib/model-options';
 
 const REASONING_EFFORT_LABELS: Record<string, string> = {
   default: 'Model default',
@@ -29,6 +30,19 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
     ? configuredReasoningEffort
     : 'default';
 
+  // A blank verification provider/model means "reuse the generation one", so
+  // the effective values drive the pickers below.
+  const verificationInheritsProvider = !config.verificationProvider || config.verificationProvider === config.provider;
+  const verificationProvider = config.verificationProvider || config.provider || 'google-ai-studio';
+  const selectedVerificationModel = config.verificationModel === 'custom'
+    ? config.verificationCustomModel
+    : (config.verificationModel || (verificationInheritsProvider ? selectedFireworksModel : ''));
+  const supportedVerificationEfforts = getReasoningEffortsForModel(selectedVerificationModel);
+  const configuredVerificationEffort = config.verificationReasoningEffort || 'default';
+  const displayedVerificationEffort = supportedVerificationEfforts.includes(configuredVerificationEffort)
+    ? configuredVerificationEffort
+    : 'default';
+
   // A saved effort can become invalid when the user changes models. Reset it
   // immediately so saving or generating cannot send a hidden unsupported value.
   useEffect(() => {
@@ -48,6 +62,18 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
         : { ...prev, reasoningEffort: 'default' };
     });
   }, [config.customModel, config.model, config.provider, config.reasoningEffort, setConfig]);
+
+  // Same guard for the verification model: never let a saved effort survive a
+  // model change that no longer supports it.
+  useEffect(() => {
+    if (verificationProvider !== 'fireworks') return;
+    // Recomputed here rather than closed over, so every dependency is a string
+    // and the effect does not re-run on unrelated form edits.
+    if (getReasoningEffortsForModel(selectedVerificationModel).includes(configuredVerificationEffort)) return;
+    setConfig(prev => (prev.verificationReasoningEffort === 'default'
+      ? prev
+      : { ...prev, verificationReasoningEffort: 'default' }));
+  }, [verificationProvider, selectedVerificationModel, configuredVerificationEffort, setConfig]);
 
   return (
     <section className="settings-group-card">
@@ -251,40 +277,16 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           <label className="form-label">
             {config.provider === 'fireworks' ? 'Fireworks Model' : 'Gemini Model'}
           </label>
-          {config.provider === 'fireworks' ? (
-            <select
-              className="form-input"
-              value={config.model}
-              onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
-            >
-              <option value="accounts/fireworks/models/deepseek-v4-pro">DeepSeek V4 Pro (Reasoning)</option>
-              <option value="accounts/fireworks/models/deepseek-v4-flash-0731">DeepSeek V4 Flash</option>
-              <option value="accounts/fireworks/models/llama4-maverick-instruct-basic">Llama 4 Maverick Instruct (401B)</option>
-              <option value="accounts/fireworks/models/kimi-k3">Kimi K3 (Reasoning)</option>
-              <option value="accounts/fireworks/routers/kimi-k3-fast">Kimi K3 Fast</option>
-              <option value="accounts/fireworks/models/glm-5p3">GLM 5.3 (Reasoning)</option>
-              <option value="accounts/fireworks/models/glm-5p3-flash">GLM 5.3 Flash</option>
-              <option value="accounts/fireworks/models/qwen3p8-max">Qwen 3.8 Max</option>
-              <option value="accounts/fireworks/models/qwen3p7-plus">Qwen 3.7 Plus (Reasoning)</option>
-              <option value="accounts/fireworks/models/minimax-m3">MiniMax M3</option>
-              <option value="custom">Custom Model Name</option>
-            </select>
-          ) : (
-            <select
-              className="form-input"
-              value={config.model}
-              onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
-            >
-              <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
-              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-              <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-              <option value="custom">Custom Model Name</option>
-            </select>
-          )}
+          <select
+            className="form-input"
+            value={config.model}
+            onChange={e => setConfig(prev => ({ ...prev, model: e.target.value }))}
+          >
+            {modelsForProvider(config.provider).map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+            <option value="custom">Custom Model Name</option>
+          </select>
         </div>
 
         {config.model === 'custom' && (
@@ -368,6 +370,144 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
           </p>
         </div>
       )}
+
+      <div className="settings-subgroup verification-settings">
+        <h4 className="settings-subgroup-title">
+          <span aria-hidden="true">🔍</span> Plan Verification
+        </h4>
+        <p className="note-text" style={{ marginTop: 0 }}>
+          Every plan is re-checked by re-deriving all weights, calories, macros and the Na:K ratio
+          from the reference nutrition table. That pass is pure arithmetic and always runs — no
+          model involved. On top of it you can have a model read the plan for instructions it
+          ignored and claims its own numbers do not support.
+        </p>
+
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={!!config.verificationAiReview}
+            onChange={e => setConfig(prev => ({ ...prev, verificationAiReview: e.target.checked }))}
+          />
+          <span>Also run a second-opinion AI review when verifying</span>
+        </label>
+
+        <div className="input-row">
+          <div className="form-group">
+            <label className="form-label">Verification Provider</label>
+            <select
+              className="form-input"
+              value={config.verificationProvider || ''}
+              onChange={e => {
+                const nextProvider = e.target.value;
+                setConfig(prev => {
+                  // Switching to a different provider makes the inherited model
+                  // id meaningless, so seed that provider's first model.
+                  const effective = nextProvider || prev.provider || 'google-ai-studio';
+                  const inherits = !nextProvider || nextProvider === prev.provider;
+                  const nextModel = inherits ? (prev.verificationModel || '') : modelsForProvider(effective)[0].value;
+                  return {
+                    ...prev,
+                    verificationProvider: nextProvider,
+                    verificationModel: nextModel,
+                    verificationReasoningEffort: 'default'
+                  };
+                });
+              }}
+            >
+              <option value="">
+                Same as generation ({PROVIDER_LABELS[config.provider || 'google-ai-studio'] || config.provider})
+              </option>
+              <option value="google-ai-studio">Google AI Studio (Gemini API)</option>
+              <option value="gemini-enterprise">Gemini Enterprise Agent Platform (Vertex AI)</option>
+              <option value="fireworks">Fireworks.ai (OpenAI-Compatible Inference)</option>
+            </select>
+            <p className="note-text">Uses the API key already configured above for that provider.</p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Verification Model</label>
+            <select
+              className="form-input"
+              value={config.verificationModel || ''}
+              onChange={e => setConfig(prev => ({ ...prev, verificationModel: e.target.value }))}
+            >
+              {verificationInheritsProvider && (
+                <option value="">Same as generation model</option>
+              )}
+              {modelsForProvider(verificationProvider).map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+              <option value="custom">Custom Model Name</option>
+            </select>
+            <p className="note-text">
+              A model that did not write the plan makes a better reviewer than the one that did.
+            </p>
+          </div>
+        </div>
+
+        {config.verificationModel === 'custom' && (
+          <div className="form-group">
+            <label className="form-label">Custom Verification Model Name</label>
+            <input
+              type="text"
+              className="form-input"
+              value={config.verificationCustomModel || ''}
+              onChange={e => setConfig(prev => ({ ...prev, verificationCustomModel: e.target.value }))}
+              placeholder={verificationProvider === 'fireworks' ? 'accounts/fireworks/models/...' : 'gemini-3.7-flash'}
+            />
+          </div>
+        )}
+
+        <div className="input-row">
+          {verificationProvider === 'fireworks' ? (
+            <div className="form-group">
+              <label className="form-label">Verification Reasoning Effort</label>
+              <select
+                className="form-input"
+                value={displayedVerificationEffort}
+                onChange={e => setConfig(prev => ({ ...prev, verificationReasoningEffort: e.target.value }))}
+                disabled={supportedVerificationEfforts.length === 1}
+              >
+                {supportedVerificationEfforts.map(effort => (
+                  <option key={effort} value={effort}>{REASONING_EFFORT_LABELS[effort] || effort}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Verification Thinking Level</label>
+              <select
+                className="form-input"
+                value={config.verificationThinkingLevel || 'default'}
+                onChange={e => setConfig(prev => ({ ...prev, verificationThinkingLevel: e.target.value }))}
+              >
+                <option value="default">Model default (dynamic)</option>
+                <option value="low">Low (fastest, cheapest)</option>
+                <option value="medium">Medium</option>
+                <option value="high">High (deepest reasoning)</option>
+              </select>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Verification Max Output Tokens</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="256"
+              className="form-input"
+              placeholder="Auto (8192)"
+              value={config.verificationMaxTokens ? String(config.verificationMaxTokens) : ''}
+              onChange={e => {
+                const parsed = parseInt(e.target.value, 10);
+                setConfig(prev => ({ ...prev, verificationMaxTokens: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 }));
+              }}
+            />
+            <p className="note-text">A review is short; the default keeps reasoning models from running long.</p>
+          </div>
+        </div>
+      </div>
 
       <button
         className="btn-primary"
