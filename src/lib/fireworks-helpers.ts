@@ -34,6 +34,7 @@ export interface FireworksPayload {
 export const FIREWORKS_API_URL: string = fireworks.FIREWORKS_API_URL;
 export const DEFAULT_MAX_TOKENS: number = fireworks.DEFAULT_MAX_TOKENS;
 export const REASONING_EFFORTS: string[] = fireworks.REASONING_EFFORTS;
+export const getReasoningEffortsForModel: (model?: string) => string[] = fireworks.getReasoningEffortsForModel;
 export const buildFireworksPayload: (
   model: string,
   prompt: string,

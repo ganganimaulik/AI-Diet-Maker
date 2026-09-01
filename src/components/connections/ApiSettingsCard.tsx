@@ -1,6 +1,17 @@
 'use client';
-import { Dispatch, SetStateAction, useState } from 'react';
+import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { Config } from '@/lib/types';
+import { getReasoningEffortsForModel } from '@/lib/fireworks-helpers';
+
+const REASONING_EFFORT_LABELS: Record<string, string> = {
+  default: 'Model default',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+  none: 'None (no reasoning)'
+};
 
 interface ApiSettingsCardProps {
   config: Config;
@@ -11,6 +22,32 @@ interface ApiSettingsCardProps {
 
 export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onSave }: ApiSettingsCardProps) {
   const [showApiKey, setShowApiKey] = useState(false);
+  const selectedFireworksModel = config.model === 'custom' ? config.customModel : config.model;
+  const supportedReasoningEfforts = getReasoningEffortsForModel(selectedFireworksModel);
+  const configuredReasoningEffort = config.reasoningEffort || 'default';
+  const displayedReasoningEffort = supportedReasoningEfforts.includes(configuredReasoningEffort)
+    ? configuredReasoningEffort
+    : 'default';
+
+  // A saved effort can become invalid when the user changes models. Reset it
+  // immediately so saving or generating cannot send a hidden unsupported value.
+  useEffect(() => {
+    if (config.provider !== 'fireworks') return;
+    const model = config.model === 'custom' ? config.customModel : config.model;
+    const supported = getReasoningEffortsForModel(model);
+    const current = config.reasoningEffort || 'default';
+    if (supported.includes(current)) return;
+
+    setConfig(prev => {
+      if (prev.provider !== 'fireworks') return prev;
+      const latestModel = prev.model === 'custom' ? prev.customModel : prev.model;
+      const latestSupported = getReasoningEffortsForModel(latestModel);
+      const latestEffort = prev.reasoningEffort || 'default';
+      return latestSupported.includes(latestEffort)
+        ? prev
+        : { ...prev, reasoningEffort: 'default' };
+    });
+  }, [config.customModel, config.model, config.provider, config.reasoningEffort, setConfig]);
 
   return (
     <section className="settings-group-card">
@@ -292,20 +329,20 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
             <label className="form-label">Reasoning Effort</label>
             <select
               className="form-input"
-              value={config.reasoningEffort || 'default'}
+              value={displayedReasoningEffort}
               onChange={e => setConfig(prev => ({ ...prev, reasoningEffort: e.target.value }))}
+              disabled={supportedReasoningEfforts.length === 1}
             >
-              <option value="default">Model default</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="xhigh">XHigh</option>
-              <option value="max">Max</option>
-              <option value="none">None (no reasoning)</option>
-              <option value="adaptive">Adaptive</option>
+              {supportedReasoningEfforts.map(effort => (
+                <option key={effort} value={effort}>
+                  {REASONING_EFFORT_LABELS[effort] || effort}
+                </option>
+              ))}
             </select>
             <p className="note-text">
-              Sent as <code>reasoning_effort</code>. Models without reasoning control ignore it.
+              {supportedReasoningEfforts.length > 1
+                ? <>Only levels supported by this model are shown and sent as <code>reasoning_effort</code>.</>
+                : <>This model does not expose a compatible <code>reasoning_effort</code> control on Fireworks.</>}
             </p>
           </div>
         )}

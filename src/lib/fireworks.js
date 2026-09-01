@@ -17,7 +17,7 @@ const DEFAULT_MAX_TOKENS = 16384;
 
 // reasoning_effort values exposed by Fireworks' OpenAI-compatible endpoint.
 // 'default' means "omit the field" and let the model decide. Individual models
-// may support only a subset and ignore unsupported effort levels.
+// support only a subset; use getReasoningEffortsForModel() for UI controls.
 const REASONING_EFFORTS = [
   'default',
   'low',
@@ -25,9 +25,48 @@ const REASONING_EFFORTS = [
   'high',
   'xhigh',
   'max',
-  'none',
-  'adaptive'
+  'none'
 ];
+
+const DEFAULT_REASONING_EFFORTS = ['default'];
+const DEEPSEEK_V4_REASONING_EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max', 'none'];
+const KIMI_K3_REASONING_EFFORTS = ['default', 'low', 'high', 'max'];
+const GLM_5P3_REASONING_EFFORTS = ['default', 'low', 'medium', 'high', 'max'];
+const QWEN_3P8_MAX_REASONING_EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'none'];
+const QWEN_3P7_REASONING_EFFORTS = ['default', 'low', 'medium', 'high', 'none'];
+
+/**
+ * Return only the reasoning_effort values documented for one Fireworks model.
+ * Unknown/custom models stay on provider default rather than risking a 400 for
+ * a model-specific value. Model ids are compacted so Fireworks ids and common
+ * custom aliases (dots, dashes, and slashes) resolve identically.
+ */
+function getReasoningEffortsForModel(model) {
+  const compactModel = String(model || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+  if (compactModel.includes('deepseekv4')) {
+    return [...DEEPSEEK_V4_REASONING_EFFORTS];
+  }
+  if (compactModel.includes('kimik3')) {
+    return [...KIMI_K3_REASONING_EFFORTS];
+  }
+  if (compactModel.includes('glm5p3flash') || compactModel.includes('glm53flash')) {
+    return [...DEFAULT_REASONING_EFFORTS];
+  }
+  if (compactModel.includes('glm5p3') || compactModel.includes('glm53')) {
+    return [...GLM_5P3_REASONING_EFFORTS];
+  }
+  if (compactModel.includes('qwen3p8max') || compactModel.includes('qwen38max')) {
+    return [...QWEN_3P8_MAX_REASONING_EFFORTS];
+  }
+  if (compactModel.includes('qwen3p7') || compactModel.includes('qwen37')) {
+    return [...QWEN_3P7_REASONING_EFFORTS];
+  }
+
+  // Llama Maverick, MiniMax M3, GLM 5.3 Flash, and unknown custom models do
+  // not expose a compatible documented effort ladder through this endpoint.
+  return [...DEFAULT_REASONING_EFFORTS];
+}
 
 const THINK_OPEN = '<think>';
 const THINK_CLOSE = '</think>';
@@ -222,6 +261,7 @@ module.exports = {
   FIREWORKS_API_URL,
   DEFAULT_MAX_TOKENS,
   REASONING_EFFORTS,
+  getReasoningEffortsForModel,
   buildFireworksPayload,
   extractFireworksChunk,
   createFireworksStreamExtractor,
