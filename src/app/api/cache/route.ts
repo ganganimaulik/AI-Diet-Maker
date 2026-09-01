@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbConnect, Config, CachedResponse, GenerationJob } from '@/lib/db';
+import { dbConnect, Config, CachedResponse, GenerationJob, VerificationResult } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 import { computeConfigHash } from '@/lib/config-hash';
 
@@ -82,11 +82,13 @@ export async function DELETE(req: Request) {
     const day = searchParams.get('day');
     const terminalJobs = { status: { $in: ['completed', 'failed'] as const } };
 
+    // A verification verdict describes one specific plan, so it goes with it.
     if (day) {
       const dayKey = day.toUpperCase();
       const [cacheResult, jobResult] = await Promise.all([
         CachedResponse.deleteOne({ day: dayKey }),
-        GenerationJob.deleteMany({ day: dayKey, ...terminalJobs })
+        GenerationJob.deleteMany({ day: dayKey, ...terminalJobs }),
+        VerificationResult.deleteMany({ day: dayKey })
       ]);
       return NextResponse.json({
         success: true,
@@ -97,7 +99,8 @@ export async function DELETE(req: Request) {
     } else {
       const [cacheResult, jobResult] = await Promise.all([
         CachedResponse.deleteMany({}),
-        GenerationJob.deleteMany(terminalJobs)
+        GenerationJob.deleteMany(terminalJobs),
+        VerificationResult.deleteMany({})
       ]);
       return NextResponse.json({
         success: true,

@@ -5,6 +5,7 @@ import { Config, DayOutput, DayProgress, GenerationJob, DEFAULT_CONFIG, normaliz
 import { useConfigActions } from '@/hooks/useConfigActions';
 import { useWhatsApp } from '@/hooks/useWhatsApp';
 import { useDietCache } from '@/hooks/useDietCache';
+import { useVerification } from '@/hooks/useVerification';
 import LoginScreen from '@/components/LoginScreen';
 import AppHeader from '@/components/AppHeader';
 import BuilderSidebar from '@/components/planner/BuilderSidebar';
@@ -122,6 +123,7 @@ export default function Home() {
     ? stableStringify(config) !== stableStringify(savedConfig)
     : false;
 
+  const verification = useVerification(isAuthenticatedState);
   const cache = useDietCache(isAuthenticatedState);
   const {
     cacheStatus,
@@ -796,6 +798,33 @@ export default function Home() {
   // Regenerate one specific day straight from the results view. The day is
   // brought on screen first so its stream is visible, and the config carrying
   // that selection is handed to handleGenerate so the auto-save writes it too.
+  // Verification always runs against the config stored in the database, so an
+  // unsaved edit is saved first — otherwise the checker would judge the plan
+  // against different targets than the ones on screen.
+  const ensureConfigSaved = async (): Promise<boolean> => {
+    if (!hasUnsavedChanges) return true;
+    try {
+      await saveConfig(config);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleVerifyDay = async (day: string) => {
+    if (!(await ensureConfigSaved())) return;
+    await verification.verifyDay(day);
+  };
+
+  // Only days that actually have a cached plan can be checked.
+  const handleVerifyAllDays = async () => {
+    if (!(await ensureConfigSaved())) return;
+    const days = DAYS_OF_WEEK.filter(day => cacheStatus[day]);
+    if (days.length === 0) return;
+    if (layoutMode === 'builder') setLayoutMode('results');
+    await verification.verifyDays(days);
+  };
+
   const handleRegenerateDay = (day: string) => {
     if (isDayBusy(day)) return;
     const nextConfig = { ...config, selectedGenerationDay: day };
@@ -1141,6 +1170,11 @@ export default function Home() {
                   onCancel={handleCancelGeneration}
                   onCancelAll={handleCancelAllGenerations}
                   onClearCache={handleClearCache}
+                  verifications={verification.verifications}
+                  verifyingDays={verification.verifyingDays}
+                  isVerifyingAll={verification.isVerifyingAll}
+                  onVerifyDay={handleVerifyDay}
+                  onVerifyAll={handleVerifyAllDays}
                 />
               </div>
             </div>
@@ -1166,6 +1200,10 @@ export default function Home() {
             onCancelDay={handleCancelGeneration}
             hidden={layoutMode === 'builder'}
             provider={config.provider}
+            verifications={verification.verifications}
+            verifyingDays={verification.verifyingDays}
+            verifyErrors={verification.verifyErrors}
+            onVerifyDay={handleVerifyDay}
           />
         </main>
         </>

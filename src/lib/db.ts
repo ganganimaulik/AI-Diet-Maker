@@ -103,6 +103,13 @@ export interface IConfig {
   thinkingLevel: string;
   maxTokens?: number;
   reasoningEffort?: string;
+  verificationAiReview?: boolean;
+  verificationProvider?: string;
+  verificationModel?: string;
+  verificationCustomModel?: string;
+  verificationThinkingLevel?: string;
+  verificationReasoningEffort?: string;
+  verificationMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;
@@ -169,6 +176,28 @@ export interface ICachedResponse {
   updatedAt: Date;
 }
 
+/** One day's stored verification verdict (see src/lib/verify-plan.js). */
+export interface IVerificationResult {
+  day: string;
+  configHash: string;
+  planGeneratedAt: Date | null;
+  ok: boolean;
+  errorCount: number;
+  warningCount: number;
+  issues: Array<{
+    severity: 'error' | 'warning';
+    category: string;
+    message: string;
+    source: 'math' | 'ai';
+  }>;
+  computed: unknown;
+  stated: unknown;
+  feasibility: unknown;
+  target: number;
+  aiReview: unknown;
+  checkedAt: Date;
+}
+
 export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface IGenerationJob {
@@ -210,3 +239,4 @@ export const Contact: Model<IContact> = models.Contact;
 export const Scheduler: Model<IScheduler> = models.Scheduler;
 export const CachedResponse: Model<ICachedResponse> = models.CachedResponse;
 export const GenerationJob: Model<IGenerationJob> = models.GenerationJob;
+export const VerificationResult: Model<IVerificationResult> = models.VerificationResult;

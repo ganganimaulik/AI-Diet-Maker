@@ -1,5 +1,5 @@
 'use client';
-import { Config, DayProgress, DAYS_OF_WEEK } from '@/lib/types';
+import { Config, DayProgress, DayVerification, DAYS_OF_WEEK } from '@/lib/types';
 import { getDayVariantName } from '@/lib/compile-prompt';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 
@@ -17,6 +17,29 @@ interface GenerationControlsProps {
   onCancel: (day: string) => void;
   onCancelAll: () => void;
   onClearCache: (day?: string) => void;
+  verifications: Record<string, DayVerification>;
+  verifyingDays: Record<string, boolean>;
+  isVerifyingAll: boolean;
+  onVerifyDay: (day: string) => void;
+  onVerifyAll: () => void;
+}
+
+/** Verified / failed / stale marker shown on a day chip. */
+function verifyMark(verification: DayVerification | undefined, isVerifying: boolean) {
+  if (isVerifying) return { cls: 'is-checking', title: 'verifying…' };
+  if (!verification) return null;
+  if (verification.isStale) return { cls: 'is-stale-check', title: 'verified against an older plan' };
+  if (!verification.ok) return { cls: 'is-failed', title: `${verification.errorCount} verification error(s)` };
+  return { cls: 'is-verified', title: 'verified' };
+}
+
+function VerifyIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 11l3 3L22 4"/>
+      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+    </svg>
+  );
 }
 
 /** Maps a day's cache/progress state onto a chip modifier and short label. */
@@ -42,7 +65,12 @@ export default function GenerationControls({
   onGenerateAllDays,
   onCancel,
   onCancelAll,
-  onClearCache
+  onClearCache,
+  verifications,
+  verifyingDays,
+  isVerifyingAll,
+  onVerifyDay,
+  onVerifyAll
 }: GenerationControlsProps) {
   const cached = cacheStatus[currentCacheDay];
   // Queued + generating days have a live server job; the cache-checking phase
@@ -64,6 +92,17 @@ export default function GenerationControls({
   })() : '';
 
   const totalCachedCount = DAYS_OF_WEEK.filter(day => cacheStatus[day]?.isValid).length;
+
+  const isCurrentDayVerifying = !!verifyingDays[currentCacheDay];
+  // Only days that actually have a plan can be verified.
+  const verifiableDays = DAYS_OF_WEEK.filter(day => cacheStatus[day]);
+  const verifiedCount = verifiableDays.filter(day => verifications[day] && !verifyingDays[day]).length;
+  const checkedDays = verifiableDays.filter(day => verifications[day]);
+  const verificationSummary = checkedDays.length > 0 ? {
+    checked: checkedDays.length,
+    failing: checkedDays.filter(day => !verifications[day].ok).length,
+    stale: checkedDays.filter(day => verifications[day].isStale).length
+  } : null;
 
   return (
     <>
@@ -103,6 +142,8 @@ export default function GenerationControls({
             const isCurrent = day === config.selectedGenerationDay;
             const { cls, label } = dayChipState(status, progress, day);
 
+            const mark = verifyMark(verifications[day], !!verifyingDays[day]);
+
             return (
               <button
                 key={day}
@@ -111,10 +152,11 @@ export default function GenerationControls({
                 title={
                   progress === 'generating' || progress === 'checking'
                     ? `${day}: generating…`
-                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}`
+                    : `${day}: ${status?.isValid ? 'Valid cache' : status ? 'Stale cache' : 'Not cached'}${mark ? ` — ${mark.title}` : ''}`
                 }
               >
                 {label}
+                {mark && <span className={`day-verify-dot ${mark.cls}`} aria-hidden="true" />}
               </button>
             );
           })}
@@ -205,6 +247,59 @@ export default function GenerationControls({
             </button>
           )}
         </div>
+
+        <div className="generation-actions__row verify-actions">
+          <button
+            className="btn-verify"
+            disabled={!cached || isCurrentDayVerifying || isVerifyingAll}
+            onClick={() => onVerifyDay(currentCacheDay)}
+            title={cached
+              ? `Re-derive every number in the ${currentCacheDay} plan and compare it to what the plan claims`
+              : `Generate ${currentCacheDay} first — there is no plan to verify`}
+          >
+            {isCurrentDayVerifying ? (
+              <>
+                <div className="spinner spinner--inline"></div>
+                Verifying {currentCacheDay.substring(0, 3)}...
+              </>
+            ) : (
+              <>
+                <VerifyIcon size={15} />
+                Verify {currentCacheDay.substring(0, 3)}
+              </>
+            )}
+          </button>
+
+          <button
+            className="btn-verify btn-verify--all"
+            disabled={isVerifyingAll || verifiableDays.length === 0}
+            onClick={onVerifyAll}
+            title={verifiableDays.length
+              ? `Verify all ${verifiableDays.length} generated day(s)`
+              : 'No generated plans to verify yet'}
+          >
+            {isVerifyingAll ? (
+              <>
+                <div className="spinner spinner--inline"></div>
+                Verifying {verifiedCount}/{verifiableDays.length}...
+              </>
+            ) : (
+              <>
+                <VerifyIcon size={15} />
+                Verify All ({verifiableDays.length})
+              </>
+            )}
+          </button>
+        </div>
+
+        {verificationSummary && (
+          <div className={`verify-summary ${verificationSummary.failing > 0 ? 'has-failures' : 'all-clear'}`}>
+            {verificationSummary.failing > 0
+              ? `⚠️ ${verificationSummary.failing} of ${verificationSummary.checked} checked day(s) failed verification`
+              : `✅ ${verificationSummary.checked} day(s) verified clean`}
+            {verificationSummary.stale > 0 && ` · ${verificationSummary.stale} stale`}
+          </div>
+        )}
 
         {isBatchGenerating ? (
           <button

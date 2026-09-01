@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "src/lib/models.js",
     "src/lib/gemini.js",
     "src/lib/generation-runner.js",
+    "src/lib/verify-plan.js",
+    "src/lib/ai-complete.js",
     ".wwebjs_auth/**",
   ]),
 ]);

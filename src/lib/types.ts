@@ -49,6 +49,15 @@ export interface Config {
   maxTokens?: number;
   /** Fireworks reasoning_effort; 'default' = don't send it. */
   reasoningEffort?: string;
+  /** Run a second-opinion AI review on top of the arithmetic check. */
+  verificationAiReview?: boolean;
+  /** Verification provider/model; blank = reuse the generation ones. */
+  verificationProvider?: string;
+  verificationModel?: string;
+  verificationCustomModel?: string;
+  verificationThinkingLevel?: string;
+  verificationReasoningEffort?: string;
+  verificationMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
     totalOliveOil: number;
@@ -130,6 +139,61 @@ export interface GenerationJob {
   isCurrentConfig: boolean;
 }
 
+/** One finding from either the arithmetic checker or the review model. */
+export interface VerificationIssue {
+  severity: 'error' | 'warning';
+  category: string;
+  message: string;
+  source: 'math' | 'ai';
+}
+
+export interface VerificationTotals {
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  sodium: number | null;
+  potassium: number | null;
+  ratio: number | null;
+  saltGrams?: number;
+  inIdealRange?: boolean | null;
+  verdict?: string | null;
+}
+
+export interface VerificationFeasibility {
+  calorieTargetReachable: boolean;
+  bestRatio: number | null;
+  ratioReachable: boolean;
+  extraPotassiumNeededMg?: number;
+  saltReductionNeededG?: number;
+}
+
+export interface VerificationAiReview {
+  status: 'skipped' | 'ok' | 'failed';
+  provider?: string;
+  model?: string;
+  verdict?: string;
+  summary?: string;
+  error?: string;
+}
+
+/** A day's verification verdict as returned by /api/verify. */
+export interface DayVerification {
+  day: string;
+  ok: boolean;
+  checkedAt: string;
+  errorCount: number;
+  warningCount: number;
+  issues: VerificationIssue[];
+  computed: VerificationTotals | null;
+  stated: VerificationTotals | null;
+  feasibility: VerificationFeasibility | null;
+  target?: number;
+  aiReview: VerificationAiReview | null;
+  /** The plan or config changed after this verdict was computed. */
+  isStale: boolean;
+}
+
 export const DEFAULT_CONFIG: Config = {
   apiKey: '',
   provider: 'gemini-enterprise',
@@ -144,6 +208,13 @@ export const DEFAULT_CONFIG: Config = {
   thinkingLevel: 'high',
   maxTokens: 65536,
   reasoningEffort: 'default',
+  verificationAiReview: false,
+  verificationProvider: '',
+  verificationModel: '',
+  verificationCustomModel: '',
+  verificationThinkingLevel: 'default',
+  verificationReasoningEffort: 'default',
+  verificationMaxTokens: 0,
   huggingFaceToken: '',
   huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {
