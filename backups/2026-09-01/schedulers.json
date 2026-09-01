@@ -1,0 +1,30 @@
+[
+  {
+    "_id": {
+      "$oid": "6a222a775fa01562ce732a28"
+    },
+    "isEnabled": true,
+    "targetTime": "14:00",
+    "recipientType": "group",
+    "recipientId": "<REDACTED>",
+    "recipientName": "<REDACTED>",
+    "lastSentDate": "2026-08-24",
+    "lastError": "WhatsApp client is not connected / authenticated.",
+    "retryCount": 19,
+    "nextRetryTime": 1788286567680,
+    "triggerTest": false,
+    "createdAt": {
+      "$date": "2026-06-05T01:46:31.254Z"
+    },
+    "updatedAt": {
+      "$date": "2026-09-01T17:46:07.680Z"
+    },
+    "__v": 0,
+    "timezone": "Asia/Kolkata",
+    "userRecipientId": "<REDACTED>",
+    "userRecipientName": "<REDACTED>",
+    "userRecipientType": "contact",
+    "triggerMyselfTest": false,
+    "lastSentTime": "14:00"
+  }
+]

@@ -1,0 +1,19 @@
+[
+  {
+    "_id": {
+      "$oid": "6a222f1c0a6d83e4a4bbec17"
+    },
+    "status": "disconnected",
+    "qr": "",
+    "connectedPhone": "",
+    "connectedName": "",
+    "createdAt": {
+      "$date": "2026-06-05T02:06:20.033Z"
+    },
+    "updatedAt": {
+      "$date": "2026-09-01T18:03:17.859Z"
+    },
+    "__v": 0,
+    "authFailureCount": 0
+  }
+]

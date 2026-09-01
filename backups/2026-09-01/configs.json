@@ -1,0 +1,796 @@
+[
+  {
+    "_id": {
+      "$oid": "6a222a77e40096d7bed11cf6"
+    },
+    "__v": 2,
+    "apiKey": "",
+    "createdAt": {
+      "$date": "2026-06-05T01:46:31.680Z"
+    },
+    "customModel": "accounts/fireworks/models/deepseek-v4-pro",
+    "customSplits": [
+      {
+        "id": "1784465883936",
+        "name": "salt",
+        "value": "5g",
+        "mealId": "meal-1784463984639"
+      }
+    ],
+    "dailyVariables": {
+      "MONDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Potato (Raw)",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "400",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Brinjal",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "120",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Eggs",
+          "weight": "80",
+          "isAuto": false,
+          "disabled": true,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "TUESDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Potato (Raw)",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "400",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Bottle Gourd",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "129",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "WEDNESDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Sweet Potato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "280",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "THURSDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Spinach",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "150",
+          "minGrams": "100",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Potato (Raw)",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "200",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "FRIDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Potato (Raw)",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "400",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "SATURDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "90",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Sweet Potato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "380",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        }
+      ],
+      "SUNDAY": [
+        {
+          "name": "Rice",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "",
+          "minGrams": "60",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Potato (Raw)",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "400",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Cluster Beans",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "150",
+          "minGrams": "50",
+          "mealId": "meal-chicken"
+        },
+        {
+          "name": "Tomato",
+          "weight": "",
+          "isAuto": true,
+          "disabled": false,
+          "personalOnly": false,
+          "split": "",
+          "maxGrams": "100",
+          "minGrams": "80",
+          "mealId": "meal-chicken"
+        }
+      ]
+    },
+    "generationRange": "single",
+    "global": {
+      "dailyCalorieTarget": 3200,
+      "totalOliveOil": 18,
+      "oliveOilSplitPercent": 50,
+      "idealSodiumPotassiumRatioMin": 0.79,
+      "idealSodiumPotassiumRatioMax": 0.8
+    },
+    "meals": [
+      {
+        "id": "meal-1784100564298",
+        "name": "Oats Egg Omelette",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "oats",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "50",
+            "minGrams": "40",
+            "mealId": ""
+          },
+          {
+            "name": "olive oil",
+            "weight": "8",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "eggs",
+            "weight": "200",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "tomato",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "120",
+            "minGrams": "100",
+            "mealId": ""
+          }
+        ],
+        "water": "",
+        "prepMethod": "",
+        "cookQuantityMode": "daily",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": true
+      },
+      {
+        "id": "meal-oats",
+        "name": "Oats Meal 1",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "Instant Oats (Raw)",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "100",
+            "minGrams": "90",
+            "mealId": ""
+          },
+          {
+            "name": "Whey Protein Isolate - myprotein matcha blueberry",
+            "weight": "60",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Almonds",
+            "weight": "5",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Cashews",
+            "weight": "5",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Walnuts",
+            "weight": "5",
+            "isAuto": false,
+            "disabled": true,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Banana",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "120",
+            "minGrams": "100",
+            "mealId": ""
+          }
+        ],
+        "water": "290g water",
+        "prepMethod": "Oats airfryer 200c, 10min",
+        "cookQuantityMode": "per-meal",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": false
+      },
+      {
+        "id": "meal-1784098317896",
+        "name": "Oats Chilla",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "Instant Oats (Raw)",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "140",
+            "minGrams": "122",
+            "mealId": ""
+          },
+          {
+            "name": "Tomato",
+            "weight": "120",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Olive oil",
+            "weight": "8",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "salt",
+            "weight": "3",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Aamchur powder",
+            "weight": "1",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          }
+        ],
+        "water": "",
+        "prepMethod": "https://youtube.com/shorts/HEII09CFFU8",
+        "cookQuantityMode": "per-meal",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": false
+      },
+      {
+        "id": "meal-chicken",
+        "name": "Vegitable Meal",
+        "mealsPerDay": 3,
+        "ingredients": [
+          {
+            "name": "Olive oil",
+            "weight": "6",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "aamchur powder",
+            "weight": "2",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "salt",
+            "weight": "3",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          }
+        ],
+        "water": "",
+        "prepMethod": "\n",
+        "cookQuantityMode": "daily",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": false
+      },
+      {
+        "id": "meal-1784463984639",
+        "name": "Chicken meal",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "chicken breast",
+            "weight": "530",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "tomato",
+            "weight": "",
+            "isAuto": true,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "120",
+            "minGrams": "100",
+            "mealId": ""
+          },
+          {
+            "name": "egg",
+            "weight": "37",
+            "isAuto": false,
+            "disabled": true,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Olive oil",
+            "weight": "10",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Aamchur powder",
+            "weight": "2",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          }
+        ],
+        "water": "",
+        "prepMethod": "gas pe bna dena onion garlic and green chili dal ke. ",
+        "cookQuantityMode": "per-meal",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": false
+      },
+      {
+        "id": "meal-shake",
+        "name": "Shake Meal",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "Whey Protein Isolate - myprotein matcha blueberry",
+            "weight": "40",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Oats (Raw)",
+            "weight": "15",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Raisins",
+            "weight": "15",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Kimia Dates",
+            "weight": "15",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Banana",
+            "weight": "100",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          }
+        ],
+        "water": "330g water",
+        "prepMethod": "Blend all ingredients with water",
+        "cookQuantityMode": "per-meal",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": true
+      },
+      {
+        "id": "meal-1788041663735",
+        "name": "Potato fries 🍟 ",
+        "mealsPerDay": 1,
+        "ingredients": [
+          {
+            "name": "Potato",
+            "weight": "300",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Olive oil",
+            "weight": "7",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Salt",
+            "weight": "3",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          },
+          {
+            "name": "Aamchur powder",
+            "weight": "2",
+            "isAuto": false,
+            "disabled": false,
+            "personalOnly": false,
+            "split": "",
+            "maxGrams": "",
+            "minGrams": "",
+            "mealId": ""
+          }
+        ],
+        "water": "",
+        "prepMethod": "Air fryer 200c, 15min + 5 mins\nhttps://youtube.com/shorts/yar2J_w8rOc\nOnion garlic or black paper wgera dal dena. ",
+        "cookQuantityMode": "per-meal",
+        "totalOliveOil": 0,
+        "oliveOilSplitPercent": 50,
+        "disabled": false
+      }
+    ],
+    "model": "accounts/fireworks/routers/kimi-k3-fast",
+    "selectedGenerationDay": "TUESDAY",
+    "thinkingBudget": 8192,
+    "thinkingEnabled": true,
+    "updatedAt": {
+      "$date": "2026-09-01T11:30:25.810Z"
+    },
+    "enterpriseApiKey": "<REDACTED>",
+    "enterpriseAuthMethod": "service-account",
+    "enterpriseLocation": "global",
+    "enterpriseProjectId": "<REDACTED>",
+    "enterpriseServiceAccountJson": "<REDACTED>",
+    "provider": "fireworks",
+    "huggingFaceSpace": "ganganimaulik/diet-maker-worker",
+    "huggingFaceToken": "<REDACTED>",
+    "dailySplits": {},
+    "fireworksApiKey": "<REDACTED>",
+    "maxTokens": 655360,
+    "reasoningEffort": "max",
+    "thinkingLevel": "high"
+  }
+]
