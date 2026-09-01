@@ -33,7 +33,7 @@ const normalizeGenerationJob = (value: unknown): GenerationJob | null => {
     typeof job.day !== 'string' ||
     !job.jobId ||
     !DAYS_OF_WEEK.includes(job.day) ||
-    !['queued', 'running', 'completed', 'failed'].includes(job.status || '')
+    !['queued', 'running', 'completed', 'failed', 'cancelled'].includes(job.status || '')
   ) {
     return null;
   }
@@ -82,6 +82,10 @@ export default function Home() {
   const presentedJobIdsRef = useRef(new Set<string>());
   const finalizedJobIdsRef = useRef(new Set<string>());
   const batchDaysRef = useRef(new Set<string>());
+  // Days the user asked to cancel. In-flight generate flows check this set at
+  // every step (config save, cache check, job creation) so a cancel clicked
+  // before the server job exists still prevents the run from starting.
+  const cancelRequestedDaysRef = useRef(new Set<string>());
   const hasRestoredJobsRef = useRef(false);
   const isPageActiveRef = useRef(true);
   const pollingEpochRef = useRef(0);
@@ -249,6 +253,7 @@ export default function Home() {
       pollingJobsRef.current = {};
       activeJobIdsRef.current = {};
       batchDaysRef.current.clear();
+      cancelRequestedDaysRef.current.clear();
       dayProgressRef.current = {};
       setDayProgress({});
       setIsBatchGenerating(false);
@@ -384,6 +389,23 @@ export default function Home() {
     } else {
       if (activeJobIdsRef.current[day] === job.jobId) {
         delete activeJobIdsRef.current[day];
+      }
+
+      // A cancelled job is intentional, not an error: stop the spinner and
+      // drop the partial stream so the day returns to its idle state (a valid
+      // cached plan reloads from the cache layer when the day is re-selected).
+      if (job.status === 'cancelled') {
+        clearDayProgress(day);
+        setDayErrors(prev => prev[day] ? { ...prev, [day]: '' } : prev);
+        setDayOutputs(prev => {
+          const existing = prev[day];
+          if (!existing || existing.isCached) return prev;
+          const next = { ...prev };
+          delete next[day];
+          dayOutputsRef.current = next;
+          return next;
+        });
+        return;
       }
 
       // A stale finished job neither overwrites a newer cached output nor gets
@@ -547,7 +569,9 @@ export default function Home() {
       const jobs = rawJobs
         .map(normalizeGenerationJob)
         .filter((job): job is GenerationJob => !!job)
-        .filter(job => isActiveJob(job) || job.isCurrentConfig);
+        // Cancelled jobs are deliberate and leave nothing behind — never
+        // restore them as errors or outputs after a reload.
+        .filter(job => job.status !== 'cancelled' && (isActiveJob(job) || job.isCurrentConfig));
 
       // GET returns newest jobs first. Keep one current job per day, except
       // that a job already being tracked by this tab wins over a stale list row.
@@ -650,6 +674,8 @@ export default function Home() {
     markDayProgress(day, 'checking');
     setConfigErrorMsg('');
     setDayErrors(prev => ({ ...prev, [day]: '' }));
+    // A new explicit run supersedes any earlier cancel intent for the day.
+    cancelRequestedDaysRef.current.delete(day);
 
     // Auto-save config if there are unsaved changes so the config hash
     // in the database reflects the current state before cache validation
@@ -662,6 +688,12 @@ export default function Home() {
         clearDayProgress(day);
         return;
       }
+    }
+
+    // Cancelled while the config save was in flight — before any job exists.
+    if (cancelRequestedDaysRef.current.has(day)) {
+      clearDayProgress(day);
+      return;
     }
 
     // The hand-written prompt belongs to the day it was authored against, so
@@ -684,6 +716,12 @@ export default function Home() {
         }
         return;
       }
+    }
+
+    // Cancelled while the cache check was in flight — before any job exists.
+    if (cancelRequestedDaysRef.current.has(day)) {
+      clearDayProgress(day);
+      return;
     }
 
     markDayProgress(day, 'generating');
@@ -728,6 +766,13 @@ export default function Home() {
         : null;
       if (!job) throw new Error('Server did not return a valid generation job.');
 
+      // Cancelled while the POST was in flight: cancel the freshly queued job
+      // instead of starting to track it.
+      if (cancelRequestedDaysRef.current.has(day)) {
+        await handleCancelGeneration(day, job.jobId);
+        return;
+      }
+
       await trackGenerationJob(job, true);
 
     } catch (e) {
@@ -757,6 +802,70 @@ export default function Home() {
     setConfig(nextConfig);
     selectedDayRef.current = day;
     handleGenerate(true, day, nextConfig);
+  };
+
+  // Cancel one day's generation. Queued jobs are cancelled outright by the
+  // server; running jobs are flagged and the worker aborts the provider stream
+  // at its next cancel poll. The intent is also recorded locally so an
+  // in-flight generate flow that has not created its server job yet (config
+  // save / cache check / POST in flight) aborts at its next step instead of
+  // enqueueing anyway.
+  const handleCancelGeneration = async (day: string, jobId?: string) => {
+    cancelRequestedDaysRef.current.add(day);
+    try {
+      // Target the exact job this client is tracking: the per-day document is
+      // recycled between runs, so a stale request must not cancel a newer one.
+      const targetJobId = jobId || activeJobIdsRef.current[day];
+      const params = new URLSearchParams({ day });
+      if (targetJobId) params.set('jobId', targetJobId);
+      const res = await fetch(`/api/generate?${params.toString()}`, {
+        method: 'DELETE'
+      });
+      const data: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        // Nothing active server-side (404) still clears stale local progress.
+        if (res.status === 404) {
+          clearDayProgress(day);
+          finishBatchDay(day);
+          return;
+        }
+        // 409: the tracked job was replaced by a newer run — not ours to cancel.
+        if (res.status === 409) return;
+        const errorMessage = data && typeof data === 'object' && 'error' in data
+          ? String((data as { error: unknown }).error)
+          : `Unable to cancel generation for ${day}.`;
+        throw new Error(errorMessage);
+      }
+
+      const job = data && typeof data === 'object' && 'job' in data
+        ? normalizeGenerationJob((data as { job: unknown }).job)
+        : null;
+      if (job) {
+        // A terminal (cancelled) job clears the day immediately; a still-
+        // running job keeps the busy state until the worker aborts it and the
+        // polling loop observes the cancelled status.
+        applyGenerationJob(job);
+        // The DELETE may only have flagged an already-running job. When no
+        // tracking loop exists yet (e.g. the cancel raced the POST response),
+        // start one so the terminal cancelled state actually clears the UI.
+        if (isActiveJob(job) && !pollingJobsRef.current[day]) {
+          void trackGenerationJob(job).catch(error => {
+            console.error(`Error tracking cancelled generation for ${day}:`, error);
+          });
+        }
+      } else {
+        clearDayProgress(day);
+      }
+      finishBatchDay(day);
+    } catch (e) {
+      console.error(`Error cancelling generation for ${day}:`, e);
+    }
+  };
+
+  // Cancel every day currently in flight (batch cancel from the controls).
+  const handleCancelAllGenerations = async () => {
+    const busyDays = DAYS_OF_WEEK.filter(day => isDayBusy(day));
+    await Promise.all(busyDays.map(day => handleCancelGeneration(day)));
   };
 
   // Parallel AI Generation for all 7 days
@@ -810,6 +919,8 @@ export default function Home() {
 
     // A day already generating on its own keeps running; don't duplicate it
     const daysToRun = DAYS_OF_WEEK.filter(day => !isDayBusy(day));
+    // Launching a batch supersedes any earlier cancel intent for these days.
+    daysToRun.forEach(day => cancelRequestedDaysRef.current.delete(day));
     daysToRun.forEach(day => batchDaysRef.current.add(day));
     daysToRun.forEach(day => markDayProgress(day, 'queued'));
     setDayErrors(prev => {
@@ -827,6 +938,13 @@ export default function Home() {
         if (cached) {
           markDayProgress(day, 'done');
           setDayOutput(day, cached.responseText, cached.thinkingText, true);
+          return;
+        }
+
+        // Cancel All clicked while the cache check was in flight — the day was
+        // already marked queued locally, but no server job exists yet.
+        if (cancelRequestedDaysRef.current.has(day)) {
+          clearDayProgress(day);
           return;
         }
 
@@ -867,6 +985,13 @@ export default function Home() {
           ? normalizeGenerationJob((data as { job: unknown }).job)
           : null;
         if (!job) throw new Error(`Server did not return a valid generation job for ${day}.`);
+
+        // Cancelled while the POST was in flight: cancel the freshly queued
+        // job instead of starting to track it.
+        if (cancelRequestedDaysRef.current.has(day)) {
+          await handleCancelGeneration(day, job.jobId);
+          return;
+        }
 
         await trackGenerationJob(job);
       } catch (err) {
@@ -1013,6 +1138,8 @@ export default function Home() {
                   isCacheLoading={isCacheLoading}
                   onGenerate={handleGenerate}
                   onGenerateAllDays={handleGenerateAllDays}
+                  onCancel={handleCancelGeneration}
+                  onCancelAll={handleCancelAllGenerations}
                   onClearCache={handleClearCache}
                 />
               </div>
@@ -1036,6 +1163,7 @@ export default function Home() {
             onGenerate={handleGenerate}
             onGenerateAllDays={handleGenerateAllDays}
             onRegenerateDay={handleRegenerateDay}
+            onCancelDay={handleCancelGeneration}
             hidden={layoutMode === 'builder'}
             provider={config.provider}
           />

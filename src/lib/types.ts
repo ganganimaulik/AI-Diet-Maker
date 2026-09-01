@@ -116,7 +116,7 @@ export interface DayOutput {
   isCached: boolean;
 }
 
-export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 /** Durable server-side generation job returned by /api/generate. */
 export interface GenerationJob {

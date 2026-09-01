@@ -24,6 +24,23 @@ function isDuplicateKeyError(error) {
 }
 
 /**
+ * Error thrown inside the runner when a cancel flag is observed mid-stream.
+ * Distinctive class so the catch block can record 'cancelled' instead of
+ * 'failed' (a cancellation is intentional, not an error worth retrying).
+ */
+class GenerationCancelledError extends Error {
+  constructor(message = 'Generation cancelled by user.') {
+    super(message);
+    this.name = 'GenerationCancelledError';
+  }
+}
+
+function isGenerationCancelledError(error) {
+  return error instanceof GenerationCancelledError
+    || (typeof error === 'object' && error !== null && error.name === 'GenerationCancelledError');
+}
+
+/**
  * Atomically claim the oldest queued job for execution. Returns the claimed job
  * (with prompt + leaseId populated) or null when nothing is queued.
  *
@@ -34,7 +51,7 @@ async function claimNextQueuedJob(GenerationJob) {
   const now = new Date();
   const leaseId = randomUUID();
   return GenerationJob.findOneAndUpdate(
-    { status: 'queued' },
+    { status: 'queued', cancelRequested: { $ne: true } },
     {
       $set: {
         status: 'running',
@@ -56,8 +73,22 @@ async function claimNextQueuedJob(GenerationJob) {
 /**
  * Return jobs whose runner died mid-execution (lease expired) to the queue so
  * they retry. Called on worker startup and opportunistically by the GET route.
+ * A stale job the user already cancelled is finished off instead of requeued.
  */
 async function requeueStaleJobs(GenerationJob, now = new Date()) {
+  await GenerationJob.updateMany(
+    { status: 'running', cancelRequested: true, leaseExpiresAt: { $lte: now } },
+    {
+      $set: {
+        status: 'cancelled',
+        error: 'Generation cancelled by user.',
+        completedAt: now,
+        leaseId: '',
+        leaseExpiresAt: null
+      }
+    }
+  );
+
   const result = await GenerationJob.updateMany(
     { status: 'running', leaseExpiresAt: { $lte: now } },
     {
@@ -93,17 +124,94 @@ async function heartbeatJob(GenerationJob, jobId, leaseId, partial = {}) {
   return result.matchedCount > 0;
 }
 
-/** Mark a job completed with its final text and release the lease. */
+/**
+ * Mark a job completed with its final text and release the lease.
+ *
+ * The update atomically requires that no cancellation has arrived, so a DELETE
+ * landing between the runner's last cancel check and this write cannot be
+ * overwritten by a completion (and then cached). Returns true when the
+ * completion was recorded; false means the job was cancelled mid-flight (or,
+ * practically never, the lease was lost) and the caller must not cache.
+ */
 async function completeJob(GenerationJob, jobId, leaseId, { responseText = '', thinkingText = '' } = {}) {
   const now = new Date();
-  await GenerationJob.updateOne(
-    { jobId, status: 'running', leaseId },
+  const result = await GenerationJob.updateOne(
+    { jobId, status: 'running', leaseId, cancelRequested: { $ne: true } },
     {
       $set: {
         status: 'completed',
         responseText,
         thinkingText,
         error: '',
+        completedAt: now,
+        heartbeatAt: now,
+        leaseId: '',
+        leaseExpiresAt: null
+      }
+    }
+  );
+  return result.matchedCount > 0;
+}
+
+/**
+ * Request cancellation of a day's active job. A queued job transitions straight
+ * to 'cancelled' (the claim query also skips flagged jobs, so a lost race still
+ * never executes); a running job is flagged and the worker aborts it at its
+ * next cancel poll. Returns the updated job, or null when no active job exists.
+ *
+ * When `jobId` is given it must match the active job: the per-day document is
+ * recycled between runs, so a delayed request from one tab must never cancel a
+ * newer generation started by another.
+ */
+async function requestCancelJob(GenerationJob, day, jobId = null) {
+  const now = new Date();
+  const scope = jobId ? { day, jobId } : { day };
+
+  const cancelled = await GenerationJob.findOneAndUpdate(
+    { ...scope, status: 'queued' },
+    {
+      $set: {
+        status: 'cancelled',
+        cancelRequested: true,
+        error: 'Generation cancelled by user.',
+        completedAt: now
+      }
+    },
+    { new: true }
+  );
+  if (cancelled) return cancelled;
+
+  return GenerationJob.findOneAndUpdate(
+    { ...scope, status: 'running' },
+    { $set: { cancelRequested: true } },
+    { new: true }
+  );
+}
+
+/**
+ * Lightweight poll used by the runner while streaming: has this claimed job
+ * been asked to cancel? Lease-matched so a recycled per-day document (new
+ * jobId/lease) never aborts a fresh run.
+ */
+async function isCancelRequested(GenerationJob, jobId, leaseId) {
+  const doc = await GenerationJob.findOne(
+    { jobId, status: 'running', leaseId, cancelRequested: true },
+    { _id: 1 }
+  );
+  return !!doc;
+}
+
+/** Mark a running job cancelled, keeping any partial text already streamed. */
+async function cancelJob(GenerationJob, jobId, leaseId, { responseText = '', thinkingText = '' } = {}) {
+  const now = new Date();
+  await GenerationJob.updateOne(
+    { jobId, status: 'running', leaseId },
+    {
+      $set: {
+        status: 'cancelled',
+        responseText,
+        thinkingText,
+        error: 'Generation cancelled by user.',
         completedAt: now,
         heartbeatAt: now,
         leaseId: '',
@@ -137,9 +245,14 @@ module.exports = {
   LEASE_DURATION_MS,
   HEARTBEAT_INTERVAL_MS,
   isDuplicateKeyError,
+  GenerationCancelledError,
+  isGenerationCancelledError,
   claimNextQueuedJob,
   requeueStaleJobs,
   heartbeatJob,
   completeJob,
-  failJob
+  failJob,
+  requestCancelJob,
+  isCancelRequested,
+  cancelJob
 };

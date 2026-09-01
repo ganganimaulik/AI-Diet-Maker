@@ -919,6 +919,29 @@ input[type="radio"]:disabled {
   cursor: not-allowed;
 }
 
+.btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+  padding: 0.55rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  background: rgba(244, 63, 94, 0.08);
+  color: #fda4af;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.btn-cancel:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn-add {
   display: inline-flex;
   align-items: center;
@@ -965,7 +988,8 @@ input[type="radio"]:disabled {
 }
 
 .btn-primary--sm,
-.btn-regenerate--sm {
+.btn-regenerate--sm,
+.btn-cancel--sm {
   min-height: 36px;
   padding: 0.35rem 0.8rem;
   font-size: 0.78rem;
@@ -995,6 +1019,7 @@ input[type="radio"]:disabled {
 
   .btn-secondary,
   .btn-regenerate,
+  .btn-cancel,
   .btn-add,
   .btn-remove {
     min-height: 38px;
@@ -1023,6 +1048,14 @@ input[type="radio"]:disabled {
     border-color: rgba(168, 85, 247, 0.45);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(168, 85, 247, 0.15);
+  }
+
+  .btn-cancel:hover:not(:disabled) {
+    background: rgba(244, 63, 94, 0.14);
+    border-color: rgba(244, 63, 94, 0.5);
+    color: #fecdd3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.15);
   }
 
   .btn-add:hover {
@@ -1746,7 +1779,8 @@ input[type="radio"]:disabled {
   flex: 1 1 12rem;
 }
 
-.generation-actions__row .btn-regenerate {
+.generation-actions__row .btn-regenerate,
+.generation-actions__row .btn-cancel {
   flex: 1 1 8rem;
 }
 
@@ -1755,6 +1789,13 @@ input[type="radio"]:disabled {
   background: rgba(192, 132, 252, 0.12);
   border: 1px solid rgba(192, 132, 252, 0.25);
   color: #e9d5ff;
+}
+
+/* Batch slot reused for Cancel All while a batch runs: keep the rose tone. */
+.btn-cancel.btn-batch {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  color: #fda4af;
 }
 
 /* Compact per-day cache chips: 4 across on phones, all 7 on tablets up. */
@@ -2066,6 +2107,12 @@ input[type="radio"]:disabled {
 
   .day-chip-regen:hover:not(:disabled) {
     background: rgba(192, 132, 252, 0.35);
+    color: #fff;
+    opacity: 1;
+  }
+
+  .day-chip-cancel:hover:not(:disabled) {
+    background: rgba(244, 63, 94, 0.35);
     color: #fff;
     opacity: 1;
   }

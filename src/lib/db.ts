@@ -169,12 +169,13 @@ export interface ICachedResponse {
   updatedAt: Date;
 }
 
-export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type GenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface IGenerationJob {
   jobId: string;
   day: string;
   status: GenerationJobStatus;
+  cancelRequested: boolean;
   prompt: string;
   provider: string;
   model: string;

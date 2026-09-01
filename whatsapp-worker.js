@@ -42,11 +42,15 @@ const {
 } = require('./src/lib/fireworks.js');
 const {
   HEARTBEAT_INTERVAL_MS,
+  GenerationCancelledError,
+  isGenerationCancelledError,
   claimNextQueuedJob,
   requeueStaleJobs,
   heartbeatJob,
   completeJob,
-  failJob
+  failJob,
+  isCancelRequested,
+  cancelJob
 } = require('./src/lib/generation-runner.js');
 
 // RemoteAuth.disconnect() normally DELETES the session from the remote store,
@@ -940,14 +944,27 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
 }
 
 // SSE Stream Parser for web ReadableStreams in Node.js
-async function* parseSSEResponse(response, customExtractor) {
+// `signal` aborts a stalled read promptly (a cancelled job cannot wait for the
+// next chunk) and cancels the body so the connection stops consuming tokens.
+async function* parseSSEResponse(response, customExtractor, signal) {
+  if (signal?.aborted) throw new GenerationCancelledError();
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
 
+  let abortPromise = null;
+  if (signal) {
+    abortPromise = new Promise((_, reject) => {
+      signal.addEventListener('abort', () => reject(new GenerationCancelledError()), { once: true });
+    });
+  }
+  const readOnce = () => abortPromise
+    ? Promise.race([reader.read(), abortPromise])
+    : reader.read();
+
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await readOnce();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -979,12 +996,14 @@ async function* parseSSEResponse(response, customExtractor) {
       }
     }
   } finally {
+    // On abort, cancel the body so the provider connection actually closes.
+    if (signal?.aborted) await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }
 
 // Stream AI response chunks from Fireworks, Gemini Enterprise, or Google AI Studio
-async function* streamAIChunks(c, prompt) {
+async function* streamAIChunks(c, prompt, signal) {
   const model = c.model === 'custom' ? c.customModel : c.model;
 
   if (c.provider === 'fireworks') {
@@ -1006,6 +1025,7 @@ async function* streamAIChunks(c, prompt) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal
     });
 
     if (!response.ok) {
@@ -1015,7 +1035,7 @@ async function* streamAIChunks(c, prompt) {
 
     const extract = createFireworksStreamExtractor();
     let finishReason = '';
-    for await (const chunk of parseSSEResponse(response, extract)) {
+    for await (const chunk of parseSSEResponse(response, extract, signal)) {
       if (chunk.finishReason) finishReason = chunk.finishReason;
       if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
     }
@@ -1051,6 +1071,7 @@ async function* streamAIChunks(c, prompt) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal
       });
 
       if (!response.ok) {
@@ -1059,7 +1080,7 @@ async function* streamAIChunks(c, prompt) {
       }
 
       let enterpriseFinishReason = '';
-      for await (const chunk of parseSSEResponse(response)) {
+      for await (const chunk of parseSSEResponse(response, undefined, signal)) {
         if (chunk.finishReason) enterpriseFinishReason = chunk.finishReason;
         if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
       }
@@ -1095,6 +1116,9 @@ async function* streamAIChunks(c, prompt) {
       const configObj = {
         temperature: 0.1,
       };
+      if (signal) {
+        configObj.abortSignal = signal;
+      }
 
       if (Number(c.maxTokens) > 0) {
         configObj.maxOutputTokens = Number(c.maxTokens);
@@ -1115,6 +1139,9 @@ async function* streamAIChunks(c, prompt) {
 
       let sdkFinishReason = '';
       for await (const chunk of responseStream) {
+        // Guard even with abortSignal set: chunk-active streams must stop at
+        // once even if the SDK's abort lands between iterations.
+        if (signal?.aborted) throw new GenerationCancelledError();
         const candidate = chunk.candidates?.[0];
         if (candidate?.finishReason) sdkFinishReason = String(candidate.finishReason);
         const parts = candidate?.content?.parts || [];
@@ -1139,6 +1166,7 @@ async function* streamAIChunks(c, prompt) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal
     });
 
     if (!response.ok) {
@@ -1147,7 +1175,7 @@ async function* streamAIChunks(c, prompt) {
     }
 
     let studioFinishReason = '';
-    for await (const chunk of parseSSEResponse(response)) {
+    for await (const chunk of parseSSEResponse(response, undefined, signal)) {
       if (chunk.finishReason) studioFinishReason = chunk.finishReason;
       if (chunk.text || chunk.thought) yield { text: chunk.text, thinking: chunk.thought };
     }
@@ -1156,10 +1184,11 @@ async function* streamAIChunks(c, prompt) {
 }
 
 // Helper: Call AI API (Fireworks or Google Gemini) with optional streaming progress callback
-async function callGeminiAPI(c, prompt, onChunk) {
+async function callGeminiAPI(c, prompt, onChunk, signal) {
   let fullText = '';
   let fullThinking = '';
-  for await (const chunk of streamAIChunks(c, prompt)) {
+  for await (const chunk of streamAIChunks(c, prompt, signal)) {
+    if (signal?.aborted) throw new GenerationCancelledError();
     if (chunk.text) fullText += chunk.text;
     if (chunk.thinking) fullThinking += chunk.thinking;
     if (onChunk) onChunk({ text: fullText, thinking: fullThinking, chunk });
@@ -1216,6 +1245,8 @@ async function runNextGenerationJob() {
   let latestText = '';
   let latestThinking = '';
   let lastCheckpointTime = Date.now();
+  let cancelObserved = false;
+  const cancelController = new AbortController();
 
   const heartbeatTimer = setInterval(() => {
     heartbeatJob(GenerationJob, job.jobId, leaseId, {
@@ -1226,6 +1257,24 @@ async function runNextGenerationJob() {
     });
   }, HEARTBEAT_INTERVAL_MS);
 
+  // Poll the cancel flag on a short cadence so a dashboard cancel aborts the
+  // provider request promptly (closing the connection stops token consumption)
+  // instead of waiting for the next chunk or the model to finish.
+  const CANCEL_POLL_INTERVAL_MS = 2000;
+  const cancelTimer = setInterval(() => {
+    if (cancelObserved) return;
+    isCancelRequested(GenerationJob, job.jobId, leaseId)
+      .then(requested => {
+        if (requested && !cancelObserved) {
+          cancelObserved = true;
+          cancelController.abort();
+        }
+      })
+      .catch(err => {
+        console.error(`Cancel check failed for generation job ${job.jobId}:`, err);
+      });
+  }, CANCEL_POLL_INTERVAL_MS);
+
   try {
     configDoc = await Config.findOne();
     if (!configDoc) throw new Error('No configuration found for this generation job.');
@@ -1233,6 +1282,7 @@ async function runNextGenerationJob() {
     console.log(`Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}...`);
 
     const onChunk = ({ text, thinking }) => {
+      if (cancelObserved) throw new GenerationCancelledError();
       latestText = text;
       latestThinking = thinking;
       const now = Date.now();
@@ -1248,16 +1298,27 @@ async function runNextGenerationJob() {
       }
     };
 
-    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt, onChunk);
+    const { text, thinking } = await callGeminiAPI(configDoc, job.prompt, onChunk, cancelController.signal);
+
+    // A cancel that landed after the final chunk still wins over completion.
+    if (cancelObserved || await isCancelRequested(GenerationJob, job.jobId, leaseId).catch(() => false)) {
+      throw new GenerationCancelledError();
+    }
 
     if (!text || !text.trim()) {
       throw new Error('The model returned an empty response.');
     }
 
-    await completeJob(GenerationJob, job.jobId, leaseId, {
+    // Atomic: completion is only recorded when no cancel request has landed.
+    // A false return means cancellation won the race — record the job as
+    // cancelled and skip caching instead of blessing a cancelled run's result.
+    const completed = await completeJob(GenerationJob, job.jobId, leaseId, {
       responseText: text,
       thinkingText: thinking || ''
     });
+    if (!completed) {
+      throw new GenerationCancelledError();
+    }
 
     // Persist to the per-day cache only when this job was cacheable. Use the
     // snapshot's hash so /api/cache marks it stale if the config changed
@@ -1283,16 +1344,30 @@ async function runNextGenerationJob() {
     }
     console.log(`Generation job ${job.jobId} for ${job.day} completed.`);
   } catch (error) {
-    const message = sanitizeGenerationError(error, configDoc);
-    console.error(`Generation job ${job.jobId} for ${job.day} failed:`, message);
-    await failJob(GenerationJob, job.jobId, leaseId, message, {
-      responseText: latestText,
-      thinkingText: latestThinking
-    }).catch(err => {
-      console.error(`Failed to mark generation job ${job.jobId} as failed:`, err);
-    });
+    // Aborted fetches surface as AbortError rather than GenerationCancelledError;
+    // cancelObserved is only ever set alongside the abort, so either marks an
+    // intentional cancellation.
+    if (isGenerationCancelledError(error) || cancelObserved) {
+      console.log(`Generation job ${job.jobId} for ${job.day} cancelled by user.`);
+      await cancelJob(GenerationJob, job.jobId, leaseId, {
+        responseText: latestText,
+        thinkingText: latestThinking
+      }).catch(err => {
+        console.error(`Failed to mark generation job ${job.jobId} as cancelled:`, err);
+      });
+    } else {
+      const message = sanitizeGenerationError(error, configDoc);
+      console.error(`Generation job ${job.jobId} for ${job.day} failed:`, message);
+      await failJob(GenerationJob, job.jobId, leaseId, message, {
+        responseText: latestText,
+        thinkingText: latestThinking
+      }).catch(err => {
+        console.error(`Failed to mark generation job ${job.jobId} as failed:`, err);
+      });
+    }
   } finally {
     clearInterval(heartbeatTimer);
+    clearInterval(cancelTimer);
   }
 }
 

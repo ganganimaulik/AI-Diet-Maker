@@ -17,3 +17,9 @@ export const requeueStaleJobs: (
   model: Model<IGenerationJob>,
   now?: Date
 ) => Promise<number> = runner.requeueStaleJobs;
+
+export const requestCancelJob: (
+  model: Model<IGenerationJob>,
+  day: string,
+  jobId?: string | null
+) => Promise<IGenerationJob | null> = runner.requestCancelJob;

@@ -10,7 +10,7 @@ import {
 } from '@/lib/db';
 import { computeConfigHash } from '@/lib/config-hash';
 
-import { requeueStaleJobs } from '@/lib/generation-runner';
+import { requeueStaleJobs, requestCancelJob } from '@/lib/generation-runner';
 
 // Generation no longer executes in this serverless function. POST persists a
 // durable GenerationJob and the always-on whatsapp-worker process claims and
@@ -139,6 +139,7 @@ async function createOrReuseJob(
     enterpriseLocation: stringValue(body.enterpriseLocation, config.enterpriseLocation || 'global'),
     configHash,
     cacheable: body.cacheable !== false,
+    cancelRequested: false,
     responseText: '',
     thinkingText: '',
     error: '',
@@ -202,6 +203,52 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error('Error queueing generation job:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    if (!(await isAuthenticated())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const day = normalizeDay(searchParams.get('day'));
+    if (!day) {
+      return NextResponse.json({ error: 'A valid generation day is required.' }, { status: 400 });
+    }
+    const jobIdParam = searchParams.get('jobId');
+    const jobId = jobIdParam && jobIdParam.trim() ? jobIdParam.trim() : null;
+
+    await dbConnect();
+    // Target the exact job the caller is tracking. The per-day document is
+    // recycled between runs, so a stale tab must not cancel a newer one.
+    const job = await requestCancelJob(GenerationJob, day, jobId);
+    if (!job) {
+      if (jobId) {
+        const active = await GenerationJob.findOne(
+          { day, status: { $in: ACTIVE_JOB_STATUSES } },
+          { jobId: 1 }
+        );
+        if (active) {
+          return NextResponse.json(
+            { error: `Generation job ${jobId} is no longer active for ${day}; a newer run may have replaced it.` },
+            { status: 409 }
+          );
+        }
+      }
+      return NextResponse.json({ error: `No active generation job for ${day}.` }, { status: 404 });
+    }
+
+    const config = await Config.findOne();
+    return NextResponse.json(
+      { job: serializeJob(job, config) },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error) {
+    console.error('Error cancelling generation job:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

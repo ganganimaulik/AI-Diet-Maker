@@ -22,6 +22,7 @@ interface OutputPanelProps {
   onGenerate: (forceRegenerate?: boolean) => void;
   onGenerateAllDays: () => void;
   onRegenerateDay: (day: string) => void;
+  onCancelDay: (day: string) => void;
   hidden?: boolean;
   provider?: string;
 }
@@ -37,6 +38,14 @@ function RegenerateIcon({ size = 12 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M1 4v6h6M23 20v-6h-6"/>
       <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+    </svg>
+  );
+}
+
+function CancelIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M18 6L6 18M6 6l12 12"/>
     </svg>
   );
 }
@@ -125,6 +134,7 @@ export default function OutputPanel({
   onGenerate,
   onGenerateAllDays,
   onRegenerateDay,
+  onCancelDay,
   hidden = false,
   provider
 }: OutputPanelProps) {
@@ -167,32 +177,48 @@ export default function OutputPanel({
                 >
                   {label}
                 </button>
-                <button
-                  className="day-chip-regen"
-                  disabled={busy}
-                  onClick={() => onRegenerateDay(day)}
-                  title={
-                    busy
-                      ? `${day} is already generating…`
-                      : hasPlan
+                {busy ? (
+                  <button
+                    className="day-chip-regen day-chip-cancel"
+                    onClick={() => onCancelDay(day)}
+                    title={`Cancel ${day} generation`}
+                    aria-label={`Cancel ${day} generation`}
+                  >
+                    <CancelIcon size={12} />
+                  </button>
+                ) : (
+                  <button
+                    className="day-chip-regen"
+                    onClick={() => onRegenerateDay(day)}
+                    title={
+                      hasPlan
                         ? `Regenerate ${day} — ignores the cached plan`
                         : `Generate ${day}`
-                  }
-                  aria-label={hasPlan ? `Regenerate ${day}` : `Generate ${day}`}
-                >
-                  <RegenerateIcon size={12} />
-                </button>
+                    }
+                    aria-label={hasPlan ? `Regenerate ${day}` : `Generate ${day}`}
+                  >
+                    <RegenerateIcon size={12} />
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
 
-        {/* Quick action for the day on screen: generate it, or redo it fresh */}
+        {/* Quick action for the day on screen: generate it, stop it, or redo it fresh */}
         <div className="output-toolbar__actions">
-          {!outputText && !isCurrentDayBusy ? (
+          {isCurrentDayBusy ? (
+            <button
+              className="btn-cancel btn-cancel--sm"
+              onClick={() => onCancelDay(selectedDay)}
+              title={`Stop generating ${selectedDay}`}
+            >
+              <CancelIcon size={12} />
+              Cancel {selectedDay.substring(0, 3)}
+            </button>
+          ) : !outputText ? (
             <button
               className="btn-primary btn-primary--sm"
-              disabled={isCurrentDayBusy}
               onClick={() => errorMsg ? onRegenerateDay(selectedDay) : onGenerate(false)}
             >
               {errorMsg ? (
@@ -207,7 +233,6 @@ export default function OutputPanel({
           ) : (
             <button
               className="btn-regenerate btn-regenerate--sm"
-              disabled={isCurrentDayBusy}
               onClick={() => onRegenerateDay(selectedDay)}
               title={`Regenerate ${selectedDay} — ignores the cached plan`}
             >

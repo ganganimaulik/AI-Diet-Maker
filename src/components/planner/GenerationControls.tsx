@@ -14,6 +14,8 @@ interface GenerationControlsProps {
   isCacheLoading: boolean;
   onGenerate: (forceRegenerate: boolean) => void;
   onGenerateAllDays: () => void;
+  onCancel: (day: string) => void;
+  onCancelAll: () => void;
   onClearCache: (day?: string) => void;
 }
 
@@ -38,9 +40,16 @@ export default function GenerationControls({
   isCacheLoading,
   onGenerate,
   onGenerateAllDays,
+  onCancel,
+  onCancelAll,
   onClearCache
 }: GenerationControlsProps) {
   const cached = cacheStatus[currentCacheDay];
+  // Queued + generating days have a live server job; the cache-checking phase
+  // is cancellable too — the client aborts the flow before any job is created.
+  const currentDayProgress = dayProgress[currentCacheDay];
+  const isCurrentDayQueued = currentDayProgress === 'queued';
+  const isCurrentDayCancellable = isCurrentDayQueued || currentDayProgress === 'generating' || isCacheLoading;
 
   const timeAgo = cached ? (() => {
     // eslint-disable-next-line react-hooks/purity
@@ -140,13 +149,18 @@ export default function GenerationControls({
         <div className="generation-actions__row">
           <button
             className="btn-primary"
-            disabled={isGenerating || isCacheLoading}
+            disabled={isGenerating || isCacheLoading || isCurrentDayQueued}
             onClick={() => onGenerate(false)}
           >
             {isGenerating ? (
               <>
                 <div className="spinner spinner--inline"></div>
                 Generating {config.selectedGenerationDay || 'Day'}...
+              </>
+            ) : isCurrentDayQueued ? (
+              <>
+                <span aria-hidden="true">⏳</span>
+                {config.selectedGenerationDay || 'Day'} Queued...
               </>
             ) : isCacheLoading ? (
               <>
@@ -163,7 +177,20 @@ export default function GenerationControls({
             )}
           </button>
 
-          {cacheStatus[currentCacheDay] && (
+          {isCurrentDayCancellable && (
+            <button
+              className="btn-cancel"
+              onClick={() => onCancel(currentCacheDay)}
+              title={`Stop generating ${currentCacheDay}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+              Cancel
+            </button>
+          )}
+
+          {cacheStatus[currentCacheDay] && !isCurrentDayCancellable && (
             <button
               className="btn-regenerate"
               disabled={isGenerating || isCacheLoading}
@@ -179,29 +206,32 @@ export default function GenerationControls({
           )}
         </div>
 
-        <button
-          className="btn-secondary btn-batch"
-          disabled={isBatchGenerating}
-          onClick={onGenerateAllDays}
-          title="Generate all 7 days concurrently in parallel and store each in cache"
-        >
-          {isBatchGenerating ? (
-            <>
-              <div className="spinner spinner--inline"></div>
-              Generating All 7 Days (Parallel)...
-            </>
-          ) : (
-            <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              ⚡ Generate All 7 Days (Parallel)
-            </>
-          )}
-        </button>
+        {isBatchGenerating ? (
+          <button
+            className="btn-cancel btn-batch"
+            onClick={onCancelAll}
+            title="Cancel all running day generations"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+            Cancel All Generations
+          </button>
+        ) : (
+          <button
+            className="btn-secondary btn-batch"
+            onClick={onGenerateAllDays}
+            title="Generate all 7 days concurrently in parallel and store each in cache"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            ⚡ Generate All 7 Days (Parallel)
+          </button>
+        )}
       </div>
     </>
   );

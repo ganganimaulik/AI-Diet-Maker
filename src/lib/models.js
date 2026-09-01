@@ -147,9 +147,12 @@ const GenerationJobSchema = new Schema({
   day: { type: String, required: true },
   status: {
     type: String,
-    enum: ['queued', 'running', 'completed', 'failed'],
+    enum: ['queued', 'running', 'completed', 'failed', 'cancelled'],
     default: 'queued'
   },
+  // Set by /api/generate DELETE: a queued job is cancelled outright, a running
+  // job is flagged so the worker aborts it at the next stream checkpoint.
+  cancelRequested: { type: Boolean, default: false },
   // The prompt must survive a serverless restart so a later status poll can
   // resume an abandoned job. select:false keeps it out of ordinary reads and
   // API serialization; the runner opts in explicitly.
