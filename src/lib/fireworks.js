@@ -15,9 +15,19 @@ const FIREWORKS_API_URL = 'https://api.fireworks.ai/inference/v1/chat/completion
 // an explicit budget, and let callers check finishReason for the rest.
 const DEFAULT_MAX_TOKENS = 16384;
 
-// reasoning_effort values accepted by Fireworks' OpenAI-compatible endpoint.
-// 'default' means "omit the field" and let the model decide.
-const REASONING_EFFORTS = ['default', 'none', 'low', 'medium', 'high'];
+// reasoning_effort values exposed by Fireworks' OpenAI-compatible endpoint.
+// 'default' means "omit the field" and let the model decide. Individual models
+// may support only a subset and ignore unsupported effort levels.
+const REASONING_EFFORTS = [
+  'default',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'none',
+  'adaptive'
+];
 
 const THINK_OPEN = '<think>';
 const THINK_CLOSE = '</think>';

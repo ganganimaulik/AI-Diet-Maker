@@ -224,6 +224,7 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               <option value="accounts/fireworks/models/deepseek-v4-flash-0731">DeepSeek V4 Flash</option>
               <option value="accounts/fireworks/models/llama4-maverick-instruct-basic">Llama 4 Maverick Instruct (401B)</option>
               <option value="accounts/fireworks/models/kimi-k3">Kimi K3 (Reasoning)</option>
+              <option value="accounts/fireworks/routers/kimi-k3-fast">Kimi K3 Fast</option>
               <option value="accounts/fireworks/models/glm-5p3">GLM 5.3 (Reasoning)</option>
               <option value="accounts/fireworks/models/glm-5p3-flash">GLM 5.3 Flash</option>
               <option value="accounts/fireworks/models/qwen3p8-max">Qwen 3.8 Max</option>
@@ -295,10 +296,13 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
               onChange={e => setConfig(prev => ({ ...prev, reasoningEffort: e.target.value }))}
             >
               <option value="default">Model default</option>
-              <option value="none">None (no reasoning)</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+              <option value="xhigh">XHigh</option>
+              <option value="max">Max</option>
+              <option value="none">None (no reasoning)</option>
+              <option value="adaptive">Adaptive</option>
             </select>
             <p className="note-text">
               Sent as <code>reasoning_effort</code>. Models without reasoning control ignore it.
