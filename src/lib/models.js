@@ -42,8 +42,6 @@ const MealSchema = new Schema({
   water: { type: String, default: '' },
   prepMethod: { type: String, default: '' },
   cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
-  totalOliveOil: { type: Number, default: 0 },
-  oliveOilSplitPercent: { type: Number, default: 50 },
   disabled: { type: Boolean, default: false }
 }, { _id: false });
 
@@ -93,8 +91,6 @@ const ConfigSchema = new Schema({
   agentMaxTokens: { type: Number, default: 8192 },
   global: {
     dailyCalorieTarget: { type: Number, default: 3200 },
-    totalOliveOil: { type: Number, default: 18 },
-    oliveOilSplitPercent: { type: Number, default: 50 },
     idealSodiumPotassiumRatioMin: { type: Number, default: 0.79 },
     idealSodiumPotassiumRatioMax: { type: Number, default: 0.80 }
   },

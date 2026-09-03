@@ -20,7 +20,7 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  * not invalidate Monday's cached plan.
  *
  * Included fields (changes invalidate that day's cache):
- *   - global (calorie target, olive oil, sodium/potassium ratios)
+ *   - global (calorie target and sodium/potassium ratios)
  *   - meals (definitions, ingredients, weights, prep methods)  [all days]
  *   - customSplits                                             [all days]
  *   - dailyVariables[day] (that day's ingredient overrides only)
@@ -47,7 +47,11 @@ function computeConfigHash(config, day) {
 
   // Extract only the diet-relevant fields
   const hashableFields = {
-    global: config.global || {},
+    global: {
+      dailyCalorieTarget: config.global?.dailyCalorieTarget,
+      idealSodiumPotassiumRatioMin: config.global?.idealSodiumPotassiumRatioMin,
+      idealSodiumPotassiumRatioMax: config.global?.idealSodiumPotassiumRatioMax,
+    },
     meals: (config.meals || []).map((meal) => ({
       id: meal.id,
       name: meal.name,
@@ -67,8 +71,6 @@ function computeConfigHash(config, day) {
       water: meal.water,
       prepMethod: meal.prepMethod,
       cookQuantityMode: meal.cookQuantityMode,
-      totalOliveOil: meal.totalOliveOil,
-      oliveOilSplitPercent: meal.oliveOilSplitPercent,
     })),
     customSplits: (config.customSplits || []).map((s) => ({
       id: s.id,

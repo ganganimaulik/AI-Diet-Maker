@@ -66,8 +66,6 @@ export async function GET() {
       if (!config.global) {
         config.global = {
           dailyCalorieTarget: 1600,
-          totalOliveOil: 18,
-          oliveOilSplitPercent: 50,
           idealSodiumPotassiumRatioMin: 0.70,
           idealSodiumPotassiumRatioMax: 0.80
         };

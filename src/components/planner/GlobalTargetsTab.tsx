@@ -13,7 +13,7 @@ export default function GlobalTargetsTab({ config, actions }: GlobalTargetsTabPr
   return (
     <div>
       <h3 className="builder-section-title">
-        <span aria-hidden="true">🎯</span> Daily Calorie &amp; Olive Oil Targets
+        <span aria-hidden="true">🎯</span> Global Nutrition Targets
       </h3>
       <div className="input-row">
         <div className="form-group">

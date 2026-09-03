@@ -84,8 +84,6 @@ export interface IMeal {
   water: string;
   prepMethod: string;
   cookQuantityMode?: 'daily' | 'per-meal';
-  totalOliveOil?: number;
-  oliveOilSplitPercent?: number;
   disabled?: boolean;
 }
 
@@ -123,8 +121,6 @@ export interface IConfig {
   agentMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
-    totalOliveOil: number;
-    oliveOilSplitPercent: number;
     idealSodiumPotassiumRatioMin?: number;
     idealSodiumPotassiumRatioMax?: number;
   };

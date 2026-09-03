@@ -27,8 +27,6 @@ export interface Meal {
   water: string;
   prepMethod: string;
   cookQuantityMode?: 'daily' | 'per-meal';
-  totalOliveOil?: number;
-  oliveOilSplitPercent?: number;
   disabled?: boolean;
 }
 
@@ -71,14 +69,11 @@ export interface Config {
   agentMaxTokens?: number;
   global: {
     dailyCalorieTarget: number;
-    totalOliveOil: number;
-    oliveOilSplitPercent: number;
     idealSodiumPotassiumRatioMin?: number;
     idealSodiumPotassiumRatioMax?: number;
   };
   meals: Meal[];
   splits?: {
-    oliveOilSplit: string;
     saltSplit: string;
     chickenPrepMethod: string;
   };
@@ -311,8 +306,6 @@ export const DEFAULT_CONFIG: Config = {
   huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {
     dailyCalorieTarget: 3200,
-    totalOliveOil: 18,
-    oliveOilSplitPercent: 50,
     idealSodiumPotassiumRatioMin: 0.79,
     idealSodiumPotassiumRatioMax: 0.80
   },
@@ -477,7 +470,11 @@ export const DEFAULT_CONFIG: Config = {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const normalizeConfig = (loaded: any): Config => {
   const normalized = { ...DEFAULT_CONFIG, ...loaded };
-  normalized.global = { ...DEFAULT_CONFIG.global, ...(loaded.global || {}) };
+  normalized.global = {
+    dailyCalorieTarget: loaded.global?.dailyCalorieTarget ?? DEFAULT_CONFIG.global.dailyCalorieTarget,
+    idealSodiumPotassiumRatioMin: loaded.global?.idealSodiumPotassiumRatioMin ?? DEFAULT_CONFIG.global.idealSodiumPotassiumRatioMin,
+    idealSodiumPotassiumRatioMax: loaded.global?.idealSodiumPotassiumRatioMax ?? DEFAULT_CONFIG.global.idealSodiumPotassiumRatioMax
+  };
   normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0
     ? loaded.meals.map((m: any) => ({ ...m, disabled: !!m.disabled }))
     : DEFAULT_CONFIG.meals;
