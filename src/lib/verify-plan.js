@@ -84,7 +84,13 @@ function buildReferenceDb(config, day) {
     if (!line.startsWith('- ')) continue;
     const body = line.slice(2);
 
-    if (body.startsWith('Table Salt (NaCl)')) {
+    if (body.startsWith('Water')) {
+      const water = { key: 'Water', kcalPerG: 0, p: 0, c: 0, f: 0, na: 0, k: 0 };
+      for (const alias of ['water']) db.set(alias, water);
+      continue;
+    }
+
+    if (body.startsWith('Table Salt')) {
       const salt = { key: 'Table Salt (NaCl)', kcalPerG: 0, p: 0, c: 0, f: 0, na: SODIUM_MG_PER_G_SALT * 100, k: 0, isSalt: true };
       for (const alias of ['table salt', 'table salt (nacl)', 'salt', 'nacl']) db.set(alias, salt);
       continue;
@@ -371,19 +377,6 @@ function expectedMeals(config, day) {
   }));
 }
 
-/** Salt splits (grams) owned by an active meal, keyed by meal id. */
-function saltSplitsByMeal(config) {
-  const active = (config.meals || []).filter((meal) => !meal.disabled);
-  const byMeal = new Map();
-  for (const split of config.customSplits || []) {
-    if (!/salt/i.test(split.name || '')) continue;
-    if (!active.some((meal) => meal.id === split.mealId)) continue;
-    const grams = num(split.value);
-    if (Number.isFinite(grams)) byMeal.set(split.mealId, grams);
-  }
-  return byMeal;
-}
-
 // -------------------------------------------------------------
 // FEASIBILITY: is the configured Na:K range reachable at all?
 // -------------------------------------------------------------
@@ -454,7 +447,6 @@ function computeFeasibility(config, day) {
       }
     }
   }
-  for (const grams of saltSplitsByMeal(config).values()) fixedNa += grams * SODIUM_MG_PER_G_SALT;
 
   const budget = target - fixedKcal;
   const evaluate = (ratio) => {
@@ -541,7 +533,6 @@ function verifyPlan(config, day, planText) {
   const lookup = makeLookup(db);
   const plan = parsePlan(planText, dayKey);
   const expected = expectedMeals(config, dayKey);
-  const saltSplits = saltSplitsByMeal(config);
 
   if (plan.meals.length === 0) {
     sink.error('format', 'Could not find any "N. Meal name (X Meals Per Day)" tables in Part 1 — the plan does not follow the expected format.');
@@ -560,7 +551,6 @@ function verifyPlan(config, day, planText) {
   let saltGrams = 0;
   let unpricedIngredients = 0;
   const mealDailyKcal = new Map();
-  const mealsWithSaltRow = new Set();
 
   for (let index = 0; index < plan.meals.length; index++) {
     const parsed = plan.meals[index];
@@ -672,7 +662,6 @@ function verifyPlan(config, day, planText) {
 
       if (ref.isSalt) {
         saltGrams += dailyGrams;
-        if (config1) mealsWithSaltRow.add(config1.meal.id);
       } else {
         daySodium += (dailyGrams * ref.na) / 100;
         dayPotassium += (dailyGrams * ref.k) / 100;
@@ -716,13 +705,7 @@ function verifyPlan(config, day, planText) {
     dayFat += thisMealFat;
 
     if (!config1) continue;
-    checkMealAgainstConfig(sink, config1, parsed, lookup, saltSplits);
-  }
-
-  // Salt allocated through a custom split that never appeared as a table row
-  // still reaches the food, so it counts towards the day's sodium.
-  for (const [mealId, grams] of saltSplits.entries()) {
-    if (!mealsWithSaltRow.has(mealId)) saltGrams += grams;
+    checkMealAgainstConfig(sink, config1, parsed, lookup);
   }
 
   const saltSodium = saltGrams * SODIUM_MG_PER_G_SALT;
@@ -800,7 +783,7 @@ function verifyPlan(config, day, planText) {
 }
 
 /** Fixed weights honoured, AUTO weights inside their bounds, nothing invented. */
-function checkMealAgainstConfig(sink, expectedMeal, parsedMeal, lookup, saltSplits) {
+function checkMealAgainstConfig(sink, expectedMeal, parsedMeal, lookup) {
   const mealName = expectedMeal.meal.name.trim();
   const perDay = expectedMeal.meal.mealsPerDay;
   const matched = new Set();
@@ -836,14 +819,6 @@ function checkMealAgainstConfig(sink, expectedMeal, parsedMeal, lookup, saltSpli
 
   for (const row of parsedMeal.rows) {
     if (matched.has(row)) continue;
-    const splitGrams = saltSplits.get(expectedMeal.meal.id);
-    if (splitGrams !== undefined && lookup(row.name)?.isSalt) {
-      const dailyGrams = Number.isFinite(row.dailyGrams) ? row.dailyGrams : row.perMealGrams * perDay;
-      if (Math.abs(dailyGrams - splitGrams) > TOL.grams) {
-        sink.error('weights', `"${mealName}": the salt split is configured at ${splitGrams}g, the plan shows ${dailyGrams}g.`);
-      }
-      continue;
-    }
     sink.error('weights', `"${mealName}": Part 1 lists "${row.name}", which is not in the config for this day.`);
   }
 }
@@ -1031,26 +1006,10 @@ function checkCookPlan(sink, plan, expected, day, config) {
       }
     }
 
-    const wantsLiquid = !!String(expectedMeal.meal.water || '').trim();
-    const hasLiquid = block.lines.some((line) => /^liquids/i.test(line));
-    if (wantsLiquid !== hasLiquid) {
-      sink.error('cook', `Part 2 "${block.name}": liquids ${hasLiquid ? 'are listed but none are configured' : `are missing (configured: "${expectedMeal.meal.water}")`}.`);
-    }
     const wantsPrep = !!String(expectedMeal.meal.prepMethod || '').trim();
     const hasPrep = block.lines.some((line) => /^prep method/i.test(line));
     if (wantsPrep !== hasPrep) {
       sink.error('cook', `Part 2 "${block.name}": prep method ${hasPrep ? 'is listed but none is configured' : 'is missing'}.`);
-    }
-
-    for (const split of config.customSplits || []) {
-      if (split.mealId !== expectedMeal.meal.id) continue;
-      const value = String(split.value || '').trim();
-      if (!value) continue;
-      const needle = `${clean(split.name || '')}:${value}`.replace(/\s+/g, '').toLowerCase();
-      const found = block.lines.some((line) => line.replace(/\s+/g, '').toLowerCase().includes(needle));
-      if (!found) {
-        sink.error('cook', `Part 2 "${block.name}": the split "${split.name}: ${split.value}" is not printed in this meal's block.`);
-      }
     }
   });
 

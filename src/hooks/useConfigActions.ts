@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Dispatch, SetStateAction } from 'react';
-import { Config, CustomSplit, Ingredient, Meal } from '@/lib/types';
+import { Config, Ingredient, Meal } from '@/lib/types';
 
 /**
  * All config-mutation handlers for the diet builder, extracted from page.tsx.
@@ -28,7 +28,6 @@ export function useConfigActions(
       ingredients: [
         { name: 'Ingredient 1', weight: '0', isAuto: false }
       ],
-      water: '',
       prepMethod: ''
     };
     setConfig(prev => ({
@@ -42,19 +41,6 @@ export function useConfigActions(
     setConfig(prev => {
       const remainingMeals = (prev.meals || []).filter(m => m.id !== id);
 
-      // Remove the meal's cook splits and any per-day overrides of them
-      const removedSplitIds = (prev.customSplits || []).filter(s => s.mealId === id).map(s => s.id);
-      const customSplits = (prev.customSplits || []).filter(s => s.mealId !== id);
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      if (removedSplitIds.length > 0) {
-        for (const day in dailySplits) {
-          dailySplits[day] = dailySplits[day].filter(s => !removedSplitIds.includes(s.id));
-          if (dailySplits[day].length === 0) {
-            delete dailySplits[day];
-          }
-        }
-      }
-
       // Daily variables belonging to this meal go with it. Left behind they
       // would still show in the Daily Variables tab while the prompt compiler
       // silently dropped them (it only keeps ingredients owned by a live meal).
@@ -63,7 +49,7 @@ export function useConfigActions(
         dailyVariables[day] = (prev.dailyVariables[day] || []).filter(ing => (ing.mealId || 'meal-chicken') !== id);
       }
 
-      return { ...prev, meals: remainingMeals, customSplits, dailySplits, dailyVariables };
+      return { ...prev, meals: remainingMeals, dailyVariables };
     });
     setActiveTab('global');
   };
@@ -225,124 +211,14 @@ export function useConfigActions(
       const varsA = prev.dailyVariables[dayA] || [];
       const varsB = prev.dailyVariables[dayB] || [];
 
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      const splitsA = dailySplits[dayA] || [];
-      const splitsB = dailySplits[dayB] || [];
-
-      // Keep days without overrides absent rather than storing empty arrays,
-      // so a swap between two un-overridden days is a genuine no-op.
-      const assignSplits = (day: string, splits: CustomSplit[]) => {
-        if (splits.length > 0) {
-          dailySplits[day] = splits;
-        } else {
-          delete dailySplits[day];
-        }
-      };
-      assignSplits(dayA, splitsB);
-      assignSplits(dayB, splitsA);
-
       return {
         ...prev,
         dailyVariables: {
           ...prev.dailyVariables,
           [dayA]: varsB,
           [dayB]: varsA
-        },
-        dailySplits
+        }
       };
-    });
-  };
-
-  // Custom Splits manipulators
-  const updateCustomSplit = (id: string, field: 'name' | 'value', val: string) => {
-    setConfig(prev => {
-      const splitsList = prev.customSplits || [];
-      const updated = splitsList.map(s => s.id === id ? { ...s, [field]: val } : s);
-
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      if (field === 'name') {
-        for (const day in dailySplits) {
-          dailySplits[day] = dailySplits[day].map(s => s.id === id ? { ...s, name: val } : s);
-        }
-      }
-      return { ...prev, customSplits: updated, dailySplits };
-    });
-  };
-
-  const addCustomSplit = (mealId: string) => {
-    // Empty name/value: the inputs show placeholder hints, and the prompt
-    // compiler skips splits until a real value is entered.
-    const newSplit = {
-      id: Date.now().toString(),
-      name: '',
-      value: '',
-      mealId
-    };
-    setConfig(prev => ({
-      ...prev,
-      customSplits: [...(prev.customSplits || []), newSplit]
-    }));
-  };
-
-  const removeCustomSplit = (id: string) => {
-    setConfig(prev => {
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      for (const day in dailySplits) {
-        dailySplits[day] = dailySplits[day].filter(s => s.id !== id);
-      }
-      return {
-        ...prev,
-        customSplits: (prev.customSplits || []).filter(s => s.id !== id),
-        dailySplits
-      };
-    });
-  };
-
-  const updateDailySplit = (dayKey: string, splitId: string, value: string) => {
-    setConfig(prev => {
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      const daySplits = [...(dailySplits[dayKey] || [])];
-
-      const existingIdx = daySplits.findIndex(s => s.id === splitId);
-      const globalSplit = (prev.customSplits || []).find(s => s.id === splitId);
-      const name = globalSplit ? globalSplit.name : '';
-
-      if (existingIdx >= 0) {
-        daySplits[existingIdx] = { ...daySplits[existingIdx], value };
-      } else {
-        daySplits.push({ id: splitId, name, value });
-      }
-
-      dailySplits[dayKey] = daySplits;
-      return { ...prev, dailySplits };
-    });
-  };
-
-  const resetDailySplit = (dayKey: string, splitId: string) => {
-    setConfig(prev => {
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      if (dailySplits[dayKey]) {
-        dailySplits[dayKey] = dailySplits[dayKey].filter(s => s.id !== splitId);
-        if (dailySplits[dayKey].length === 0) {
-          delete dailySplits[dayKey];
-        }
-      }
-      return { ...prev, dailySplits };
-    });
-  };
-
-  const resetAllDailyOverridesForSplit = (splitId: string) => {
-    setConfig(prev => {
-      const dailySplits = { ...(prev.dailySplits || {}) };
-      for (const day in dailySplits) {
-        if (dailySplits[day]) {
-          dailySplits[day] = dailySplits[day].filter(s => s.id !== splitId);
-          if (dailySplits[day].length === 0) {
-            delete dailySplits[day];
-          }
-        }
-      }
-      return { ...prev, dailySplits };
     });
   };
 
@@ -358,13 +234,7 @@ export function useConfigActions(
     addIngredient,
     updateIngredient,
     removeIngredient,
-    swapDayVariables,
-    updateCustomSplit,
-    addCustomSplit,
-    removeCustomSplit,
-    updateDailySplit,
-    resetDailySplit,
-    resetAllDailyOverridesForSplit
+    swapDayVariables
   };
 }
 

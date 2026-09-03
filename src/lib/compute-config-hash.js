@@ -22,9 +22,7 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  * Included fields (changes invalidate that day's cache):
  *   - global (calorie target and sodium/potassium ratios)
  *   - meals (definitions, ingredients, weights, prep methods)  [all days]
- *   - customSplits                                             [all days]
  *   - dailyVariables[day] (that day's ingredient overrides only)
- *   - dailySplits[day]    (that day's split overrides only)
  *   - provider, model, customModel, thinkingLevel
  *   - maxTokens, reasoningEffort (only once moved off their defaults, so
  *     existing caches are not invalidated by simply adding the settings)
@@ -32,7 +30,7 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  *
  * Excluded fields (changes do NOT invalidate cache):
  *   - apiKey, enterpriseApiKey, etc. (credentials only)
- *   - other days' dailyVariables / dailySplits
+ *   - other days' dailyVariables
  *   - generationRange, selectedGenerationDay (UI selection only)
  *   - huggingFaceToken, huggingFaceSpace (WhatsApp worker config)
  *
@@ -68,18 +66,10 @@ function computeConfigHash(config, day) {
         minGrams: ing.minGrams,
         mealId: ing.mealId,
       })),
-      water: meal.water,
       prepMethod: meal.prepMethod,
       cookQuantityMode: meal.cookQuantityMode,
     })),
-    customSplits: (config.customSplits || []).map((s) => ({
-      id: s.id,
-      name: s.name,
-      value: s.value,
-      mealId: s.mealId,
-    })),
     dailyVariables: normalizeIngredients(mapGet(config.dailyVariables, dayKey)),
-    dailySplits: normalizeSplits(mapGet(config.dailySplits, dayKey)),
     provider: config.provider || '',
     model: config.model || '',
     customModel: config.customModel || '',
@@ -134,17 +124,6 @@ function normalizeIngredients(list) {
     maxGrams: ing.maxGrams,
     minGrams: ing.minGrams,
     mealId: ing.mealId,
-  }));
-}
-
-/**
- * Normalize one day's split overrides to the diet-relevant fields only.
- */
-function normalizeSplits(list) {
-  return (list || []).map((s) => ({
-    id: s.id,
-    name: s.name,
-    value: s.value,
   }));
 }
 

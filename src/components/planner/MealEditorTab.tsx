@@ -1,22 +1,18 @@
 'use client';
-import { Config, Meal } from '@/lib/types';
+import { Meal } from '@/lib/types';
 import { ConfigActions } from '@/hooks/useConfigActions';
 import IngredientEditorRow from './IngredientEditorRow';
 
 interface MealEditorTabProps {
   meal: Meal;
-  config: Config;
   canDelete: boolean;
   actions: ConfigActions;
 }
 
-export default function MealEditorTab({ meal: selectedMeal, config, canDelete, actions }: MealEditorTabProps) {
+export default function MealEditorTab({ meal: selectedMeal, canDelete, actions }: MealEditorTabProps) {
   const {
-    updateMeal, deleteMeal, addMealIngredient, updateMealIngredient, removeMealIngredient,
-    updateCustomSplit, removeCustomSplit, addCustomSplit, resetAllDailyOverridesForSplit
+    updateMeal, deleteMeal, addMealIngredient, updateMealIngredient, removeMealIngredient
   } = actions;
-
-  const mealSplits = (config.customSplits || []).filter(s => s.mealId === selectedMeal.id);
 
   return (
     <div>
@@ -115,17 +111,6 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
       <hr className="hr-soft" />
 
       <div className="form-group">
-        <label className="form-label">Liquid Configuration (e.g. water, milk, or &quot;none&quot;)</label>
-        <input
-          type="text"
-          className="form-input"
-          value={selectedMeal.water}
-          onChange={e => updateMeal(selectedMeal.id, 'water', e.target.value)}
-          placeholder="e.g. 190g water"
-        />
-      </div>
-
-      <div className="form-group">
         <label className="form-label">Preparation Method &amp; Cooking Instructions</label>
         <textarea
           className="form-input"
@@ -136,60 +121,6 @@ export default function MealEditorTab({ meal: selectedMeal, config, canDelete, a
           style={{ resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }}
         />
       </div>
-
-      <hr className="hr-soft" />
-
-      <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
-        Cook Seasoning &amp; Instructions Splits
-      </label>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
-        {mealSplits.map((split) => {
-          const hasOverrides = Object.keys(config.dailySplits || {}).some(day => {
-            const daySplits = config.dailySplits?.[day] || [];
-            return daySplits.some(s => s.id === split.id);
-          });
-          return (
-            <div key={split.id} className="split-card">
-              <div className="split-card__fields">
-                <input
-                  type="text"
-                  className="form-input form-input--compact split-card__title"
-                  value={split.name}
-                  onChange={e => updateCustomSplit(split.id, 'name', e.target.value)}
-                  placeholder="Title (e.g. Olive Oil split)"
-                  aria-label="Split title"
-                />
-                <input
-                  type="text"
-                  className="form-input form-input--compact split-card__value"
-                  value={split.value}
-                  onChange={e => updateCustomSplit(split.id, 'value', e.target.value)}
-                  placeholder="Instruction split"
-                  aria-label="Split instruction"
-                />
-                <button className="btn-remove split-card__remove" onClick={() => removeCustomSplit(split.id)} aria-label="Remove split">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                </button>
-              </div>
-              {hasOverrides && (
-                <div className="split-card__note">
-                  <span>⚠️ Overridden on some days.</span>
-                  <button className="link-button" onClick={() => resetAllDailyOverridesForSplit(split.id)}>
-                    Reset all days to use global value
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <button className="btn-add" onClick={() => addCustomSplit(selectedMeal.id)}>
-        + Add Cook Split / Instruction to {selectedMeal.name}
-      </button>
     </div>
   );
 }

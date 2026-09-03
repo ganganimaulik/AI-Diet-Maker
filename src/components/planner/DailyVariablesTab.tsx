@@ -13,7 +13,7 @@ interface DailyVariablesTabProps {
 }
 
 export default function DailyVariablesTab({ config, activeDay, setActiveDay, actions }: DailyVariablesTabProps) {
-  const { addIngredient, updateIngredient, removeIngredient, swapDayVariables, updateDailySplit, resetDailySplit } = actions;
+  const { addIngredient, updateIngredient, removeIngredient, swapDayVariables } = actions;
   const [draggedDay, setDraggedDay] = useState<string | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
 
@@ -83,61 +83,6 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
       <button className="btn-add" onClick={() => addIngredient('daily', activeDay)}>
         + Add Ingredient to {activeDay}
       </button>
-
-      <hr className="hr-soft" />
-
-      <h4 className="builder-section-title">
-        Cook Seasoning &amp; Instructions Splits for {activeDay}
-      </h4>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {(config.customSplits || []).map((globalSplit) => {
-          const daySplits = config.dailySplits?.[activeDay] || [];
-          const override = daySplits.find(s => s.id === globalSplit.id);
-          const currentValue = override ? override.value : globalSplit.value;
-          const isCustomized = !!override;
-          const ownerMeal = (config.meals || []).find(m => m.id === globalSplit.mealId);
-
-          return (
-            <div key={globalSplit.id} className="split-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', minWidth: 0 }}>
-                  {globalSplit.name}
-                  {ownerMeal && (
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.72rem', marginLeft: '0.4rem' }}>
-                      · {ownerMeal.name}
-                    </span>
-                  )}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{
-                    fontSize: '0.7rem',
-                    padding: '0.15rem 0.4rem',
-                    borderRadius: '4px',
-                    fontWeight: 600,
-                    background: isCustomized ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)',
-                    color: isCustomized ? '#c084fc' : 'var(--text-muted)'
-                  }}>
-                    {isCustomized ? 'Customized' : 'Global Default'}
-                  </span>
-                  {isCustomized && (
-                    <button className="link-button" onClick={() => resetDailySplit(activeDay, globalSplit.id)}>
-                      Reset to default
-                    </button>
-                  )}
-                </div>
-              </div>
-              <input
-                type="text"
-                className="form-input form-input--compact"
-                value={currentValue}
-                onChange={e => updateDailySplit(activeDay, globalSplit.id, e.target.value)}
-                placeholder={`Default: ${globalSplit.value}`}
-              />
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

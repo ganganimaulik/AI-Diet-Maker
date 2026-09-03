@@ -130,7 +130,7 @@ function sanitize(value, depth = 0) {
   if (Array.isArray(value)) return value.map((entry) => sanitize(entry, depth + 1));
   if (typeof value !== 'object') return value;
 
-  // Mongoose Maps (dailyVariables, dailySplits) serialize as plain objects.
+  // Mongoose Maps (dailyVariables) serialize as plain objects.
   const source = typeof value.toObject === 'function' ? value.toObject() : value;
   if (source instanceof Map) {
     const fromMap = {};
@@ -295,9 +295,7 @@ async function toolGetDietConfig() {
     configured: true,
     targets: clean.global || {},
     meals: clean.meals || [],
-    customSplits: clean.customSplits || [],
     dailyVariables: clean.dailyVariables || {},
-    dailySplits: clean.dailySplits || {},
     selectedGenerationDay: clean.selectedGenerationDay || '',
     updatedAt: clean.updatedAt || null,
     note:

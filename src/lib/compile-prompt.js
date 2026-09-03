@@ -14,7 +14,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 6;
+const PROMPT_TEMPLATE_VERSION = 7;
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -74,101 +74,14 @@ function formatIngredientEntry(ing, mealsList) {
 function compilePromptText(c, options) {
   const { mode = 'single', selectedDay = 'MONDAY', daysOfWeek = DEFAULT_DAYS_OF_WEEK } = options || {};
   const isSingle = mode === 'single';
-  const idealMin = c.global.idealSodiumPotassiumRatioMin === undefined ? 0.70 : c.global.idealSodiumPotassiumRatioMin;
-  const idealMax = c.global.idealSodiumPotassiumRatioMax === undefined ? 0.80 : c.global.idealSodiumPotassiumRatioMax;
+  const idealMin = c?.global?.idealSodiumPotassiumRatioMin === undefined ? 0.70 : c.global.idealSodiumPotassiumRatioMin;
+  const idealMax = c?.global?.idealSodiumPotassiumRatioMax === undefined ? 0.80 : c.global.idealSodiumPotassiumRatioMax;
   const idealMinStr = idealMin.toFixed(2);
   const idealMaxStr = idealMax.toFixed(2);
   const activeDays = isSingle ? [selectedDay] : daysOfWeek;
   const dayRefLabel = isSingle ? 'the day' : 'each day';
 
   const mealsList = (c.meals || []).filter(m => !m.disabled);
-  let splitsList = c.customSplits || [];
-  if (splitsList.length === 0) {
-    if (c.splits) {
-      splitsList = [
-        { id: 'salt', name: 'Salt Seasoning Split', value: c.splits.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-        { id: 'prep', name: 'Chicken Prep Method', value: c.splits.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
-      ];
-    } else {
-      splitsList = [
-        { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-        { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
-      ];
-    }
-  }
-
-  // Splits are attached to meals; drop those whose meal is disabled.
-  // Splits with no/unknown mealId (legacy configs) are kept.
-  const allMeals = c.meals || [];
-  splitsList = splitsList.filter(s => {
-    if (!s.mealId) return true;
-    const ownerMeal = allMeals.find(m => m.id === s.mealId);
-    return !ownerMeal || !ownerMeal.disabled;
-  });
-
-  // Defaults a newly added split used to carry before being filled in;
-  // never meaningful, so they are kept out of the prompt.
-  const PLACEHOLDER_SPLIT_NAME = 'New Split/Instruction';
-  const PLACEHOLDER_SPLIT_VALUE = 'Enter instructions here';
-
-  const getSplitsForDayText = (day, prefix = '') => {
-    const dayOverrides = mapGet(c.dailySplits, day) || [];
-    const daySplits = splitsList
-      .map(globalSplit => {
-        const override = dayOverrides.find(o => o.id === globalSplit.id);
-        const name = (globalSplit.name || '').trim();
-        const value = ((override ? override.value : globalSplit.value) || '').trim();
-        // Every split is owned by a meal; legacy splits with a missing/unknown
-        // mealId fall back to the default meal (same rule as normalizeConfig).
-        const ownerMeal = (globalSplit.mealId && mealsList.find(m => m.id === globalSplit.mealId))
-          || mealsList.find(m => m.id === 'meal-chicken')
-          || mealsList[0]
-          || null;
-        return {
-          name: name === PLACEHOLDER_SPLIT_NAME ? '' : name,
-          value,
-          mealName: ownerMeal ? ownerMeal.name : ''
-        };
-      })
-      .filter(s => s.value && s.value !== PLACEHOLDER_SPLIT_VALUE);
-
-    const dynamicIngredientSplits = [];
-    mealsList.forEach(meal => {
-      (meal.ingredients || []).forEach(ing => {
-        if (!ing.disabled && ing.split && ing.split.trim()) {
-          dynamicIngredientSplits.push(`Ingredient Split: ${ing.name} total daily split instruction is "${ing.split.trim()}" (belongs to ${meal.name})`);
-        }
-      });
-    });
-
-    const dayVars = (mapGet(c.dailyVariables, day) || []);
-    dayVars.forEach(ing => {
-      const mealId = ing.mealId || 'meal-chicken';
-      const meal = mealsList.find(m => m.id === mealId);
-      if (meal && !ing.disabled && ing.split && ing.split.trim()) {
-        dynamicIngredientSplits.push(`Daily Variable Split: ${ing.name} split instruction is "${ing.split.trim()}" (belongs to ${meal.name})`);
-      }
-    });
-
-    const allSplits = [
-      ...dynamicIngredientSplits,
-      ...daySplits.map(s => {
-        const base = s.name ? `${s.name}: ${s.value}` : s.value;
-        return s.mealName ? `${base} (belongs to ${s.mealName})` : base;
-      })
-    ];
-
-    return allSplits.map(s => `${prefix}- ${s}`).join('\n');
-  };
-
-  let splitsText = '';
-  if (isSingle) {
-    splitsText = getSplitsForDayText(selectedDay);
-  } else {
-    splitsText = activeDays.map(day => {
-      return `- ${day}:\n${getSplitsForDayText(day, '  ')}`;
-    }).join('\n');
-  }
 
   const perMealMeals = mealsList.filter(m => (m.cookQuantityMode || 'daily') === 'per-meal');
   const hasPerMealMode = perMealMeals.length > 0;
@@ -191,7 +104,6 @@ ${activeIngs.map(ing => {
   const autoLabel = constraints.length > 0 ? `[AUTO, ${constraints.join(', ')}]` : '[AUTO]';
   return `- ${ing.name}: ${autoLabel}${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
 }).join('\n')}
-${meal.water ? `- liquids: ${meal.water}` : ''}
 ${meal.prepMethod ? `- prep method: ${meal.prepMethod.split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
 `;
     }).join('\n');
@@ -203,7 +115,7 @@ Your task is to automatically calculate all calories using standard nutritional 
 - PART 2 must be a raw, copy-pasteable weekly text plan for my cook containing ONLY strict text blocks for each day with absolutely no conversational text, tables, or calorie explanations.
 
 ===================================================================
-       CONFIGURABLE VARIABLES (EDIT TARGETS, WEIGHTS & SPLITS HERE)
+       CONFIGURABLE VARIABLES (EDIT TARGETS & WEIGHTS HERE)
 ===================================================================
 
 [GLOBAL DIET TARGETS]
@@ -211,9 +123,6 @@ Your task is to automatically calculate all calories using standard nutritional 
 ${mealsTargetText}
 
 ${mealsDetailsText}
-[COOK COOKING & SEASONING SPLITS / INSTRUCTIONS]
-${splitsText}
-
 [DAILY VARIABLE INGREDIENT WEIGHTS (WHOLE DAY)]
 * Note: Use [AUTO] for any ingredient you want the calculator to dynamically scale to hit your exact Daily Calorie Target.
 ${activeDays.map(day => {
@@ -233,6 +142,8 @@ ${activeDays.map(day => {
 
 STANDARD RAW NUTRITIONAL REFERENCE DATABASE (PER 100g UNCOOKED/RAW):
 You MUST use these exact standard nutritional values for all calorie sums, [AUTO] weight solving, macro breakdowns, and mineral calculations:
+- Water / water: 0 kcal (0.00 kcal/g), 0.0g Protein, 0.0g Carbs, 0.0g Fat, 0mg Sodium, 0mg Potassium
+- Table Salt (NaCl) / salt / Table Salt: 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt (38,800mg/100g), 0mg Potassium
 - Whey Protein Isolate - myprotein matcha blueberry: 367 kcal (3.67 kcal/g), 77.0g Protein, 8.71g Carbs, 2.03g Fat, 240mg Sodium, 400mg Potassium
 - Fast & up Whey Protein Isolate: 375 kcal (3.75 kcal/g), 81.0g Protein, 3.50g Carbs, 1.50g Fat, 180mg Sodium, 350mg Potassium
 - Whey Protein Isolate (Generic / Default WPI): 375 kcal (3.75 kcal/g), 83.0g Protein, 3.00g Carbs, 1.20g Fat, 180mg Sodium, 380mg Potassium
@@ -257,7 +168,6 @@ You MUST use these exact standard nutritional values for all calorie sums, [AUTO
 - Kimia Dates: 277 kcal (2.77 kcal/g), 1.8g Protein, 75.0g Carbs, 0.20g Fat, 2mg Sodium, 696mg Potassium
 - Eggs / egg / eggs: 143 kcal (1.43 kcal/g), 12.6g Protein, 0.7g Carbs, 9.50g Fat, 142mg Sodium, 138mg Potassium
 - aamchur powder: 300 kcal (3.00 kcal/g), 3.0g Protein, 68.0g Carbs, 1.50g Fat, 30mg Sodium, 250mg Potassium
-- Table Salt (NaCl): 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt (38,800mg/100g), 0mg Potassium
 * If any ingredient is not listed above, use standard raw USDA FoodData Central values.
 
 INSTRUCTIONS FOR THE CALCULATOR:
@@ -267,7 +177,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
    - Daily variables calories = sum of calories of all variables for that day
 3. Subtract that total (meals + variables) from the [Daily Calorie Target] to find the remaining calorie deficit.
 4. Convert that remaining calorie deficit into grams for the ingredient(s) marked \`[AUTO]\` by dividing the deficit calories by their exact calorie density from the reference table.
-5. Each daily variable ingredient is marked with a "(belongs to [Meal Name])" suffix specifying which meal it belongs to. When constructing the meal breakdowns in PART 1 and copy-pasteable meal plans in PART 2, you MUST add each daily variable ingredient to its designated meal. Do NOT add any daily variable ingredient under any meal other than the one specified in its belongs-to suffix. The same ownership rule applies to splits: every entry under [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] is marked with a "(belongs to [Meal Name])" suffix — in PART 2 you MUST print each entry inside its owning meal's block (after the meal's ingredient lines) WITHOUT the "(belongs to ...)" suffix. PART 2 must NOT contain any separate or trailing "Splits & Cooking Instructions" section; if an entry somehow lacks a belongs-to suffix, print it at the end of that day's plan without any section heading.
+5. Each daily variable ingredient is marked with a "(belongs to [Meal Name])" suffix specifying which meal it belongs to. When constructing the meal breakdowns in PART 1 and copy-pasteable meal plans in PART 2, you MUST add each daily variable ingredient to its designated meal. Do NOT add any daily variable ingredient under any meal other than the one specified in its belongs-to suffix.
 6. If a day contains multiple \`[AUTO]\` ingredients:
    - If there are 2 or more \`[AUTO]\` ingredients, dynamically adjust the calorie split (e.g. 60-40, 70-30, 80-20, etc.) among them to steer the resulting daily Sodium-to-Potassium Ratio (Na:K Ratio) into the ideal range of ${idealMinStr} to ${idealMaxStr}.
    - Leverage the differing natural sodium and potassium densities of the \`[AUTO]\` ingredients from the reference table (e.g., Potato = 421mg K / 100g, Sweet Potato = 337mg K / 100g, Rice = 115mg K / 100g). For example, if the ratio is above ${idealMaxStr}, allocate more calories to high-potassium ingredients (like Potato) and fewer to low-potassium ones (like Rice) to lower the ratio. Conversely, if the ratio is below ${idealMinStr}, allocate more to low-potassium/high-calorie density ingredients to raise the ratio.
@@ -279,9 +189,8 @@ INSTRUCTIONS FOR THE CALCULATOR:
 8. Round all final calculated weights and calories to the nearest whole number so that the day's total hits your target exactly.
 9. Calculate the total daily Sodium (Na) and Potassium (K) in milligrams (mg), and their ratio (Na:K ratio) for ${dayRefLabel}:
    - Table salt (NaCl) contains exactly 388 mg of sodium per 1 g of salt.
-   - Scan EVERY entry under [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] and identify ALL table salt (NaCl) allocations across ALL meals. Salt may appear as a named multi-part split (e.g. "Salt Seasoning Split: 8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste") AND/OR as a simple per-meal seasoning split (e.g. "salt: 3g (belongs to Egg Meal)"). You MUST sum the salt from every such entry — do NOT limit the calculation to a single split.
-   - For any salt portion that is boiled in water which is then thrown away (e.g., "7g in chicken with 1 liter water"), assume only 10% of that salt/sodium is absorbed and retained by the food (meaning only 0.7g of that salt is consumed, while the other 90% is discarded with the water). All other salt allocations (e.g. in subji, in marinate paste, salt added directly while cooking a meal) are assumed to be 100% consumed.
-   - Do NOT treat non-salt seasonings listed in the splits (e.g. aamchur powder, turmeric, black pepper) as table salt; only count their sodium if the seasoning is notably sodium-rich (e.g. soy sauce, baking soda).
+   - Scan all ingredients across ALL meals and daily variables for Table Salt (NaCl) / salt.
+   - For any salt portion that is boiled in water which is then thrown away (as specified in an ingredient's split instruction), assume only 10% of that salt/sodium is absorbed and retained by the food (meaning only 0.7g of a 7g salt portion is consumed, while the other 90% is discarded with the water). All other salt allocations (in food, in subji, in marinate paste, salt added directly while cooking a meal) are assumed to be 100% consumed.
    - Use the natural sodium and potassium per 100g values strictly from the STANDARD RAW NUTRITIONAL REFERENCE DATABASE above for all ingredients.
    - Compute Total Daily Sodium (mg) = Sodium from consumed salt + Natural sodium from all daily ingredients.
    - Compute Total Daily Potassium (mg) = Natural potassium from all daily ingredients.
@@ -291,7 +200,7 @@ INSTRUCTIONS FOR THE CALCULATOR:
      - If the ratio is above ${idealMaxStr}, calculate the additional Potassium required to reach a ratio of ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium / ${idealMaxStr}) - Total Daily Potassium (rounded to the nearest whole number). Also calculate the additional Potassium required to reach a ratio of ${idealMinStr}: Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium / ${idealMinStr}) - Total Daily Potassium (rounded to the nearest whole number).
      - If the ratio is between ${idealMinStr} and ${idealMaxStr} (inclusive), the ratio is ideal.
 10. For ${isSingle ? `the selected day (${selectedDay})` : 'each day'}, calculate the total daily Protein (g), Carbohydrates (g), and Fat (g) using the exact macronutrient densities from the STANDARD RAW NUTRITIONAL REFERENCE DATABASE above for all ingredients (including solved [AUTO] weights and variables). Convert these macronutrient grams to calories (assuming Protein = 4 kcal/g, Carbohydrates = 4 kcal/g, Fat = 9 kcal/g) and sum their calories up to verify it matches the total daily calories target.
-11. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the final splits section of Part 1, and in Part 2 inside the owning meal's block (as marked by the entry's belongs-to suffix). Ensure the sum of split weights matches the total ingredient weight exactly.
+11. If any ingredient has a split instruction (e.g. '50% in subji, remaining in chicken' or '3g in subji, remaining in marinate'), you MUST calculate the exact weights in grams for each split part (based on the total daily resolved weight of that ingredient, resolving any percentages or math allocations) and display the resulting splits clearly in the ingredient's meal table in Part 1, and in Part 2 inside the owning meal's block. Ensure the sum of split weights matches the total ingredient weight exactly.
 
 ---
 
@@ -302,12 +211,12 @@ At the very top of Part 1 (above any meal breakdowns/tables), you MUST print a b
 ### Daily Sodium & Potassium Summary
 For ${isSingle ? `the day (${selectedDay})` : 'each day from Monday to Sunday'}:
 - **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
-  * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt sums ALL salt splits across ALL meals: 100% of [non-water-boiled splits] and only 10% of [water-boiled splits] (water discarded). Total potassium is from natural ingredients.")
+  * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt sums ALL salt across ALL meals: 100% of [non-water-boiled portions] and only 10% of [water-boiled portions] (water discarded). Total potassium is from natural ingredients.")
   * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (${idealMinStr} - ${idealMaxStr})." If below ${idealMinStr}: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach ${idealMinStr}." If above ${idealMaxStr}: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach ${idealMaxStr} (or [D] mg to reach ${idealMinStr})."]
 
 ${mealsList.map((meal, idx) => `
 ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''} Per Day)
-Include both the static ingredients configured under this meal and any daily variable ingredients that belong to this meal. Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''}), Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal). For Protein, Carbs, and Fat, estimate their values from the raw ingredient weights using standard USDA values and print them as "Xg (Y kcal)". At the bottom of the table, include a "Total" row summing the total calculated calories, protein, carbs, and fat for the meal (e.g. Total calories, and macro sums formatted as "Total_grams g (Total_kcal kcal)").
+Include both the static ingredients configured under this meal and any daily variable ingredients that belong to this meal. Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''}), Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal). For Protein, Carbs, and Fat, estimate their values from the raw ingredient weights using standard USDA values and print them as "Xg (Y kcal)". For Water and Table Salt (NaCl), calories and macros are 0g (0 kcal). At the bottom of the table, include a "Total" row summing the total calculated calories, protein, carbs, and fat for the meal (e.g. Total calories, and macro sums formatted as "Total_grams g (Total_kcal kcal)").
 `).join('\n')}
 
 Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals to prove it hits your configured target. For each day, you MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
@@ -315,7 +224,7 @@ Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggreg
 ---
 
 PART 2: FOR MY COOK (Weekly Text Plan)
-Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${selectedDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated weights (including solved \`[AUTO]\` weights) and cooking splits/instructions directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate this from Part 1 using a horizontal rule (---). Output ${isSingle ? `only the day ${selectedDay}` : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated weights (including solved \`[AUTO]\` weights) directly. Absolutely no conversational text, tables, or calorie mentions in this section.
 
 ${hasPerMealMode ? `CRITICAL QUANTITY MODE — PER-MEAL MEALS: The following meals are configured to show **per-meal weights** (daily total ÷ mealsPerDay) in Part 2, NOT the whole-day total. For these meal headings, also note how many times they are eaten per day (e.g. "Meal Name (x3 daily):"). The cook needs to know the quantity for a single serving/preparation.
 Per-meal quantity meals: ${perMealMealNames.join(', ')}
@@ -323,7 +232,7 @@ All other meals should show their daily total weights followed by "(daily total)
 
 ` : 'All meals should show their daily total weights followed by "(daily total)".\n\n'}CRITICAL: You MUST exclude any daily variable ingredients marked with [PERSONAL ONLY - DO NOT SEND TO COOK] from PART 2 entirely. They must not appear under any day's ingredient list, meal preparation, splits, or variant names in PART 2.
 
-CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details printed under their owning meal's block (as marked by the belongs-to suffix).
+CRITICAL: Under PART 2 (FOR MY COOK), you MUST completely exclude any ingredient that has a split instruction (e.g. Olive oil, or any other ingredient with split details) and its total weight from the meal ingredient lists (do not print their names or total weights under any meal name in Part 2). This is to prevent the cook from adding them multiple times. Instead, the cook should only see their split details printed under their owning meal's block.
 
 Exact Output Template to Follow for Each Day:
 
@@ -332,24 +241,23 @@ Exact Output Template to Follow for Each Day:
 - If a meal is marked [COOK QUANTITIES: PER MEAL] above, show its ingredients with per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)", and add the frequency suffix to the meal heading (e.g. "Meal Name (x3 daily):").
 - Otherwise (if NOT marked as [COOK QUANTITIES: PER MEAL]), show its ingredients with daily total weights followed by "(daily total)" and DO NOT add any frequency suffix to the meal heading (e.g. "Meal Name:").
 
-After the meal's ingredient lines, print ALL splits/cooking instructions from [COOK COOKING & SEASONING SPLITS / INSTRUCTIONS] that are marked "(belongs to [this meal's name])" for that day — custom splits verbatim, and ingredient split instructions as their computed exact gram amounts (per calculator instruction 11) — WITHOUT the "(belongs to ...)" suffix.
+After the meal's ingredient lines, print any ingredient split instructions as their computed exact gram amounts (per calculator instruction 11).
 
-Then, if and only if a liquid configuration is explicitly defined in that meal's weights configuration section, list it. Do not infer or invent liquids from other sections like seasoning/salt splits. List prep methods without any hyphen or bullet point prefix.
+Then, if and only if a prep method is configured for that meal, list it as "prep method: [prepMethod]".
 
 Example for a PER-MEAL mode meal:
 Meal Name (x3 daily):
 ingredient1 name 50g (per meal)
-[splits/instructions belonging to this meal, if any, without the "(belongs to ...)" suffix]
-liquids: 190g water
+Water 190g (per meal)
+[split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
 Example for a DAILY TOTAL mode meal:
 Meal Name:
 ingredient1 name 150g (daily total)
-[splits/instructions belonging to this meal, if any, without the "(belongs to ...)" suffix]
-liquids: 190g water
-prep method: airfryer 200c, 10min]
-[Do NOT output any separate "Splits & Cooking Instructions" section or trailing splits list — every split/cooking instruction must already be printed under its owning meal's block above.]
+Water 190g (daily total)
+[split instructions belonging to this meal, if any]
+prep method: airfryer 200c, 10min
 `;
 }
 

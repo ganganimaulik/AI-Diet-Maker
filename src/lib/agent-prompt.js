@@ -29,7 +29,7 @@ Today is ${today} (${weekday}, ${timezone}).
 
 ## How this app works
 
-The user configures meals, each holding ingredients. An ingredient either has a fixed weight, or is marked isAuto — meaning the plan generator solves its weight, within optional minGrams/maxGrams bounds, to hit the daily calorie target and the sodium:potassium ratio band. Ingredient and meal overrides can differ per weekday (dailyVariables, dailySplits). Meals or ingredients with disabled=true are excluded.
+The user configures meals, each holding ingredients. An ingredient either has a fixed weight, or is marked isAuto — meaning the plan generator solves its weight, within optional minGrams/maxGrams bounds, to hit the daily calorie target and the sodium:potassium ratio band. Ingredient overrides can differ per weekday (dailyVariables). Meals or ingredients with disabled=true are excluded.
 
 A separate model then generates one plan per weekday, and a verifier re-derives the totals arithmetically and records any mismatch against what the plan claimed. So a day has three separate things worth reading: the configuration, the generated plan, and the verdict on that plan.
 

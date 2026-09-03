@@ -1227,7 +1227,6 @@ export default function Home() {
                 {selectedMeal && (
                   <MealEditorTab
                     meal={selectedMeal}
-                    config={config}
                     canDelete={config.meals.length > 1}
                     actions={actions}
                   />

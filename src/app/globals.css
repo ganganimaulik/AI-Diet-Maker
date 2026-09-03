@@ -1701,47 +1701,6 @@ input[type="radio"]:disabled {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Custom split rows in the meal editor. */
-.split-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.02);
-  padding: 0.65rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.split-card__fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "title  remove"
-    "value  value";
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.split-card__title { grid-area: title; }
-.split-card__value { grid-area: value; }
-.split-card__remove { grid-area: remove; }
-
-.split-card__note {
-  font-size: 0.75rem;
-  color: #c084fc;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-@media (min-width: 768px) {
-  .split-card__fields {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
-    grid-template-areas: "title value remove";
-  }
-}
-
 /* ============================================================
    Generation controls & cache status
    ============================================================ */

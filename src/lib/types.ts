@@ -24,7 +24,7 @@ export interface Meal {
   name: string;
   mealsPerDay: number;
   ingredients: Ingredient[];
-  water: string;
+  water?: string;
   prepMethod: string;
   cookQuantityMode?: 'daily' | 'per-meal';
   disabled?: boolean;
@@ -322,7 +322,6 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'eggs', weight: '200', isAuto: false },
         { name: 'tomato', weight: '', isAuto: true, minGrams: '100', maxGrams: '120' }
       ],
-      water: '',
       prepMethod: ''
     },
     {
@@ -337,9 +336,9 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'Almonds', weight: '15', isAuto: false },
         { name: 'Cashews', weight: '15', isAuto: false },
         { name: 'Walnuts', weight: '5', isAuto: false, disabled: true },
-        { name: 'Banana', weight: '', isAuto: true, minGrams: '50', maxGrams: '70' }
+        { name: 'Banana', weight: '', isAuto: true, minGrams: '50', maxGrams: '70' },
+        { name: 'Water', weight: '290', isAuto: false }
       ],
-      water: '290g water',
       prepMethod: 'Oats airfryer 200c, 10min'
     },
     {
@@ -353,7 +352,6 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'Fast & up Whey Protein Isolate', weight: '55', isAuto: false },
         { name: 'banana', weight: '', isAuto: true, minGrams: '120', maxGrams: '125' }
       ],
-      water: '',
       prepMethod: ''
     },
     {
@@ -364,9 +362,9 @@ export const DEFAULT_CONFIG: Config = {
       disabled: false,
       ingredients: [
         { name: 'Olive oil', weight: '9', isAuto: false, split: '9g in subji' },
-        { name: 'aamchur powder', weight: '2', isAuto: false, split: '2g in subji' }
+        { name: 'aamchur powder', weight: '2', isAuto: false, split: '2g in subji' },
+        { name: 'Table Salt (NaCl)', weight: '3', isAuto: false, split: '3g in subji' }
       ],
-      water: '',
       prepMethod: '\n'
     },
     {
@@ -379,9 +377,9 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'chicken breast', weight: '425', isAuto: false },
         { name: 'tomato', weight: '', isAuto: true, minGrams: '100', maxGrams: '120' },
         { name: 'egg', weight: '37', isAuto: false, disabled: true },
-        { name: 'Olive oil', weight: '10', isAuto: false }
+        { name: 'Olive oil', weight: '10', isAuto: false },
+        { name: 'Table Salt (NaCl)', weight: '4', isAuto: false }
       ],
-      water: '',
       prepMethod: 'gas pe bna dena onion garlic and green chili dal ke. '
     },
     {
@@ -394,9 +392,10 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'Instant Oats (Raw)', weight: '75', isAuto: false },
         { name: 'Besan', weight: '50', isAuto: false },
         { name: 'Tomato', weight: '', isAuto: true, minGrams: '50', maxGrams: '80' },
-        { name: 'Olive oil', weight: '7', isAuto: false }
+        { name: 'Olive oil', weight: '7', isAuto: false },
+        { name: 'Water', weight: '100', isAuto: false },
+        { name: 'Table Salt (NaCl)', weight: '1', isAuto: false }
       ],
-      water: '100g water',
       prepMethod: 'Whisk oats powder, besan, tomato, green chilli, coriander, ajwain and salt with water. Cook crisp on tawa with olive oil.'
     },
     {
@@ -410,9 +409,9 @@ export const DEFAULT_CONFIG: Config = {
         { name: 'Oats (Raw)', weight: '15', isAuto: false },
         { name: 'Raisins', weight: '15', isAuto: false },
         { name: 'Kimia Dates', weight: '15', isAuto: false },
-        { name: 'Banana', weight: '100', isAuto: false }
+        { name: 'Banana', weight: '100', isAuto: false },
+        { name: 'Water', weight: '330', isAuto: false }
       ],
-      water: '330g water',
       prepMethod: 'Blend all ingredients with water'
     }
   ],
@@ -458,11 +457,7 @@ export const DEFAULT_CONFIG: Config = {
       { name: 'Tomato', weight: '', isAuto: true, mealId: 'meal-chicken', minGrams: '80', maxGrams: '100' }
     ]
   },
-  customSplits: [
-    { id: 'salt', name: 'Salt Seasoning Split', value: ' 3g in subji', mealId: 'meal-chicken' },
-    { id: '1784465883936', name: 'salt', value: '4g', mealId: 'meal-1784463984639' },
-    { id: 'salt-oats-chilla', name: 'Salt in Oats Chilla', value: '1g', mealId: 'meal-oats-chilla' }
-  ],
+  customSplits: [],
   dailySplits: {},
   selectedGenerationDay: 'MONDAY'
 };
@@ -475,9 +470,106 @@ export const normalizeConfig = (loaded: any): Config => {
     idealSodiumPotassiumRatioMin: loaded.global?.idealSodiumPotassiumRatioMin ?? DEFAULT_CONFIG.global.idealSodiumPotassiumRatioMin,
     idealSodiumPotassiumRatioMax: loaded.global?.idealSodiumPotassiumRatioMax ?? DEFAULT_CONFIG.global.idealSodiumPotassiumRatioMax
   };
-  normalized.meals = Array.isArray(loaded.meals) && loaded.meals.length > 0
-    ? loaded.meals.map((m: any) => ({ ...m, disabled: !!m.disabled }))
+
+  const rawMeals = Array.isArray(loaded.meals) && loaded.meals.length > 0
+    ? loaded.meals
     : DEFAULT_CONFIG.meals;
+
+  normalized.meals = rawMeals.map((m: any) => {
+    const ingredients = Array.isArray(m.ingredients) ? [...m.ingredients] : [];
+
+    // Migrate meal.water to Water ingredient if present. Only gram/ml values
+    // migrate cleanly; anything else ("1 liter water", "none", free text) is
+    // kept on the meal so the prompt can still mention it if desired — but we
+    // deliberately do not invent a bogus ingredient from unparseable text.
+    if (m.water && typeof m.water === 'string' && m.water.trim()) {
+      const text = m.water.trim();
+      // "290g water", "290 ml water", "290 water" → weight 290, name "Water".
+      // Reject anything that is not a bare number + optional g/ml + optional name.
+      const match = text.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)?\s*(.*)$/i);
+      const weight = match ? match[1] : '';
+      const rest = match && match[2] ? match[2].trim() : '';
+      // Only migrate when the remainder is empty or clearly a liquid name
+      // (single word like "water"/"milk"). Multi-word remainders are likely
+      // instructions, not names (e.g. "liter water" from "1 liter water").
+      const isSimpleLiquid = !rest || /^[a-z]+$/i.test(rest);
+      if (weight && isSimpleLiquid) {
+        const capitalized = rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : 'Water';
+        const exists = ingredients.some(
+          (ing: any) => ing.name && ing.name.trim().toLowerCase() === capitalized.toLowerCase()
+        );
+        if (!exists) {
+          ingredients.push({
+            name: capitalized,
+            weight,
+            isAuto: false,
+            disabled: false
+          });
+        }
+      }
+    }
+
+    return {
+      ...m,
+      ingredients,
+      water: '',
+      disabled: !!m.disabled
+    };
+  });
+
+  // Migrate customSplits into meal ingredients. Two kinds of legacy splits:
+  //  - salt/seasoning splits with gram quantities ("3g in subji", "4g") →
+  //    become a real ingredient (e.g. "Table Salt (NaCl)", weight in grams,
+  //    the allocation text kept as the ingredient's `split` instruction).
+  //  - prep-method splits with no gram quantity ("Chicken air fryer 200c,
+  //    15 min") → are NOT ingredients; they are folded into the owning meal's
+  //    prepMethod so no phantom "Chicken Prep Method 1g" ingredient appears.
+  const incomingSplits = Array.isArray(loaded.customSplits) ? loaded.customSplits : [];
+  for (const s of incomingSplits) {
+    if (!s || !s.value || !String(s.value).trim()) continue;
+    const targetMealId = s.mealId || (normalized.meals.some((m: Meal) => m.id === 'meal-chicken') ? 'meal-chicken' : normalized.meals[0]?.id);
+    const meal = normalized.meals.find((m: Meal) => m.id === targetMealId);
+    if (!meal) continue;
+
+    const value = String(s.value).trim();
+    const rawName = (s.name || '').trim();
+    const match = value.match(/(\d+(?:\.\d+)?)\s*g/i);
+    const weight = match ? match[1] : '';
+
+    // No gram quantity → this is an instruction, not an ingredient. Append it
+    // to the meal's prep method instead of creating a bogus "1g" ingredient.
+    if (!weight) {
+      if (!String(meal.prepMethod || '').includes(value)) {
+        meal.prepMethod = [meal.prepMethod, value].filter(Boolean).join('\n');
+      }
+      continue;
+    }
+
+    const isSalt = /salt/i.test(rawName);
+    const ingredientName = isSalt ? 'Table Salt (NaCl)' : (rawName || 'Seasoning');
+    const splitText = value !== `${weight}g` && value !== `${weight} g` ? value : '';
+
+    const existing = meal.ingredients.find(
+      (ing: any) => ing.name && ing.name.trim().toLowerCase() === ingredientName.toLowerCase()
+    );
+    if (!existing) {
+      const newIng: Ingredient = { name: ingredientName, weight, isAuto: false, disabled: false };
+      if (splitText) newIng.split = splitText;
+      meal.ingredients.push(newIng);
+    } else if (!existing.weight) {
+      // Existing ingredient has no weight: adopt the split's weight.
+      existing.weight = weight;
+      if (splitText && !existing.split) existing.split = splitText;
+    } else if (String(existing.weight).trim() !== weight) {
+      // Weight conflict: keep the existing ingredient's weight but preserve the
+      // divergent allocation as its split instruction so no data is lost.
+      if (splitText && !existing.split) existing.split = splitText;
+      console.warn(
+        `[normalizeConfig] "${meal.name}": split "${rawName}" says ${weight}g but existing ` +
+        `"${ingredientName}" is ${existing.weight}g — keeping the existing weight.`
+      );
+    }
+  }
 
   // Ensure dailyVariables has mealId populated, defaulting to 'meal-chicken'
   if (loaded.dailyVariables) {
@@ -493,33 +585,47 @@ export const normalizeConfig = (loaded: any): Config => {
     normalized.dailyVariables = DEFAULT_CONFIG.dailyVariables;
   }
 
-  normalized.dailySplits = loaded.dailySplits || {};
-
-  // Migrate old splits or populate customSplits if empty
-  if (!loaded.customSplits || !Array.isArray(loaded.customSplits) || loaded.customSplits.length === 0) {
-    if (loaded.splits) {
-      normalized.customSplits = [
-        { id: 'salt', name: 'Salt Seasoning Split', value: loaded.splits.saltSplit || '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-        { id: 'prep', name: 'Chicken Prep Method', value: loaded.splits.chickenPrepMethod || 'Chicken air fryer 200c, 15 min' }
-      ];
-    } else {
-      normalized.customSplits = [
-        { id: 'salt', name: 'Salt Seasoning Split', value: '8g in subji. 7g in chicken with 1 liter water. 3g in marinate paste' },
-        { id: 'prep', name: 'Chicken Prep Method', value: 'Chicken air fryer 200c, 15 min' }
-      ];
-    }
-  } else {
-    normalized.customSplits = loaded.customSplits;
-  }
-
-  // Ensure every split is attached to a meal so it shows up in that meal's editor
-  const splitFallbackMealId = normalized.meals.some((m: Meal) => m.id === 'meal-chicken')
+  // Migrate per-day split overrides (dailySplits) into that day's
+  // dailyVariables, so the per-day data is not lost. A day-level salt/seasoning
+  // override becomes a daily variable ingredient on the split's owning meal,
+  // overriding whatever the migrated meal-level ingredient says.
+  const fallbackMealId = normalized.meals.some((m: Meal) => m.id === 'meal-chicken')
     ? 'meal-chicken'
     : normalized.meals[0]?.id;
-  normalized.customSplits = (normalized.customSplits || []).map((s: CustomSplit) => ({
-    ...s,
-    mealId: s.mealId && normalized.meals.some((m: Meal) => m.id === s.mealId) ? s.mealId : splitFallbackMealId
-  }));
+  if (loaded.dailySplits && typeof loaded.dailySplits === 'object') {
+    const splitById = new Map(incomingSplits.map((s: any) => [s.id, s]));
+    for (const day of Object.keys(loaded.dailySplits)) {
+      const overrides = loaded.dailySplits[day] || [];
+      for (const o of overrides) {
+        if (!o || !o.value || !String(o.value).trim()) continue;
+        const value = String(o.value).trim();
+        const match = value.match(/(\d+(?:\.\d+)?)\s*g/i);
+        if (!match) continue; // instruction-only override; global migration already folded it into prepMethod
+        const parent: any = splitById.get(o.id);
+        const rawName = ((o.name || parent?.name || '') as string).trim();
+        const isSalt = /salt/i.test(rawName);
+        const ingredientName = isSalt ? 'Table Salt (NaCl)' : (rawName || 'Seasoning');
+        const mealId = parent?.mealId || fallbackMealId;
+        const dayVars = (normalized.dailyVariables[day] = normalized.dailyVariables[day] || []);
+        const existing = dayVars.find(
+          (ing: Ingredient) => ing.name && ing.name.trim().toLowerCase() === ingredientName.toLowerCase()
+            && (ing.mealId || fallbackMealId) === mealId
+        );
+        const splitText = value !== `${match[1]}g` && value !== `${match[1]} g` ? value : '';
+        if (existing) {
+          existing.weight = match[1];
+          if (splitText) existing.split = splitText;
+        } else {
+          const newVar: Ingredient = { name: ingredientName, weight: match[1], isAuto: false, disabled: false, mealId };
+          if (splitText) newVar.split = splitText;
+          dayVars.push(newVar);
+        }
+      }
+    }
+  }
+
+  normalized.customSplits = [];
+  normalized.dailySplits = {};
   return normalized;
 };
 
