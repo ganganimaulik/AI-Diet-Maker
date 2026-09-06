@@ -258,11 +258,36 @@ function parseMealTables(part1Lines) {
 function parseDailyTotals(part1) {
   const totals = { perMeal: {} };
 
-  const perMealLine = part1.match(/meal calories\*{0,2}\s*:\s*(.+)/i);
-  if (perMealLine) {
-    for (const segment of perMealLine[1].split('|')) {
-      const entry = segment.match(/(.+?):\s*\*{0,2}([\d,]+)\s*kcal/i);
-      if (entry) totals.perMeal[clean(entry[1]).replace(/daily total/i, '').replace(/:$/, '').trim()] = num(entry[2]);
+  // One bullet per meal under the summary heading: "- Meal Name: **1234 kcal**
+  // daily (**411 kcal** per meal x 3)". Anchored to that heading so a
+  // similarly shaped line earlier in Part 1 cannot be read as a summary entry.
+  // Plans generated before the template switched to per-meal bullets put every
+  // meal on one pipe-separated "meal calories" line, so both shapes are read.
+  const summaryStart = part1.search(/^#{0,6}\s*\*{0,2}\s*Daily Totals/im);
+  if (summaryStart !== -1) {
+    const addEntry = (rawName, rawKcal) => {
+      const name = clean(rawName).replace(/daily total/i, '').replace(/:$/, '').trim();
+      if (!name || /^(total|final)\b/i.test(name)) return;
+      totals.perMeal[name] = num(rawKcal);
+    };
+
+    for (const line of part1.slice(summaryStart).split('\n').slice(1)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (/^#{1,6}\s/.test(trimmed) || trimmed === '---') break;
+      if (!trimmed.startsWith('-')) continue;
+
+      const legacy = trimmed.match(/meal calories\*{0,2}\s*:\s*(.+)/i);
+      if (legacy) {
+        for (const segment of legacy[1].split('|')) {
+          const entry = segment.match(/(.+?):\s*\*{0,2}([\d,]+)\s*kcal/i);
+          if (entry) addEntry(entry[1], entry[2]);
+        }
+        continue;
+      }
+
+      const entry = trimmed.match(/^-\s*\*{0,2}(.+?)\*{0,2}\s*:\s*\*{0,2}\s*([\d,]+)\s*kcal/i);
+      if (entry) addEntry(entry[1], entry[2]);
     }
   }
 
@@ -698,7 +723,7 @@ function verifyPlan(config, day, planText) {
       sink.warn('format', `"${parsed.name}": the table has no Total row.`);
     }
 
-    mealDailyKcal.set(parsed.name, thisMealKcal);
+    mealDailyKcal.set(parsed.name, { exact: thisMealKcal, printed: printedKcal * perDay, perDay });
     dayKcal += thisMealKcal;
     dayProtein += thisMealProtein;
     dayCarbs += thisMealCarbs;
@@ -891,10 +916,17 @@ function checkRatioAdvice(sink, stated) {
 function checkDailyTotals(sink, stated, computed) {
   const severity = computed.trusted ? 'error' : 'warn';
 
-  for (const [name, kcal] of computed.mealDailyKcal.entries()) {
+  for (const [name, meal] of computed.mealDailyKcal.entries()) {
     const key = Object.keys(stated.perMeal).find((candidate) => candidate.toLowerCase().startsWith(name.toLowerCase().slice(0, 8)));
-    if (key && Math.abs(stated.perMeal[key] - kcal) > TOL.kcalMealTotal) {
-      sink[severity]('calories', `Daily summary: "${name}" listed as ${stated.perMeal[key]} kcal, its weights give ${fmt(kcal)} kcal.`);
+    if (!key) continue;
+    // A summary figure may be derived from the exact weights or from the
+    // printed per-meal rows multiplied up, and whole-kcal row rounding puts
+    // those up to half a kcal per row apart before the frequency multiplies
+    // the gap. Accept either, and scale the slack the same way.
+    const slack = TOL.kcalMealTotal * Math.max(1, meal.perDay);
+    if (Math.abs(stated.perMeal[key] - meal.exact) > slack
+      && Math.abs(stated.perMeal[key] - meal.printed) > slack) {
+      sink[severity]('calories', `Daily summary: "${name}" listed as ${stated.perMeal[key]} kcal, its weights give ${fmt(meal.exact)} kcal.`);
     }
   }
 
