@@ -27,6 +27,8 @@ interface OutputPanelProps {
   onCancelDay: (day: string) => void;
   hidden?: boolean;
   provider?: string;
+  /** 'deterministic' plans come from the local solver, not from a model. */
+  engine?: 'llm' | 'deterministic';
   verifications: Record<string, DayVerification>;
   verifyingDays: Record<string, boolean>;
   verifyErrors: Record<string, string>;
@@ -177,6 +179,7 @@ export default function OutputPanel({
   onCancelDay,
   hidden = false,
   provider,
+  engine,
   verifications,
   verifyingDays,
   verifyErrors,
@@ -189,6 +192,7 @@ export default function OutputPanel({
     || isCurrentDayVerifying
     || dayProgress[selectedDay] === 'checking';
   const currentJob = dayJobs[selectedDay];
+  const isDeterministic = engine === 'deterministic';
   const providerName = formatProviderLabel(provider);
   // Days differ in whether they carry thinking output — fall back to the plan
   // tab instead of rendering an empty panel after switching days.
@@ -457,7 +461,9 @@ export default function OutputPanel({
               <>
                 <div className="spinner"></div>
                 <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {providerName} is calculating plan for {selectedDay}...
+                  {isDeterministic
+                    ? `Computing plan for ${selectedDay}...`
+                    : `${providerName} is calculating plan for ${selectedDay}...`}
                 </p>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Using precision math constraints</span>
               </>
@@ -467,7 +473,11 @@ export default function OutputPanel({
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             {activeTab === 'thoughts' && thinkingText && (
               <div className="thinking-box">
-                <div className="thinking-title">{providerName} Thinking Output ({selectedDay})</div>
+                <div className="thinking-title">
+                  {isDeterministic
+                    ? `Plan Derivation (${selectedDay})`
+                    : `${providerName} Thinking Output (${selectedDay})`}
+                </div>
                 <div className="thinking-text">
                   {thinkingText}
                 </div>

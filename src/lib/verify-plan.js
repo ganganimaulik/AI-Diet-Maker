@@ -45,7 +45,11 @@ const num = (value) => {
   return match ? parseFloat(match[0]) : NaN;
 };
 
-const clean = (value) => String(value).replace(/\*\*/g, '').replace(/[✓✅❗⚠️🔴🟢]/g, '').trim();
+// The `u` flag is load-bearing: without it the astral glyphs in this class are
+// matched as lone UTF-16 surrogates, so every emoji in U+1F400–U+1F7FF (🐔 🔥 …)
+// loses its high surrogate and a meal name carrying one could never match the
+// config's, no matter what the plan printed.
+const clean = (value) => String(value).replace(/\*\*/g, '').replace(/[✓✅❗⚠️🔴🟢]/gu, '').trim();
 
 /** Decimal places the plan printed for the first number in a cell. */
 function decimalsOf(cellText) {
@@ -1031,5 +1035,13 @@ module.exports = {
   computeFeasibility,
   buildReferenceDb,
   parsePlan,
-  SODIUM_MG_PER_G_SALT
+  SODIUM_MG_PER_G_SALT,
+  UNBOUNDED_MAX_G,
+  // Exported for the deterministic (no-LLM) plan builder in build-plan.js.
+  // It must resolve names, group a day's ingredients and solve the calorie
+  // budget exactly the way the checker does, or it would generate plans its
+  // own verifier rejects.
+  makeLookup,
+  expectedMeals,
+  solveWithCalorieBudget
 };
