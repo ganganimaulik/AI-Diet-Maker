@@ -14,7 +14,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 7;
+const PROMPT_TEMPLATE_VERSION = 8;
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -219,7 +219,13 @@ ${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' :
 Include both the static ingredients configured under this meal and any daily variable ingredients that belong to this meal. Include a markdown table with columns: Ingredient, Weight Per Meal, Daily Total (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''}), Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal). For Protein, Carbs, and Fat, estimate their values from the raw ingredient weights using standard USDA values and print them as "Xg (Y kcal)". For Water and Table Salt (NaCl), calories and macros are 0g (0 kcal). At the bottom of the table, include a "Total" row summing the total calculated calories, protein, carbs, and fat for the meal (e.g. Total calories, and macro sums formatted as "Total_grams g (Total_kcal kcal)").
 `).join('\n')}
 
-Include a Daily Totals (Summary) bulleted section at the bottom of Part 1 aggregating the calculated daily sum total across all meals to prove it hits your configured target. For each day, you MUST also show the total daily macros (Protein in grams & calories, Carbs in grams & calories, Fat in grams & calories) and the final aggregated Total Daily Calories.
+End Part 1 with a Daily Totals (Summary) section aggregating the calculated daily sum total across all meals to prove it hits your configured target. Format it EXACTLY as the template below — same heading, same bullets, in this same order. Every bullet is a top-level "- " bullet: never indent a bullet, never nest sub-bullets under the day, never merge several meals onto one line, and add no extra bullets, notes, ticks or commentary of your own.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
+### Daily Totals (Summary) — ${isSingle ? selectedDay : '[DAY NAME]'}
+${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 1 ? ` (**[Y] kcal** per meal \u00d7 ${meal.mealsPerDay})` : ''}`).join('\n')}
+- **Total Daily Protein**: **[P]g ([P kcal] kcal)**
+- **Total Daily Carbohydrates**: **[C]g ([C kcal] kcal)**
+- **Total Daily Fat**: **[F]g ([F kcal] kcal)**
+- **Final Aggregated Total Daily Calories**: **[T] kcal** (Target: **${c.global.dailyCalorieTarget} kcal**)
 
 ---
 

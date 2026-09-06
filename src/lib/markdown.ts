@@ -46,7 +46,11 @@ export const renderMarkdown = (md: string) => {
   const { part1 } = getPart1AndPart2(md);
   const lines = part1.split('\n');
   const html: string[] = [];
-  let inList = false;
+  // Indent width of every currently open <ul>, outermost first. A stack rather
+  // than a boolean because the model emits indented sub-bullets (the sodium
+  // notes, the per-meal daily totals); a boolean rendered them as siblings of
+  // their own parent.
+  const listStack: number[] = [];
   let inTable = false;
   let tableRows: string[] = [];
 
@@ -98,25 +102,53 @@ export const renderMarkdown = (md: string) => {
     return tHtml.join('\n');
   };
 
+  // Close every open list deeper than `indent`; -1 closes all of them. A nested
+  // <ul> was opened inside its parent <li>, so it has to close both.
+  const closeListsTo = (indent: number) => {
+    while (listStack.length > 0 && listStack[listStack.length - 1] > indent) {
+      listStack.pop();
+      html.push(listStack.length > 0 ? '</ul></li>' : '</ul>');
+    }
+  };
+  const closeLists = () => closeListsTo(-1);
+
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
 
     if (!line) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
       continue;
     }
 
-    if (line.startsWith('- ') || line.startsWith('* ')) {
+    const bullet = rawLine.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (bullet) {
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
-      if (!inList) { html.push('<ul>'); inList = true; }
-      html.push(`<li>${parseInline(line.substring(2))}</li>`);
+      const indent = bullet[1].replace(/\t/g, '    ').length;
+
+      if (listStack.length === 0) {
+        html.push('<ul>');
+        listStack.push(indent);
+      } else if (indent > listStack[listStack.length - 1]) {
+        // Reopen the previous <li> so the nested list sits inside it.
+        const prev = html[html.length - 1];
+        if (prev && prev.endsWith('</li>')) html[html.length - 1] = prev.slice(0, -5);
+        html.push('<ul>');
+        listStack.push(indent);
+      } else {
+        closeListsTo(indent);
+        // An out-dent past the first bullet's own indent closes everything.
+        if (listStack.length === 0) { html.push('<ul>'); listStack.push(indent); }
+      }
+
+      html.push(`<li>${parseInline(bullet[2])}</li>`);
       continue;
     }
 
     if (/^\d+\.\s/.test(line)) {
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       const headingContent = line.replace(/^\d+\.\s/, '');
       const num = line.match(/^(\d+)\.\s/)?.[1] || '1';
       html.push(`<h4 style="margin-top: 1.25rem; font-size: 1.05rem; font-weight: 700; color: #c084fc;">${num}. ${parseInline(headingContent)}</h4>`);
@@ -124,39 +156,39 @@ export const renderMarkdown = (md: string) => {
     }
 
     if (line.startsWith('### ')) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
       html.push(`<h3>${parseInline(line.substring(4))}</h3>`);
       continue;
     }
 
     if (line.startsWith('## ')) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
       html.push(`<h2>${parseInline(line.substring(3))}</h2>`);
       continue;
     }
 
     if (line.startsWith('# ')) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
       html.push(`<h1>${parseInline(line.substring(2))}</h1>`);
       continue;
     }
 
     if (line.startsWith('|')) {
-      if (inList) { html.push('</ul>'); inList = false; }
+      closeLists();
       inTable = true;
       tableRows.push(line);
       continue;
     }
 
-    if (inList) { html.push('</ul>'); inList = false; }
+    closeLists();
     if (inTable) { html.push(renderTable(tableRows)); tableRows = []; inTable = false; }
     html.push(`<p style="margin-bottom: 0.5rem;">${parseInline(line)}</p>`);
   }
 
-  if (inList) html.push('</ul>');
+  closeLists();
   if (inTable) html.push(renderTable(tableRows));
 
   return html.join('\n');

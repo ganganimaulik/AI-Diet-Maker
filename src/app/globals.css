@@ -2343,6 +2343,14 @@ input[type="radio"]:disabled {
 
 .markdown-content li { margin-bottom: 0.15rem; }
 
+/* A nested list is part of its parent bullet, so it keeps the indent but drops
+   the block spacing a top-level list carries. */
+.markdown-content li > ul,
+.markdown-content li > ol {
+  margin-top: 0.4rem;
+  margin-bottom: 0;
+}
+
 .markdown-content strong {
   color: #fff;
   font-weight: 700;
