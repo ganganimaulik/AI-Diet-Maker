@@ -4089,3 +4089,34 @@ input[type="radio"]:disabled {
     max-width: 100%;
   }
 }
+
+/* Generation engine toggle — AI provider vs. the local deterministic solver. */
+.engine-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.engine-toggle .switch-container {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  min-height: 1.9rem;
+}
+
+.engine-toggle__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.engine-toggle__note {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}

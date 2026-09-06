@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const { compilePromptText } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
+const { buildPlan } = require('./src/lib/build-plan.js');
 const {
   assertGeminiFinishReason,
   extractPartsText,
@@ -754,6 +755,9 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     if (!configDoc) {
       throw new Error('Diet configuration is missing.');
     }
+    // The deterministic engine computes the plan from the config, so a
+    // scheduled send needs no provider credentials at all when it is selected.
+    const useDeterministicEngine = configDoc.generationEngine === 'deterministic';
     const hasFireworksCreds = configDoc.provider === 'fireworks' && (
       process.env.FIREWORKS_API_KEY || configDoc.fireworksApiKey
     );
@@ -763,7 +767,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
       (configDoc.enterpriseAuthMethod === 'service-account' && configDoc.enterpriseServiceAccountJson)
     );
     const hasStudioCreds = configDoc.provider !== 'gemini-enterprise' && configDoc.provider !== 'fireworks' && (process.env.GEMINI_API_KEY || process.env.API_KEY || configDoc.apiKey);
-    if (!hasFireworksCreds && !hasEnterpriseCreds && !hasStudioCreds) {
+    if (!useDeterministicEngine && !hasFireworksCreds && !hasEnterpriseCreds && !hasStudioCreds) {
       throw new Error('AI API Key or credentials are missing.');
     }
 
@@ -801,10 +805,45 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
       if (cachedEntry && cachedEntry.configHash !== currentHash) {
         console.log(`Cache for ${targetDayName} is stale (config changed). Regenerating...`);
       }
-      console.log('Generating diet plan from Gemini...');
-      const geminiResult = await callGeminiAPI(configDoc, prompt);
-      generatedText = geminiResult.text;
-      const thinkingText = geminiResult.thinking;
+      let thinkingText = '';
+      // One stamp for both the cache entry and the verdict below. /api/verify
+      // decides staleness by comparing those two timestamps for equality, so
+      // reading the clock twice would mark every freshly computed plan stale.
+      const generatedAt = new Date();
+      if (useDeterministicEngine) {
+        console.log(`Computing diet plan for ${targetDayName} locally (no model call)...`);
+        const built = buildPlan(configDoc, targetDayName);
+        generatedText = built.text;
+        thinkingText = built.thinking;
+
+        // Free to run here (it calls nothing) and it keeps the day's stored
+        // verdict describing the plan that is actually about to be sent.
+        try {
+          const record = await runPlanVerification(configDoc, targetDayName, generatedText, {
+            aiReview: false,
+            configHash: currentHash,
+            planGeneratedAt: generatedAt
+          });
+          await VerificationResult.findOneAndUpdate(
+            { day: targetDayName },
+            { $set: record },
+            { upsert: true }
+          );
+          if (!record.ok) {
+            console.warn(
+              `Computed ${targetDayName} plan has ${record.errorCount} verification error(s);`
+              + ' sending it anyway and recording the verdict.'
+            );
+          }
+        } catch (verifyErr) {
+          console.error(`Failed to verify the computed ${targetDayName} plan (non-fatal):`, verifyErr);
+        }
+      } else {
+        console.log('Generating diet plan from Gemini...');
+        const geminiResult = await callGeminiAPI(configDoc, prompt);
+        generatedText = geminiResult.text;
+        thinkingText = geminiResult.thinking;
+      }
 
       // An empty response (safety block, no candidates) is a failure, not a
       // plan: sending it would deliver "No plan generated" and mark the day
@@ -822,7 +861,7 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
               configHash: currentHash,
               responseText: generatedText,
               thinkingText: thinkingText || '',
-              generatedAt: new Date()
+              generatedAt
             }
           },
           { upsert: true }
@@ -1322,7 +1361,17 @@ async function runNextGenerationJob() {
     // which re-derives everything from the *compiled* prompt — would be judging
     // a plan against a brief it was never given. Those runs stay unverified.
     const autoVerify = !!job.autoVerify && !!job.cacheable;
-    const maxAttempts = Math.max(1, Number(job.maxGenerationAttempts) || 1);
+    // No current path enqueues a deterministic job: /api/generate finishes
+    // those inline and createOrReuseJob only ever writes engine:'llm'. This
+    // branch is the guard for that staying true — if a job ever does arrive
+    // carrying the deterministic engine, it must not be handed to a provider
+    // that the saved config says should never be called. Retries are pointless
+    // either way: the same config yields the same plan, so a rejected one is
+    // rejected again.
+    const isDeterministic = job.engine === 'deterministic';
+    const maxAttempts = isDeterministic
+      ? 1
+      : Math.max(1, Number(job.maxGenerationAttempts) || 1);
 
     // Resumed after a lease takeover: continue the retry budget, don't reset it.
     // Clamped so a job that crashed on its last attempt still produces a plan
@@ -1350,9 +1399,12 @@ async function runNextGenerationJob() {
         ? job.prompt + buildRetryFeedback(job.day, attempt - 1, rejectedIssues, rejectedFeasibility)
         : job.prompt;
 
+      // /api/generate runs deterministic days inline and stores them already
       console.log(
-        `Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}`
-        + ` (attempt ${attempt}/${autoVerify ? maxAttempts : 1})...`
+        isDeterministic
+          ? `Computing plan for ${job.day} locally (attempt ${attempt}/${autoVerify ? maxAttempts : 1})...`
+          : `Generating plan for ${job.day} via ${configDoc.provider || 'google-ai-studio'}`
+            + ` (attempt ${attempt}/${autoVerify ? maxAttempts : 1})...`
       );
 
       const onChunk = ({ text, thinking }) => {
@@ -1372,7 +1424,12 @@ async function runNextGenerationJob() {
         }
       };
 
-      const { text, thinking } = await callGeminiAPI(configDoc, prompt, onChunk, cancelController.signal);
+      const { text, thinking } = isDeterministic
+        ? (() => {
+          const built = buildPlan(configDoc, job.day);
+          return { text: built.text, thinking: built.thinking };
+        })()
+        : await callGeminiAPI(configDoc, prompt, onChunk, cancelController.signal);
 
       // A cancel that landed after the final chunk still wins over completion.
       await throwIfCancelled();
@@ -1397,7 +1454,9 @@ async function runNextGenerationJob() {
       let verifyError = '';
       try {
         record = await runPlanVerification(configDoc, job.day, finalText, {
-          aiReview: !!configDoc.verificationAiReview,
+          // A computed plan is checked by arithmetic only: this run exists to
+          // need no provider, and the review never decides pass/fail anyway.
+          aiReview: !isDeterministic && !!configDoc.verificationAiReview,
           configHash: job.configHash,
           signal: cancelController.signal
         });
@@ -1438,6 +1497,16 @@ async function runNextGenerationJob() {
 
       if (record.ok) {
         console.log(`${job.day} passed verification on attempt ${attempt}.`);
+        break;
+      }
+
+      if (isDeterministic) {
+        // Reached only on a failing verdict. The same config always produces
+        // the same plan, so a retry would reproduce this verdict exactly.
+        console.warn(
+          `${job.day} was computed with ${record.errorCount} verification error(s);`
+          + ' regenerating cannot change that, so the plan and its verdict are kept.'
+        );
         break;
       }
 
