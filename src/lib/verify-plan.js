@@ -280,18 +280,18 @@ function parseDailyTotals(part1) {
       const legacy = trimmed.match(/meal calories\*{0,2}\s*:\s*(.+)/i);
       if (legacy) {
         for (const segment of legacy[1].split('|')) {
-          const entry = segment.match(/(.+?):\s*\*{0,2}([\d,]+)\s*kcal/i);
+          const entry = segment.match(/(.+?):\s*\*{0,2}([\d,.]+)\s*kcal/i);
           if (entry) addEntry(entry[1], entry[2]);
         }
         continue;
       }
 
-      const entry = trimmed.match(/^-\s*\*{0,2}(.+?)\*{0,2}\s*:\s*\*{0,2}\s*([\d,]+)\s*kcal/i);
+      const entry = trimmed.match(/^-\s*\*{0,2}(.+?)\*{0,2}\s*:\s*\*{0,2}\s*([\d,.]+)\s*kcal/i);
       if (entry) addEntry(entry[1], entry[2]);
     }
   }
 
-  const calories = part1.match(/(?:Final Aggregated |Final |)Total Daily Calories\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d,]+)\s*kcal/i);
+  const calories = part1.match(/(?:Final Aggregated |Final |)Total Daily Calories\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d,.]+)\s*kcal/i);
   totals.calories = calories ? num(calories[1]) : NaN;
 
   const macro = (primary, fallback) => {
@@ -299,16 +299,16 @@ function parseDailyTotals(part1) {
     return match ? { grams: parseFloat(match[1]), kcal: num(match[2]) } : null;
   };
   const protein = macro(
-    /Total (?:Daily )?Protein\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,]+)\s*kcal\)/i,
-    /Protein:\s*([\d.]+)g\s*\(([\d,]+)\s*kcal\)/i
+    /Total (?:Daily )?Protein\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,.]+)\s*kcal\)/i,
+    /Protein:\s*([\d.]+)g\s*\(([\d,.]+)\s*kcal\)/i
   );
   const carbs = macro(
-    /Total (?:Daily )?Carb(?:ohydrate)?s?\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,]+)\s*kcal\)/i,
-    /Carbs:\s*([\d.]+)g\s*\(([\d,]+)\s*kcal\)/i
+    /Total (?:Daily )?Carb(?:ohydrate)?s?\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,.]+)\s*kcal\)/i,
+    /Carbs:\s*([\d.]+)g\s*\(([\d,.]+)\s*kcal\)/i
   );
   const fat = macro(
-    /Total (?:Daily )?Fat\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,]+)\s*kcal\)/i,
-    /Fat:\s*([\d.]+)g\s*\(([\d,]+)\s*kcal\)/i
+    /Total (?:Daily )?Fat\*{0,2}\s*:?\*{0,2}\s*\*{0,2}([\d.]+)\s*g\s*\(([\d,.]+)\s*kcal\)/i,
+    /Fat:\s*([\d.]+)g\s*\(([\d,.]+)\s*kcal\)/i
   );
 
   totals.protein = protein ? protein.grams : NaN;
