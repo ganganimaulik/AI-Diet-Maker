@@ -22,7 +22,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 9;
+const PROMPT_TEMPLATE_VERSION = 10;
 
 /**
  * The reference nutrition table, one entry per line, exactly as it is printed.
@@ -300,7 +300,15 @@ R9. Do every calculation privately in your reasoning. The final output contains 
 PART 1: FOR MYSELF (User Breakdown)
 Generate this section first, using markdown tables and bullet points, based strictly on your calculations.
 
-At the very top of Part 1 (above any meal breakdowns/tables), you MUST print a bolded summary block for the daily sodium and potassium levels for each day generated. Format it exactly as follows:
+Open Part 1 with a Daily Totals (Summary) section aggregating the calculated daily sum total across all meals to prove it hits your configured target. It sits at the very top of Part 1, above the sodium summary and above any meal breakdowns/tables — so settle the per-meal arithmetic below first, then print the finished figures here. Format it EXACTLY as the template below — same heading, same bullets, in this same order. Every bullet is a top-level "- " bullet: never indent a bullet, never nest sub-bullets under the day, never merge several meals onto one line, and add no extra bullets, notes, ticks or commentary of your own.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
+### Daily Totals (Summary) — [DAY NAME]   <- replace [DAY NAME] with the day named in DAY DATA
+${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 1 ? ` (**[Y] kcal** per meal × ${meal.mealsPerDay})` : ''}`).join('\n')}
+- **Total Daily Protein**: **[P]g ([P kcal] kcal)**
+- **Total Daily Carbohydrates**: **[C]g ([C kcal] kcal)**
+- **Total Daily Fat**: **[F]g ([F kcal] kcal)**
+- **Final Aggregated Total Daily Calories**: **[T] kcal** (Target: **${c.global.dailyCalorieTarget} kcal**)
+
+Next, still above any meal breakdowns/tables, you MUST print a bolded summary block for the daily sodium and potassium levels for each day generated. Format it exactly as follows:
 ### Daily Sodium & Potassium Summary
 For ${isSingle ? 'the target day' : 'each day from Monday to Sunday'}:
 - **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
@@ -314,14 +322,6 @@ Each section holds one markdown table with exactly these columns, in this order:
 - One row per ingredient: the meal's own ingredients plus the daily variables that belong to it (R3). List every configured ingredient and nothing else — no ingredient that is not in the configuration for this day.
 - Protein, Carbs and Fat print as "Xg (Y kcal)". Water and Table Salt (NaCl) are 0g (0 kcal) on every macro and on calories.
 - The last row's first cell is exactly "Total", summing the four PER-MEAL columns above it.
-
-End Part 1 with a Daily Totals (Summary) section aggregating the calculated daily sum total across all meals to prove it hits your configured target. Format it EXACTLY as the template below — same heading, same bullets, in this same order. Every bullet is a top-level "- " bullet: never indent a bullet, never nest sub-bullets under the day, never merge several meals onto one line, and add no extra bullets, notes, ticks or commentary of your own.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
-### Daily Totals (Summary) — [DAY NAME]   <- replace [DAY NAME] with the day named in DAY DATA
-${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 1 ? ` (**[Y] kcal** per meal × ${meal.mealsPerDay})` : ''}`).join('\n')}
-- **Total Daily Protein**: **[P]g ([P kcal] kcal)**
-- **Total Daily Carbohydrates**: **[C]g ([C kcal] kcal)**
-- **Total Daily Fat**: **[F]g ([F kcal] kcal)**
-- **Final Aggregated Total Daily Calories**: **[T] kcal** (Target: **${c.global.dailyCalorieTarget} kcal**)
 
 ---
 
