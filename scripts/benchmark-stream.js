@@ -26,25 +26,25 @@ const CANDIDATE_MODELS = [
     name: 'DeepSeek V4.1 Flash',
     id: 'accounts/fireworks/models/deepseek-v4p1-flash',
     reasoningEffort: 'low',
-    maxTokens: 16384
+    maxTokens: 32768
   },
   {
     name: 'Kimi K3 Fast',
     id: 'accounts/fireworks/routers/kimi-k3-fast',
     reasoningEffort: 'low',
-    maxTokens: 16384
+    maxTokens: 32768
   },
   {
     name: 'GLM 5.3 (Reasoning)',
     id: 'accounts/fireworks/models/glm-5p3',
     reasoningEffort: 'low',
-    maxTokens: 16384
+    maxTokens: 32768
   },
   {
     name: 'Qwen 3.8 Max',
     id: 'accounts/fireworks/models/qwen3p8-max',
     reasoningEffort: 'low',
-    maxTokens: 16384
+    maxTokens: 32768
   }
 ];
 
@@ -136,9 +136,14 @@ async function runModelStream(apiKey, candidate, prompt) {
 }
 
 async function main() {
-  const apiKey = process.env.FIREWORKS_API_KEY;
+  let apiKey = process.env.FIREWORKS_API_KEY;
+  if (!apiKey && fs.existsSync(path.resolve(__dirname, '../.env.local'))) {
+    const envContent = fs.readFileSync(path.resolve(__dirname, '../.env.local'), 'utf8');
+    const match = envContent.match(/FIREWORKS_API_KEY=(.+)/);
+    if (match) apiKey = match[1].trim();
+  }
   if (!apiKey) {
-    console.error('ERROR: FIREWORKS_API_KEY environment variable is required.');
+    console.error('ERROR: FIREWORKS_API_KEY not found in env or .env.local.');
     process.exit(1);
   }
 

@@ -10,7 +10,7 @@ export interface ModelOption {
 
 export const FIREWORKS_MODELS: ModelOption[] = [
   { value: 'accounts/fireworks/models/deepseek-v4-pro', label: 'DeepSeek V4 Pro (Reasoning)' },
-  { value: 'accounts/fireworks/models/deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash' },
+  { value: 'accounts/fireworks/models/deepseek-v4p1-flash', label: 'DeepSeek V4.1 Flash' },
   { value: 'accounts/fireworks/models/llama4-maverick-instruct-basic', label: 'Llama 4 Maverick Instruct (401B)' },
   { value: 'accounts/fireworks/models/kimi-k3', label: 'Kimi K3 (Reasoning)' },
   { value: 'accounts/fireworks/routers/kimi-k3-fast', label: 'Kimi K3 Fast' },

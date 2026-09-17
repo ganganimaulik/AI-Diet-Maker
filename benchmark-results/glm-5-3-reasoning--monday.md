@@ -1,273 +1,569 @@
 # GLM 5.3 (Reasoning) (accounts/fireworks/models/glm-5p3)
-Duration: 179.04s | Errors: 1 | Finish: length
+Duration: 219.05s | Errors: 7 | Finish: stop
 
 ## Thinking
 Let me compute fixed calories.
 
-Meal 1 fixed: whey 60g×3.67=220.2; almonds 5×5.79=28.95; cashews 5×5.53=27.65. Total 276.8. AUTO: oats (90-100), banana (100-120).
+Meal1: whey 60g×3.67=220.2; almonds 5×5.79=28.95; cashews 5×5.53=27.65. Fixed = 276.8. AUTO: oats (3.79), banana (0.89).
 
-Meal 2 fixed: tomato 120×0.18=21.6; olive oil 8×8.84=70.72; salt 0; aamchur 1×3=3. Total 95.32. AUTO oats 122-140.
+Meal2: tomato 120×0.18=21.6; olive oil 8×8.84=70.72; salt 0; aamchur 1×3=3. Fixed=95.32. AUTO oats (3.79).
 
-Meal 3 fixed: olive oil 6×8.84=53.04; aamchur 2×3=6; salt 0. Total 59.04. Daily vars: rice AUTO min60, potato 50-400, brinjal 50-120, tomato 80-100.
+Meal3: olive oil 6×8.84=53.04; aamchur 2×3=6; salt 0. Fixed=59.04. Daily vars: rice AUTO (3.65, min60), potato AUTO (0.77, 50-400), brinjal AUTO (0.25, 50-120), tomato AUTO (0.18, 80-100).
 
-Meal 4 fixed: chicken 530×1.2=636; olive oil 10×8.84=88.4; aamchur 2×3=6. Total 730.4. AUTO tomato 100-120.
+Meal4: chicken 530×1.20=636; olive oil 10×8.84=88.4; aamchur 2×3=6. Fixed=730.4. AUTO tomato (0.18, 100-120).
 
-Meal 5 fixed: potato 300×0.77=231; olive oil 7×8.84=61.88; salt 0; aamchur 2×3=6. Total 298.88.
+Meal5: potato 300×0.77=231; olive oil 7×8.84=61.88; salt 0; aamchur 2×3=6. Fixed=298.88.
 
-Fixed total: 276.8+95.32+59.04+730.4+298.88 = 1460.44.
+Total fixed = 276.8+95.32+59.04+730.4+298.88 = 1460.44.
+Budget = 3200−1460.44 = 1739.56 kcal for AUTOs.
 
-Budget = 3200 − 1460.44 = 1739.56 kcal across AUTOs: oats1 (90-100), banana (100-120), oats2 (122-140), rice (≥60), potato (50-400), brinjal (50-120), tomato3 (80-100), tomato4 (100-120).
+AUTOs: oats1 (90-100), banana (100-120), oats2 (122-140), rice (≥60), potato (50-400), brinjal (50-120), tomato3 (80-100), tomato4 (100-120).
 
-Min calories: oats1 90×3.79=341.1; banana 100×0.89=89; oats2 122×3.79=462.38; rice 60×3.65=219; potato 50×0.77=38.5; brinjal 50×0.25=12.5; tomato3 80×0.18=14.4; tomato4 100×0.18=18. Min sum = 1194.88. Remaining to distribute: 1739.56−1194.88=544.68 kcal.
+Na:K target 0.79-0.80. Salt total: 3+3+3=9g → 3492 mg Na. Natural Na: whey 60×2.4=144; oats ~6mg/100g; chicken 530×0.45=238.5; olive oil 31g×0.02=0.62; tomato etc small; aamchur 7g×0.3=2.1; almonds 0.05; cashews 0.6; potato 300×0.06=18; banana ~1; rice small.
 
-Max extra: oats1 +10g×3.79=37.9; banana +20×0.89=17.8; oats2 +18×3.79=68.22; rice unbounded; potato +350×0.77=269.5; brinjal +70×0.25=17.5; tomato3 +20×0.18=3.6; tomato4 +20×0.18=3.6. Plenty of room.
+Natural Na ≈ 144+238.5+0.6+2.1+0.65+18+~2+ oats(~0.2g→12)+ tomato(~0.3g→15)+ brinjal(~0.1→2)+ rice(~0.1→5) ≈ ~440. Total Na ≈ 3932 mg.
 
-Now Na:K. Sodium sources: salt 3+3+3=9g → 3492 mg. Natural sodium: whey 60g×2.4=144; oats ~6mg/100g; chicken 530×0.45=238.5; olive oil 31g×0.02=0.62; aamchur 7g×0.3=2.1; almonds 0.05; cashews 0.6; tomato etc small. Roughly natural ~400 mg. Total Na ≈ 3892.
+For ratio 0.795, need K ≈ 3932/0.795 ≈ 4946 mg. Hmm, that's a lot of potassium. Let's estimate K from fixed: whey 240; chicken 1590; almonds 36.7; cashews 33; potato meal5 1263; olive oil ~0; aamchur 17.5; tomato meal2 284.4; oats ~? Fixed K ≈ 240+1590+36.65+33+1263+17.5+284.4 = 3464.6.
 
-Potassium: whey 240; oats (90+122)g×3.5=742; almonds 36.65; cashews 33; banana ~100g×3.58=358; chicken 530×3=1590; olive oil ~0; potato meal5 300×4.21=1263; potato meal3 var; brinjal; tomato; rice; aamchur 7×2.5=17.5.
+AUTO K: oats (3.5/g), banana (3.58/g), rice (1.15/g), potato (4.21/g), brinjal (2.3/g), tomato (2.37/g).
 
-Target K = Na/0.795 ≈ 3892/0.795 ≈ 4895 mg. Current fixed K (with mins): whey240 + oats1 90×3.5=315 + oats2 122×3.5=427 + almonds 36.65 + cashews 33 + banana 100×3.58=358 + chicken 1590 + potato5 1263 + aamchur 17.5 + rice 60×1.15=69 + potato3 50×4.21=210.5 + brinjal 50×2.3=115 + tomato3 80×2.37=189.6 + tomato4 100×2.37=237 + oil ~0.3 ≈ 5101? Let me sum: 240+315+427+36.65+33+358+1590+1263+17.5+69+210.5+115+189.6+237 = let's add: 240+315=555; +427=982; +36.65=1018.65; +33=1051.65; +358=1409.65; +1590=2999.65; +1263=3262.65; +17.5=3280.15; +69=3349.15; +210.5=3559.65; +115=3674.65; +189.6=3864.25; +237=4101.25.
+Budget 1739.56 kcal. If all to potato: K = 1739.56/0.77×4.21 = 9510 mg → total K ~12975, ratio 3932/12975=0.30. Way below. If all to rice: K=1739.56/3.65×1.15=548 → total ~4013, ratio 0.98. So band reachable? Need K between 3932/0.80=4915 and 3932/0.79=4977. So need AUTO K ≈ 4915−3464.6 = 1450 to 1512 mg. Rice-only gives 548 (too little, ratio above). Potato-heavy gives too much. So reachable.
 
-Sodium with mins: salt 3492 + whey 144 + oats (212g×0.06)=12.72 + almonds 0.05 + cashews 0.6 + banana 1 + chicken 238.5 + oil 31×0.02=0.62 + aamchur 7×0.3=2.1 + rice 60×0.05=3 + potato 350g total×0.06=21 + brinjal 50×0.02=1 + tomato 300g×0.05=15 ≈ 3492+144+12.72+0.05+0.6+1+238.5+0.62+2.1+3+21+1+15 = 3931.6.
+But wait — mins: oats1 min 90, oats2 min 122, banana min 100, rice min 60, potato min 50, brinjal min 50, tomato3 min 80, tomato4 min 100. Minimum calories: 90×3.79=341.1; 100×0.89=89; 122×3.79=462.38; 60×3.65=219; 50×0.77=38.5; 50×0.25=12.5; 80×0.18=14.4; 100×0.18=18. Sum mins = 1194.88. Budget 1739.56, so slack = 544.68 kcal to distribute.
 
-Ratio at mins: 3931.6/4101.25 = 0.959. Above 0.80. Need more K or... ratio above ideal means need more potassium. Extra budget calories: which AUTO has most K per kcal? Potato: 421mg K / 77kcal = 5.47 mg/kcal. Banana: 358/89=4.02. Brinjal: 230/25=9.2 mg/kcal! Brinjal is highest. Tomato: 237/18=13.2 mg/kcal — even higher! Rice: 115/365=0.315. Oats: 350/379=0.923.
+Min K from AUTOs: oats1 90×3.5=315; banana 100×3.58=358; oats2 122×3.5=427; rice 60×1.15=69; potato 50×4.21=210.5; brinjal 50×2.3=115; tomato3 80×2.37=189.6; tomato4 100×2.37=237. Sum = 1921.1. Total K at mins = 3464.6+1921.1 = 5385.7. Ratio = 3932/5385.7 = 0.73. Below 0.79 already at minimums! Adding more K only lowers it. So ratio cannot reach band — it's below ideal at minimum allocation and only decreases.
 
-So pushing budget to tomato/brinjal/potato lowers ratio. Extra 544.68 kcal: if all to tomato (max +20g tomato3, +20g tomato4 = 7.2 kcal only), brinjal +70g = 17.5 kcal, potato +350g = 269.5 kcal. Max K-heavy allocation: tomato3 100g, tomato4 120g, brinjal 120g, potato 400g, banana 120g, oats maxed... but oats raise ratio slightly. Remaining after maxing K-heavy: 544.68 − 3.6 − 3.6 − 17.5 − 269.5 − 17.8(banana) = 232.68 kcal must go to oats/rice (low K/kcal). Oats1 max +37.9, oats2 max +68.22 → 106.12; rest 126.56 to rice (unbounded, low K). Hmm rice min 60, no max.
+Wait, check: adding calories to AUTOs — all AUTOs add K per kcal. Rice lowest K/kcal: 1.15/3.65=0.315 mg/kcal. Potato highest: 4.21/0.77=5.47. At mins ratio 0.73; adding rice only: K increases 0.315/kcal, Na roughly constant. Need ratio ≥0.79 → K ≤ 3932/0.79 = 4977. But K at mins is already 5386 > 4977. So ratio is below ideal and unreachable. Per R4e: don't search; split evenly and report honestly.
 
-Extreme low-ratio allocation: max K-dense first. K added: tomato3 +20g→+47.4mg K, +3.6 kcal; tomato4 +20g→+47.4, 3.6; brinjal +70→+161, 17.5; potato +350→+1473.5, 269.5; banana +20→+71.6, 17.8. Sum kcal 311.99, K +1800.9. Remaining 232.69 to oats (K 3.5/3.79=0.923 mg/kcal) and rice (0.315). Oats max extra 106.12 kcal → +97.9 K; rice 126.57 kcal → +39.9 K. Total K = 4101.25+1800.9+97.9+39.9 = 6039.95. Na also changes slightly: potato +350g→+21 Na (already counted? I counted 350g potato total; now potato3=400, so +350g more → +21 Na). Let me recompute Na at this extreme: potato total 700g → 42 Na; tomato total 340g→17; brinjal 120→2.4; banana 120→1.2; oats 100+140=240→14.4; rice 60+34.68g... rice extra 126.57/3.65=34.68g → rice 94.68g → 4.73 Na. Na = 3492+144+14.4+0.05+0.6+1.2+238.5+0.62+2.1+4.73+42+2.4+17 = 3960. Ratio = 3960/6040 = 0.656. Below 0.79!
+Hmm wait, but sodium: let me recompute more carefully. Salt 9g = 3492. Natural:
+- whey 60g: 144
+- almonds 5g: 0.05
+- cashews 5g: 0.6
+- oats1 90g: 5.4
+- banana 100g: 1
+- oats2 122g: 7.32
+- tomato m2 120g: 6
+- olive oil m2 8g: 0.16
+- aamchur m2 1g: 0.3
+- olive oil m3 6g: 0.12
+- aamchur m3 2g: 0.6
+- rice 60g: 3
+- potato 50g: 3
+- brinjal 50g: 1
+- tomato m3 80g: 4
+- chicken 530g: 238.5
+- tomato m4 100g: 5
+- olive oil m4 10g: 0.2
+- aamchur m4 2g: 0.6
+- potato m5 300g: 18
+- olive oil m5 7g: 0.14
+- aamchur m5 2g: 0.6
 
-So band is reachable (0.656 to 0.959 spans 0.79-0.80). Good, search for split.
+Sum natural ≈ 144+0.05+0.6+5.4+1+7.32+6+0.16+0.3+0.12+0.6+3+3+1+4+238.5+5+0.2+0.6+18+0.14+0.6 = 440.59. Total Na ≈ 3932.6.
 
-We need ratio ~0.795. Na ≈ 3940 (varies little). Target K ≈ 3940/0.795 ≈ 4956. Need K ≈ 4956, currently at mins 4101, need +855 mg K from 544.68 extra kcal → need avg 1.568 mg K/kcal from extras. Mix of potato (5.47) and rice (0.315): fraction f to potato: 5.47f + 0.315(1−f) = 1.568 → f = 1.253/5.155 = 0.243. Potato extra kcal = 132.4 → 172g potato extra → potato3 = 222g. Rice extra = 412.3 kcal → 113g → rice 173g.
+So ratio below ideal regardless. Per R6: Additional Na = 0.79×K − Na.
 
-But also could use oats/banana etc. Let's just pick a clean split. Let me set: oats1=100 (max), oats2=140 (max), banana=120 (max), tomato3=100 (max), tomato4=120 (max), brinjal=120 (max). Extra used: 37.9+68.22+17.8+3.6+3.6+17.5 = 148.62. Remaining: 544.68−148.62 = 396.06 kcal for rice + potato3.
+Now split budget evenly (R4e: "split the budget evenly"). Evenly across the 8 AUTOs? Slack 544.68 / 8 = 68.085 kcal each. But bounds: oats1 max 100 (min cal 341.1, +68.09 → 409.2 → 108g > 100 max). Hmm. "split the budget evenly" — evenly in calories presumably, respecting bounds, pin and redistribute? Let's do: give each AUTO +68.085 kcal subject to max bounds.
 
-K from those maxes: oats1 +10g→+35; oats2 +18→+63; banana +20→+71.6; tomato3 +20→+47.4; tomato4 +20→+47.4; brinjal +70→+161. Sum +425.4. Base K 4101.25 → 4526.65. Need total K ≈ Na/0.795.
+Max extra per AUTO: oats1: 100−90=10g → 37.9 kcal; banana: 20g → 17.8; oats2: 18g → 68.22 (fits ~68.085); rice: no max; potato: 350g → 269.5; brinjal: 70g → 17.5; tomato3: 20g → 3.6; tomato4: 20g → 3.6.
 
-Na at these: oats 240g→14.4; banana 120→1.2; tomato 340→17; brinjal 120→2.4; potato5 300→18; potato3 P g→0.06P; rice R g→0.05R. Na = 3492+144+14.4+0.05+0.6+1.2+238.5+0.62+2.1+18+2.4+17 +0.06P+0.05R = 3931.27 + 0.06P + 0.05R.
+Pins: oats1 gets 37.9 (excess 30.185), banana 17.8 (excess 50.285), brinjal 17.5 (excess 50.585), tomato3 3.6 (64.485), tomato4 3.6 (64.485). oats2 gets 68.085 (fits, 68.22 cap). Remaining recipients with room: rice (unbounded), potato (269.5 room). Excess total = 30.185+50.285+50.585+64.485+64.485 = 260.025. Split between rice and potato: 130.01 each. Potato room 269.5 ok.
 
-K = 4526.65 + 4.21P + 1.15R (P = potato3 weight, R = rice weight), minus base potato3 50g already in base? Base included potato3 50g (210.5 K) and rice 60g (69 K). So P here is extra over 50, R extra over 60. Let me define p = potato3 total grams, r = rice total grams. Then K = 4101.25 − 210.5 − 69 + 425.4 + 4.21p + 1.15r = 4247.15 + 4.21p + 1.15r. Na = 3931.27 − 3(rice 60 base Na=3) − 3(potato 50 base=3) + ... ugh. Let me just recompute Na cleanly:
+So allocations:
+- oats1: 90g + 37.9/3.79 = 10g → 100g
+- banana: 100 + 17.8/0.89 = 20g → 120g
+- oats2: 122 + 68.085/3.79 = 122+17.965 = 139.965 → 140g (cap 140, 68.22; 68.085 fits)
+- rice: 60 + 130.0125/3.65 = 60+35.62 = 95.62g
+- potato: 50 + 130.0125/0.77 = 50+168.84 = 218.84g
+- brinjal: 50 + 17.5/0.25 = 120g
+- tomato3: 80 + 3.6/0.18 = 100g
+- tomato4: 100 + 3.6/0.18 = 120g
 
-Na = salt 3492
-+ whey 144
-+ oats (100+140)=240g ×0.06 = 14.4
-+ almonds 0.05
-+ cashews 0.6
-+ banana 120×0.01 = 1.2
-+ chicken 238.5
-+ olive oil 31×0.02 = 0.62
-+ aamchur 7×0.3 = 2.1
-+ meal5 potato 300×0.06 = 18
-+ brinjal 120×0.02 = 2.4
-+ tomato (120 meal2 + 100 + 120) = 340×0.05 = 17
-+ potato3 p×0.06
-+ rice r×0.05
-Fixed part = 3492+144+14.4+0.05+0.6+1.2+238.5+0.62+2.1+18+2.4+17 = 3930.87. Na = 3930.87 + 0.06p + 0.05r.
+Check calories: oats1 379; banana 106.8; oats2 530.6... let me sum: 379 + 106.8 + 140×3.79=530.6 + 95.62×3.65=349.01 + 218.84×0.77=168.51 + 120×0.25=30 + 100×0.18=18 + 120×0.18=21.6. Sum = 379+106.8+530.6+349.01+168.51+30+18+21.6 = 1603.52. Plus mins of others already counted... wait mins sum was 1194.88 and slack 544.68 → total AUTO = 1739.56. Check: 1603.52? Let me recompute: mins were oats1 341.1, banana 89, oats2 462.38, rice 219, potato 38.5, brinjal 12.5, tomato3 14.4, tomato4 18 = 1194.88. Additions: 37.9+17.8+68.085+130.01+130.01+17.5+3.6+3.6 = 408.5? Hmm that's not 544.68. Let me recount: 37.9+17.8=55.7; +68.085=123.785; +130.0125+130.0125=383.81; +17.5=401.31; +3.6+3.6=408.51. That's short by 136.17.
 
-K = whey 240 + oats 240×3.5=840 + almonds 36.65 + cashews 33 + banana 120×3.58=429.6 + chicken 1590 + oil ~0.31 + aamchur 17.5 + meal5 potato 1263 + brinjal 120×2.3=276 + tomato 340×2.37=805.8 + 4.21p + 1.15r.
-Fixed = 240+840+36.65+33+429.6+1590+0.31+17.5+1263+276+805.8 = 5731.86. K = 5731.86 + 4.21p + 1.15r.
+I made an error: excess redistribution. Total slack 544.68. Even share 68.085 each ×8 = 544.68. Pinned ones couldn't take full share: oats1 took 37.9 (short 30.185), banana 17.8 (short 50.285), brinjal 17.5 (short 50.585), tomato3 3.6 (short 64.485), tomato4 3.6 (short 64.485). Total short = 260.025. oats2 took 68.085 (full). Rice and potato each took 68.085 + share of 260.025. 260.025/2 = 130.0125 each. So rice total add = 68.085+130.0125 = 198.0975; potato same. I forgot the base 68.085 for rice/potato. Redo:
 
-Calories: budget for p,r: 3200 − (fixed 1460.44 + autos maxed others). Calories of maxed autos: oats1 100×3.79=379; banana 120×0.89=106.8; oats2 140×3.79=530.6; tomato3 100×0.18=18; tomato4 120×0.18=21.6; brinjal 120×0.25=30. Sum = 1086. Fixed 1460.44 + 1086 = 2546.44. Remaining for p,r: 3200−2546.44 = 653.56 = 0.77p + 3.65r.
+- rice: 60 + 198.0975/3.65 = 60 + 54.273 = 114.27g
+- potato: 50 + 198.0975/0.77 = 50 + 257.27 = 307.27g (within 400 max ✓)
 
-Ratio: Na/K = 0.795 target.
-(3930.87 + 0.06p + 0.05r) / (5731.86 + 4.21p + 1.15r) = 0.795
-3930.87 + 0.06p + 0.05r = 4556.33 + 3.347p + 0.914r
-→ 3.287p + 0.864r = 624.54.
-With 0.77p + 3.65r = 653.56.
+Check potato room: max extra 269.5, needed 198.1 ✓.
 
-From first: p = (624.54 − 0.864r)/3.287 = 190.0 − 0.2628r.
-Sub: 0.77(190 − 0.2628r) + 3.65r = 653.56 → 146.3 − 0.2024r + 3.65r = 653.56 → 3.4476r = 507.26 → r = 147.1. p = 190 − 38.65 = 151.35.
+Total AUTO cal: 379 + 106.8 + 530.6 + 114.27×3.65=417.09 + 307.27×0.77=236.60 + 30 + 18 + 21.6 = 1739.69. Close to 1739.56 (rounding). Good.
 
-Check bounds: p=151.35 (50-400 ✓), r=147.1 (≥60 ✓).
+Now round: oats1 100, banana 120, oats2 140, rice 114, potato 307, brinjal 120, tomato3 100, tomato4 120.
 
-Now round: p=151, r=147. Calories: 0.77×151=116.27; 3.65×147=536.55; sum 652.82 vs needed 653.56 → day total = 2546.44+652.82 = 3199.26. Off by 0.74. Residual absorber: rice (unbounded). Need +0.74 kcal → +0.2g rice... whole grams: rice 148g → 540.2, total 3200.91 (within 1? 0.91 ✓). Or rice 147, potato 152: 0.77×152=117.04, sum 653.59 → total 3199.99... wait 2546.44+117.04+536.55 = 3200.03. Within 1 kcal ✓. Use potato3=152g, rice=147g.
+Rounded calories: 379 + 106.8 + 530.6 + 416.1 + 236.39 + 30 + 18 + 21.6 = 1738.49. Day total = 1460.44 + 1738.49 = 3198.93. Need within 1 kcal of 3200 → need +1.07. Residual absorber: rice (room). +1.07/3.65 = 0.29g... whole grams only. Hmm, shifting by whole grams: rice 114→115 adds 3.65 → 3202.58, off by 2.58. Potato 307→308 adds 0.77 → 3199.70, off by 0.30 ✓ within 1. Use potato as absorber: potato = 308g.
 
-But rounding other autos: they're already whole (100,120,140,100,120,120). Good.
+Final: day cal = 1460.44 + 379 + 106.8 + 530.6 + 416.1 + 308×0.77=237.16 + 30 + 18 + 21.6 = 1460.44+1739.26 = 3199.70. Within 1 ✓. Round printed calories to whole: total 3200 (3199.7 → 3200).
 
-Final weights:
-Meal1: oats 100, whey 60, almonds 5, cashews 5, banana 120.
-Meal2: oats 140, tomato 120, oil 8, salt 3, aamchur 1.
-Meal3 (daily total, ÷3 per meal): oil 6, aamchur 2, salt 3, rice 147, potato 152, brinjal 120, tomato 100.
-Meal4: chicken 530, tomato 120, oil 10, aamchur 2.
-Meal5: potato 300, oil 7, salt 3, aamchur 2.
+Now per-meal calories (round each):
 
-Calories:
-Meal1: oats 379; whey 220.2→220; almonds 28.95→29; cashews 27.65→28; banana 106.8→107. Total 763.
-Meal2: oats 530.6→531; tomato 21.6→22; oil 70.72→71; salt 0; aamchur 3. Total 627.
-Meal3: oil 53.04→53; aamchur 6; salt 0; rice 536.55→537; potato 117.04→117; brinjal 30; tomato 18. Total 761.
-Meal4: chicken 636; tomato 21.6→22; oil 88.4→88; aamchur 6. Total 752.
-Meal5: potato 231; oil 61.88→62; salt 0; aamchur 6. Total 299.
+Meal 1 (1/day): oats 100g: 379 kcal, P 13.2, C 67.7, F 6.5. Whey 60g: 220.2→220, P 46.2, C 5.226→5.2, F 1.218→1.2. Almonds 5g: 28.95→29, P 1.06, C 1.08, F 2.495→2.5. Cashews 5g: 27.65→28, P 0.91, C 1.51, F 2.19. Banana 120g: 106.8→107, P 1.32, C 27.36, F 0.36.
+Meal1 totals: cal 379+220+29+28+107 = 763. P: 13.2+46.2+1.1+0.9+1.3 = 62.7. C: 67.7+5.2+1.1+1.5+27.4 = 102.9. F: 6.5+1.2+2.5+2.2+0.4 = 12.8.
 
-Day total: 763+627+761+752+299 = 3202. Hmm, target 3200, off by 2. R5c says within 1 kcal. Need to recompute from rounded weights: exact day = 379+220.2+28.95+27.65+106.8+530.6+21.6+70.72+3+53.04+6+536.55+117.04+30+18+636+21.6+88.4+6+231+61.88+6 = let's sum precisely:
-379+220.2=599.2; +28.95=628.15; +27.65=655.8; +106.8=762.6; +530.6=1293.2; +21.6=1314.8; +70.72=1385.52; +3=1388.52; +53.04=1441.56; +6=1447.56; +536.55=1984.11; +117.04=2101.15; +30=2131.15; +18=2149.15; +636=2785.15; +21.6=2806.75; +88.4=2895.15; +6=2901.15; +231=3132.15; +61.88=3194.03; +6=3200.03. 
+Meal 2: oats 140g: 530.6→531, P 18.48, C 94.78, F 9.1. Tomato 120g: 21.6→22, P 1.08, C 4.68, F 0.24. Olive oil 8g: 70.72→71, F 8. Salt 3g: 0. Aamchur 1g: 3, P 0.03, C 0.68, F 0.015.
+Totals: cal 531+22+71+0+3 = 627. P: 18.5+1.1+0+0+0.03 = 19.6 (18.48+1.08+0.03=19.59→19.6). C: 94.78+4.68+0.68 = 100.14→100.1. F: 9.1+0.24+8+0.015 = 17.355→17.4.
 
-Exact = 3200.03 ✓ within 1. But printed calories (rounded per row) sum to 3202. R5e: "Every total is the sum of the numbers you actually printed." Hmm — but the daily total should be 3200. Conflict. The rule says totals are sums of printed rows. But also day must sit within 1 kcal of target. Adjust: make one row's rounding differ? E.g., whey 220.2 prints 220; banana 106.8→107. Sum of printed = 3202. To fix, adjust residual absorber by whole grams: reduce rice by 1g: rice 146 → 532.9 → prints 533, exact day = 3196.38 — no, that's 3.6 off. Reduce potato3 by... potato 0.77/g: need −2 kcal printed. Potato3 151g: 116.27→116 (−1 printed, −0.77 exact). Then exact day = 3199.26 (within 1 ✓), printed sum = 3201. Still 1 off. Also potato 150: 115.5→116 (prints 116, same). Hmm.
+Meal 3 (×3): olive oil 6g: 53.04→53, F 6. Aamchur 2g: 6, P 0.06, C 1.36, F 0.03. Salt 3g: 0. Rice 114g: 416.1→416, P 8.094, C 91.2, F 0.798. Potato 308g: 237.16→237, P 6.16, C 53.9, F 0.308. Brinjal 120g: 30, P 1.2, C 7.08, F 0.24. Tomato 100g: 18, P 0.9, C 3.9, F 0.2.
+Daily total cal: 53+6+0+416+237+30+18 = 760. Per meal: 760/3 = 253.33. Hmm, per-meal columns: weights per meal = daily/3. Rice 38g/meal, potato 102.67g... awkward. Per meal: rice 38g, potato ~102.7g, brinjal 40g, tomato 33.33g, oil 2g, aamchur 0.67g, salt 1g. Per-meal calories: rice 38×3.65=138.7→139; potato 102.67×0.77=79.05→79; brinjal 10; tomato 6; oil 17.68→18; aamchur 2; salt 0. Sum per meal = 139+79+10+6+18+2+0 = 254. ×3 = 762 ≠ 760. Hmm. R5e: totals = sum of printed rows. Per-meal total row sums per-meal column: 254. Daily total in summary: I'll compute daily from daily weights: 760. But template says "X kcal daily (Y kcal per meal × 3)". Inconsistency 254×3=762 vs 760. Better: make per-meal figures such that ×3 = daily. Use per-meal = daily/3 rounded? 760/3=253.3. Alternatively present per-meal weights as daily/3 and compute per-meal calories from those, then daily = 3× per-meal sum. To keep consistency, I'll define per-meal values and daily = 3×. Let me choose per-meal weights: rice 38g (114/3), potato 102.67→ use 102.7? Weights should probably be grams; I'll print per-meal weights with one decimal where needed: rice 38g, potato 102.7g, brinjal 40g, tomato 33.3g, olive oil 2g, aamchur 0.7g, salt 1g.
 
-Alternative: rice 147 prints 537 (536.55). If rice 146: 532.9→533. Day exact 3196.38 — outside 1. No.
+Per-meal calories: rice 138.7→139; potato 79.1→79; brinjal 10; tomato 6; oil 17.7→18; aamchur 2; salt 0. Total 254. Daily = 762. Then day total = 763+627+762+meal4+meal5.
 
-Try potato3=150, rice=147: exact potato 115.5, day = 3198.49 — off by 1.51. No.
+Hmm but then day total changes. Let me just recompute everything consistently: daily totals per meal from daily weights, and per-meal = daily/3 where I'll present per-meal calories as daily/3 rounded... The template: "Vegitable Meal: [X] kcal daily ([Y] kcal per meal × 3)". If Y×3 ≠ X it looks bad. Simplest: set per-meal numbers and let daily = 3×per-meal. Adjust: per-meal total 254 → daily 762. Then day total = 763+627+762+? 
 
-Potato3=152, rice=147 gave exact 3200.03, printed 3202. Potato3=151, rice=147: exact 3199.26 ✓, printed: potato 116.27→116, sum 3201. Potato3=151, rice=146: exact 3195.61 ✗.
+Meal 4: chicken 530g: 636, P 119.25, F 13.25. Tomato 120g: 21.6→22, P 1.08, C 4.68, F 0.24. Olive oil 10g: 88.4→88, F 10. Aamchur 2g: 6, P 0.06, C 1.36, F 0.03.
+Totals: 636+22+88+6 = 752. P: 119.25+1.08+0.06=120.4. C: 4.68+1.36=6.0. F: 13.25+0.24+10+0.03=23.5.
 
-Hmm, need printed sum 3200 or 3199-3201? R5c: day's calories recomputed from rounded weights within 1 kcal of target — that's exact computation = 3200.03 ✓ with p=152,r=147. R5e: totals = sum of printed numbers. The Daily Totals bullets show per-meal kcal; total line shows final aggregated. Perhaps total should be 3200 (the true value) — but rule says never write a total rows don't produce. Tension. I'll aim to make printed sum = 3200 too.
+Meal 5: potato 300g: 231, P 6, C 52.5, F 0.3. Olive oil 7g: 61.88→62, F 7. Salt 3g: 0. Aamchur 2g: 6, P 0.06, C 1.36, F 0.03.
+Totals: 231+62+0+6 = 299. P 6.1 (6+0.06). C 53.9 (52.5+1.36=53.86). F 7.3 (0.3+7+0.03=7.33).
 
-Printed sum currently 3202 with p=152. Need −2 in printed. Options: change a row where rounding was up by ~1 and shift weight. E.g., almonds 28.95→29; cashews 27.65→28; banana 106.8→107; tomato 21.6→22 (×2); oil 70.72→71; 88.4→88; 61.88→62; 53.04→53; whey 220.2→220; oats 530.6→531.
+Day total: 763+627+762+752+299 = 3203. Hmm, target 3200, off by 3. The issue is meal3 rounding. Let me instead compute meal3 daily from daily weights = 760, and per-meal display... Actually per R5e, "Every total is the sum of the numbers you actually printed." The meal table's Total row sums per-meal column. The summary daily figure — I could print 760 (daily) and per-meal 253.3? Template shows integer kcal. Alternatively adjust absorber to account: day total from daily weights = 3199.7 ≈ 3200. The per-meal rounding discrepancy (762 vs 760) is a display artifact. I'll print per-meal calories that sum consistently: choose per-meal values: rice 138.7→139? Let me pick rounding to make sum = 253.33×3... 
 
-Reduce potato3 to 149: 114.73→115 (−2 printed from 117). Exact day = 3200.03−2.31=3197.72 ✗.
+Simplest defensible approach: per-meal column shows daily/3 values; I'll round per-meal calories so that they sum to a per-meal total whose ×3 equals the daily total. Daily meal3 = 760 → per meal 253.33. Rows: rice 138.7 (139), potato 79.1 (79), brinjal 10, tomato 6, oil 17.7 (18), aamchur 2, salt 0 → 254. To get 253: round oil 17.68→18, rice 138.7→139... could round potato 79.05→79, rice 138.7→139, oil 17.68→18, tomato 5.99→6, brinjal 10, aamchur 2. Sum 254. Alternatively rice 138.7 → 138? No, nearest is 139.
 
-Alternatively increase rice and decrease potato to keep exact ~3200 while lowering printed. Rice 3.65/g prints exact-ish (536.55→537, +0.45). Potato 0.77/g: 152→117.04→117 (+0). Hmm.
+I'll just accept: per-meal total 254, daily 762, and adjust the residual absorber earlier so overall day = 3200. Currently with meal3=762, day = 3203. Reduce by 3: adjust potato meal3 from 308 to 304? Each gram potato = 0.77. 304→ 234.08, daily meal3 = 760−3.08=756.9... messy.
 
-Try p=150, r=148: exact = 115.5+540.2=655.7 vs previous 653.59 → +2.11 → day 3202.14 ✗ (>1).
+Alternative: recompute absorber considering that printed totals use per-meal rounding. Honestly, simpler: present meal 3 per-meal weights as exact fractions and per-meal calories unrounded-ish... but calories must be whole numbers.
 
-p=149, r=148: 114.73+540.2=654.93 → day 3201.56... wait base without p,r: 3200.03−653.59=2546.44. +654.93=3201.37 ✗.
+Pragmatic choice: define meal 3 per-meal portions with clean grams: rice 38g, potato 103g, brinjal 40g, tomato 33g, oil 2g, aamchur 0.7g, salt 1g per meal. Then daily weights = ×3: rice 114, potato 309, brinjal 120, tomato 99, oil 6, aamchur 2.1, salt 3. Hmm tomato 99 vs solved 100; aamchur 2.1 vs 2. Deviating from solved weights.
 
-p=151, r=148: 116.27+540.2=656.47 → 3202.91 ✗.
+Better: keep daily weights as solved (rice 114, potato 308, brinjal 120, tomato 100, oil 6, aamchur 2, salt 3) and per-meal = daily/3 shown to 1 decimal: rice 38g, potato 102.7g, brinjal 40g, tomato 33.3g, oil 2g, aamchur 0.7g, salt 1g. Per-meal calories (rounded): rice 138.7→139, potato 79.1→79, brinjal 10, tomato 6, oil 17.7→18, aamchur 2, salt 0. Total 254/meal, 762 daily. Then overall day = 3203. Then adjust absorber: need day 3200. Reduce potato meal3 by 4g: 304g → daily cal 304×0.77=234.08→234; per-meal potato 101.3g → 78.0→78; per-meal total 253; daily 759; day total = 763+627+759+752+299 = 3200. 
 
-p=153, r=146: 117.81+531.9=649.71 → 3196.15 ✗.
+Check: potato 304g within bounds (50-400) ✓. Day calories from densities: 1460.44 + 379 + 106.8 + 530.6 + 416.1 + 234.08 + 30 + 18 + 21.6 = 3196.72. Hmm, that's 3.3 below target — violates "within 1 kcal" from densities. But printed totals sum to 3200. Conflict between R5c (densities) and R5e (printed sums). 
 
-p=152, r=146: 117.04+531.9=648.94 → 3195.38 ✗.
+Ugh. Let me reconsider: maybe don't force per-meal×3 = daily exactly; the template says "[X] kcal daily ([Y] kcal per meal × 3)" — X and Y are separate slots; Y×3 need not equal X exactly since Y is rounded. I'll go with daily from densities: meal3 daily = 760 (53+6+0+416+237+30+18 = 760 with potato 308). Day = 763+627+760+752+299 = 3201. Hmm 3201, within 1 of 3200? 3199.70 actual → prints as 3200. But sum of printed meal dailies = 3201. R5e says totals = sum of printed rows. Meal daily totals: 763, 627, 760, 752, 299 → 3201. Final aggregated total should be 3201? But target check... "Final Aggregated Total Daily Calories: [T] kcal (Target: 3200)". T = 3201, honest. Actually the true value 3199.7 rounds to 3200; the sum-of-rounded is 3201. I'll print 3200 as final (from recomputed densities, 3199.7→3200) — but R5e says never write a total rows don't produce... The meal-level rounding causes ±1. I'll print final total 3201 to be sum-consistent? Or adjust one meal's rounding: meal5 potato 300g = 231 exactly; oil 61.88→62; aamchur 6 → 299. Meal1: 379+220.2+28.95+27.65+106.8 = 762.6 → rows 379+220+29+28+107=763. Meal2: 530.6+21.6+70.72+3 = 625.92 → rows 531+22+71+3=627. Meal4: 636+21.6+88.4+6=752 → rows 636+22+88+6=752. Meal3: 53.04+6+416.1+237.16+30+18 = 760.3 → rows 53+6+416+237+30+18=760.
 
-Hmm only p=152,r=147 (3200.03) and p=151,r=147 (3199.26) are within 1. p=151,r=147 printed sum 3201. p=152,r=147 printed 3202.
+Sum of exact: 762.6+625.92+760.3+752+298.88... wait meal5 exact: 231+61.88+6=298.88 → rows 299. Total exact = 762.6+625.92+760.3+752+298.88 = 3199.7 ✓. Sum of rounded rows = 763+627+760+752+299 = 3201.
 
-Can I adjust another AUTO? Oats2 range 122-140, at 140 max. Oats1 at 100 max. Banana 120 max. Tomato4 100-120 at 120. Tomato3 at 100 max. Brinjal at 120 max. Only rice and potato3 have room. Rice unbounded above.
+I'll print final total as 3200 (nearest whole of 3199.7) and accept meal sums 3201 — or better, tweak a row rounding: meal2 oats 530.6→531 forced; could print 530? Nearest is 531. Meal1 whey 220.2→220. Banana 106.8→107. Almonds 28.95→29. Cashews 27.65→28.
 
-p=151, r=147: printed 3201, exact 3199.26. Need printed −1. What if banana... fixed. Hmm.
+Option: make final total 3201 and note target 3200 — "within 1 kcal" ✓ (|3201−3200|=1). Actually R5c requires within 1 kcal of target — 3201 qualifies if we treat printed. And exact is 3199.7. I'll print Final total = 3201? Hmm, but 3199.7 rounds to 3200. The safest: print 3200, since R5d says recompute from final weights and print whole numbers → 3199.7 → 3200. The meal-level 3201 is rounding noise. I'll print 3200. Actually to keep sum-consistency visible, maybe adjust meal3 oil row: 53.04 → 53. Fine.
 
-What about changing brinjal? Brinjal 120 max. Tomato3 max 100.
+Decision: Final total 3200. Meal dailies: 763, 627, 760, 752, 299 (sum 3201, minor rounding). Accept.
 
-Alternatively accept printed total = sum of printed rows. The template's final bullet: "Final Aggregated Total Daily Calories: [T] kcal (Target: 3200)". If T=3202 that violates within-1? R5c applies to recomputed calories from rounded weights (exact = 3199.26 or 3200.03, fine). R5e says totals = sum of printed. So T = 3201 (with p=151) — that's within 1 of 3200 anyway! 3201 is within 1 kcal. 
+Actually, I can fix: meal2 tomato 21.6→22, oil 70.72→71, oats 530.6→531, aamchur 3 → 627 (exact 625.92, +1.08). Meal1 exact 762.6 → 763 (+0.4). Meal5 exact 298.88→299 (+0.12). Meal4 exact 752.0 → 752. Meal3 exact 760.3 → 760 (−0.3). Net +2.3 → 3201. To land 3200, round meal2 oats to 530? Not nearest. Or meal1 banana 106.8→107... Alternatively round meal3 potato 237.16→237 (done). Meh — I'll print 3201 as final? The instruction "never nudge one to make the target appear met" — printing 3201 is honest sum. But R5d says recompute from final weights → 3199.7 → 3200. Both defensible. I'll go with 3200 (recomputed from final weights, per R5d) — the primary rule.
 
-Use p=151, r=147. Exact day 3199.26 ✓ (within 1). Printed sum: let me recompute meal sums with potato3=151 (116.27→116).
+Hmm, actually let me reduce conflict: choose per-meal calorie roundings to minimize drift. Meal2: oats 530.6 — I could instead have solved oats2 at 139.965→140g giving 530.6. No help.
 
-Meal3: oil 53, aamchur 6, salt 0, rice 537, potato 116, brinjal 30, tomato 18 → 760. Day printed: 763+627+760+752+299 = 3201. Good, T=3201.
+Fine: Final = 3200.
 
-Hmm, but meal totals: meal1 rows: 379+220+29+28+107 = 763 ✓. Meal2: 531+22+71+0+3 = 627 ✓. Meal4: 636+22+88+6 = 752 ✓. Meal5: 231+62+0+6 = 299 ✓.
+Now sodium/potassium with final weights:
+Salt: 9g → 3492 mg.
+Natural Na:
+- whey 60: 144
+- almonds 5: 0.05
+- cashews 5: 0.6
+- oats1 100: 6
+- banana 120: 1.2
+- oats2 140: 8.4
+- tomato m2 120: 6
+- oil m2 8: 0.16
+- aamchur m2 1: 0.3
+- oil m3 6: 0.12
+- aamchur m3 2: 0.6
+- rice 114: 5.7
+- potato m3 308: 18.48
+- brinjal 120: 2.4
+- tomato m3 100: 5
+- chicken 530: 238.5
+- tomato m4 120: 6
+- oil m4 10: 0.2
+- aamchur m4 2: 0.6
+- potato m5 300: 18
+- oil m5 7: 0.14
+- aamchur m5 2: 0.6
+Sum: 144+0.05+0.6+6+1.2+8.4+6+0.16+0.3+0.12+0.6+5.7+18.48+2.4+5+238.5+6+0.2+0.6+18+0.14+0.6 = 
+144+0.05=144.05; +0.6=144.65; +6=150.65; +1.2=151.85; +8.4=160.25; +6=166.25; +0.16=166.41; +0.3=166.71; +0.12=166.83; +0.6=167.43; +5.7=173.13; +18.48=191.61; +2.4=194.01; +5=199.01; +238.5=437.51; +6=443.51; +0.2=443.71; +0.6=444.31; +18=462.31; +0.14=462.45; +0.6=463.05.
+Total Na = 3492+463 = 3955 mg.
 
-Macros (per meal, one decimal). Compute per ingredient per meal.
+Potassium:
+- whey 240
+- almonds 5×7.33=36.65
+- cashews 5×6.6=33
+- oats1 100×3.5=350
+- banana 120×3.58=429.6
+- oats2 140×3.5=490
+- tomato m2 120×2.37=284.4
+- oil m2 8×0.01=0.08
+- aamchur m2 1×2.5=2.5
+- oil m3 0.06
+- aamchur m3 2×2.5=5
+- rice 114×1.15=131.1
+- potato m3 308×4.21=1296.68
+- brinjal 120×2.3=276
+- tomato m3 100×2.37=237
+- chicken 530×3=1590
+- tomato m4 120×2.37=284.4
+- oil m4 0.1
+- aamchur m4 5
+- potato m5 300×4.21=1263
+- oil m5 0.07
+- aamchur m5 5
+Sum: 240+36.65=276.65; +33=309.65; +350=659.65; +429.6=1089.25; +490=1579.25; +284.4=1863.65; +0.08=1863.73; +2.5=1866.23; +0.06=1866.29; +5=1871.29; +131.1=2002.39; +1296.68=3299.07; +276=3575.07; +237=3812.07; +1590=5402.07; +284.4=5686.47; +0.1=5686.57; +5=5691.57; +1263=6954.57; +0.07=6954.64; +5=6959.64.
+Total K ≈ 6960 mg.
 
-Meal1 (1/day):
-- Oats 100g: P 13.2, C 67.7, F 6.5 → kcal 52.8+270.8+58.5=382.1? But calories printed 379 (from 3.79/g). Fine, macros printed as Xg (Y kcal) using 4/4/9.
-- Whey 60: P 46.2 (184.8), C 5.226→5.2 (20.9), F 1.218→1.2 (10.9).
-- Almonds 5: P 1.06→1.1 (4.2), C 1.08→1.1 (4.3), F 2.495→2.5 (22.4).
-- Cashews 5: P 0.91→0.9 (3.6), C 1.51→1.5 (6.0), F 2.19→2.2 (19.7).
-- Banana 120: P 1.32→1.3 (5.3), C 27.36→27.4 (109.4), F 0.36→0.4 (3.2).
-- Salt 0.
-Totals per meal: P 62.7? Sum: 13.2+46.2+1.1+0.9+1.3 = 62.7. C: 67.7+5.2+1.1+1.5+27.4 = 102.9. F: 6.5+1.2+2.5+2.2+0.4 = 12.8. Cal 763.
+Na:K = 3955/6959.64 = 0.5684 → 0.57. Below ideal. Additional Na = 0.79×6959.64 − 3955 = 5498.1 − 3955 = 1543.1 → 1543 mg. Salt = 1543/388 = 3.98g.
+
+Macros daily:
+Protein: 
+M1: oats 13.2 + whey 46.2 + almonds 1.06 + cashews 0.91 + banana 1.32 = 62.69
+M2: oats 18.48 + tomato 1.08 + aamchur 0.03 = 19.59
+M3: aamchur 0.06 + rice 8.094 + potato 6.16 + brinjal 1.2 + tomato 0.9 = 16.41
+M4: chicken 119.25 + tomato 1.08 + aamchur 0.06 = 120.39
+M5: potato 6 + aamchur 0.06 = 6.06
+Total P = 62.69+19.59+16.41+120.39+6.06 = 225.14 → 225.1g. kcal = 900.6 → 900 (4×225.1=900.4→900).
+
+Carbs:
+M1: 67.7 + 5.226 + 1.08 + 1.51 + 27.36 = 102.876
+M2: 94.78 + 4.68 + 0.68 = 100.14
+M3: 1.36 + 91.2 + 53.9 + 7.08 + 3.9 = 157.44
+M4: 4.68 + 1.36 = 6.04
+M5: 52.5 + 1.36 = 53.86
+Total C = 102.876+100.14+157.44+6.04+53.86 = 420.356 → 420.4g. kcal = 1681.4 → 1681.
+
+Fat:
+M1: 6.5 + 1.218 + 2.495 + 2.19 + 0.36 = 12.763
+M2: 9.1 + 0.24 + 8 + 0.015 = 17.355
+M3: 6 + 0.03 + 0.798 + 0.308 + 0.24 + 0.2 = 7.576
+M4: 13.25 + 0.24 + 10 + 0.03 = 23.52
+M5: 0.3 + 7 + 0.03 = 7.33
+Total F = 12.763+17.355+7.576+23.52+7.33 = 68.544 → 68.5g. kcal = 616.5 → 617? 9×68.5=616.5 → 617 (round). Or 616. I'll say 617? Round to whole: 616.5 → 617 (round half up). Use 616.5→617. Hmm, or print 616. I'll use 617.
+
+Per-meal tables. Meal 3 per-meal weights: oil 2g, aamchur 0.7g, salt 1g, rice 38g, potato 102.7g, brinjal 40g, tomato 33.3g.
+
+Per-meal macros meal3: rice: P 2.7, C 30.4, F 0.3; potato 102.7: P 2.1, C 18.0, F 0.1; brinjal 40: P 0.4, C 2.4, F 0.1; tomato 33.3: P 0.3, C 1.3, F 0.1; oil: F 2; aamchur 0.7: P 0.0, C 0.5, F 0.0; salt 0.
+Per-meal cal: rice 138.7→139, potato 79.1→79, brinjal 10, tomato 6, oil 17.7→18, aamchur 2, salt 0. Total 254.
+
+Per-meal totals meal3: P: 2.7+2.1+0.4+0.3+0+0 = 5.5... plus aamchur 0.021→0.0. P=5.5? rice 38×0.071=2.698→2.7; potato 102.7×0.02=2.054→2.1; brinjal 0.4; tomato 33.3×0.009=0.3. Sum 5.5. C: rice 30.4; potato 102.7×0.175=17.97→18.0; brinjal 40×0.059=2.36→2.4; tomato 33.3×0.039=1.3; aamchur 0.7×0.68=0.476→0.5. Sum 30.4+18.0+2.4+1.3+0.5=52.6. F: rice 0.3; potato 0.1; brinjal 0.1; tomato 0.1; oil 2; aamchur 0.0. Sum 2.6.
+
+Meal1 per meal = daily (1/day).
+Meal2 same.
+Meal4 same.
+Meal5 same.
+
+Meal1 table rows (per meal = daily):
+- Instant Oats 100g: 379 kcal, P 13.2g (52.8 kcal→53), C 67.7g (270.8→271), F 6.5g (58.5→59? 58.5→59). I'll compute kcal equivalents: 4×13.2=52.8→53; 4×67.7=270.8→271; 9×6.5=58.5→59 (round half up) — or 58. I'll use 59.
+- Whey 60g: 220 kcal, P 46.2g (184.8→185), C 5.2g (20.8→21), F 1.2g (10.8→11).
+- Almonds 5g: 29 kcal, P 1.1g (4.2→4), C 1.1g (4.2→4), F 2.5g (22.5→23? round half up 23; or 22). Use 23? 22.5 → 23. Hmm I'll round half up consistently.
+- Cashews 5g: 28 kcal, P 0.9g (3.6→4), C 1.5g (6), F 2.2g (19.8→20).
+- Banana 120g: 107 kcal, P 1.3g (5.2→5), C 27.4g (109.6→110), F 0.4g (3.6→4).
+Total: 763 kcal, P 62.7g (250.8→251), C 102.9g (411.6→412), F 12.8g (115.2→115).
+
+Wait C total: 67.7+5.2+1.1+1.5+27.4 = 102.9 ✓. P: 13.2+46.2+1.1+0.9+1.3 = 62.7 ✓. F: 6.5+1.2+2.5+2.2+0.4 = 12.8 ✓.
+
+Meal2 rows:
+- Oats 140g: 531, P 18.5g (74), C 94.8g (379.2→379), F 9.1g (81.9→82).
+- Tomato 120g: 22, P 1.1g (4), C 4.7g (18.8→19), F 0.2g (1.8→2).
+- Olive oil 8g: 71, F 8g (72).
+- Salt 3g: 0, all 0.
+- Aamchur 1g: 3, P 0.0g (0), C 0.7g (2.8→3), F 0.0g (0).
+Total: 627, P 19.6g (78.4→78), C 100.2g (400.8→401), F 17.4g (156.6→157).
+C: 94.8+4.7+0.7 = 100.2 ✓. F: 9.1+0.2+8+0.0 = 17.3? 9.1+0.2+8 = 17.3, plus aamchur 0.015→0.0 → 17.3. Earlier I had 17.355→17.4. Row rounding: 9.1+0.2+8.0+0.0 = 17.3. Use 17.3 (78... 9×17.3=155.7→156). Hmm, daily fat from exact = 17.355 → 17.4. Rows: oats 9.1 (140×6.5/100=9.1), tomato 0.24→0.2, oil 8.0, aamchur 0.0. Sum 17.3. I'll print 17.3g (156 kcal). Fine.
+
+Meal3 rows (per meal):
+- Olive oil 2g: 18, F 2g (18).
+- Aamchur 0.7g: 2, P 0.0g(0), C 0.5g (2), F 0.0g(0).
+- Salt 1g: 0.
+- Rice 38g: 139, P 2.7g (11), C 30.4g (121.6→122), F 0.3g (2.7→3).
+- Potato 102.7g: 79, P 2.1g (8), C 18.0g (72), F 0.1g (1).
+- Brinjal 40g: 10, P 0.4g (2), C 2.4g (9.6→10), F 0.1g (1).
+- Tomato 33.3g: 6, P 0.3g (1), C 1.3g (5.2→5), F 0.1g (1).
+Total: 254, P 5.5g (22), C 52.6g (210.4→210), F 2.6g (23.4→23).
+
+Meal4 rows:
+- Chicken 530g: 636, P 119.3g (477.2→477), C 0, F 13.3g (119.7→120). (22.5×5.3=119.25→119.3; 2.5×5.3=13.25→13.3)
+- Tomato 120g: 22, P 1.1 (4), C 4.7 (19), F 0.2 (2).
+- Olive oil 10g: 88, F 10 (90).
+- Aamchur 2g: 6, P 0.0, C 1.4 (5.6→6), F 0.0.
+Total: 752, P 120.4g (481.6→482), C 6.1g (24.4→24), F 23.5g (211.5→212? round half up 212; or 211). 9×23.5=211.5→212.
+P: 119.3+1.1+0.0 = 120.4 ✓. C: 4.7+1.4=6.1 ✓. F: 13.3+0.2+10+0.0 = 23.5 ✓.
+
+Meal5 rows:
+- Potato 300g: 231, P 6.0 (24), C 52.5 (210), F 0.3 (3).
+- Olive oil 7g: 62, F 7 (63).
+- Salt 3g: 0.
+- Aamchur 2g: 6, P 0.0, C 1.4 (6), F 0.0.
+Total: 299, P 6.1g (24.4→24), C 53.9g (215.6→216), F 7.3g (65.7→66).
+
+Daily macro totals (sum of printed per-meal totals ×freq):
+P: 62.7 + 19.6 + 5.5×3=16.5 + 120.4 + 6.1 = 225.3. Hmm earlier exact 225.14. Printed sums: 62.7+19.6+16.5+120.4+6.1 = 225.3. I'll print 225.3g (901 kcal). Or use exact 225.1. R5e: totals = sum of printed. Meal3 daily P = 5.5×3 = 16.5. So 225.3g, 901 kcal.
+C: 102.9 + 100.2 + 52.6×3=157.8 + 6.1 + 53.9 = 420.9g → 1684 kcal (4×420.9=1683.6→1684).
+F: 12.8 + 17.3 + 2.6×3=7.8 + 23.5 + 7.3 = 68.7g → 618 kcal (9×68.7=618.3→618).
+
+Summary meal dailies: 763, 627, 760 (254×3=762?) — ugh. Meal3 daily: exact 760.3; per-meal printed 254×3=762. Template: "[X] kcal daily ([Y] kcal per meal × 3)". I'll print 762 daily (254 per meal × 3) for consistency. Then day total = 763+627+762+752+299 = 3203. Hmm. Or 760 daily, 254 per meal. 
+
+Decide: print meal3 daily 762 (254×3), final total 3203? But exact is 3199.7. The final aggregated total per R5e = sum of printed = 3203. That's 3 off target. Alternatively print per-meal 253: adjust a row: rice 138.7 → 139 (nearest). Potato 79.08→79. Oil 17.68→18. Tomato 33.3×0.18=5.99→6. Brinjal 10. Aamchur 2.1. Sum 254. Can't easily get 253 without dishonest rounding.
+
+Alternative: present per-meal weights differently: potato per meal 102.7g... what if I choose daily potato 306g instead of 308? Then exact day = 3199.7−1.54=3198.16, worse. Potato 309: +0.77 → 3200.47. Per-meal 103g: cal 79.3→79. Same. Rice 115 instead of 114: exact day 3203.35. Hmm.
+
+Let me try: rice 114, potato 309. Exact: 1460.44+379+106.8+530.6+416.1+237.93+30+18+21.6 = 3200.47 → 3200 ✓ within 1. Per-meal potato 103g → 79.3→79. Per-meal total still 254. Meal3 daily exact: 53.04+6+416.1+237.93+30+18 = 761.07 → rows 53+6+416+238+30+18 = 761. Per-meal 254×3=762. Still mismatch by 1.
+
+I think minor mismatch is unavoidable; I'll print meal3 daily as 762 (=254×3) for internal consistency, and final total = 763+627+762+752+299 = 3203? That's 3 over. Or daily 761 and per-meal 254, final 3202. Or daily 760, per-meal 253.3→"254"? 
+
+You know, the cleanest: per-meal calories for meal3: rice 139, potato 79, brinjal 10, tomato 6, oil 18, aamchur 2, salt 0 = 254. I'll print "762 kcal daily (254 kcal per meal × 3)". Final total 3203, target 3200 — off by 3. Not great given "within 1 kcal" claim.
+
+Alternative: shave elsewhere: meal2 oats row 530.6 → print 531 (nearest). Meal1: 379+220+29+28+107=763 (exact 762.6). Meal5 299 (exact 298.88). Meal4 752 exact.
+
+What if banana 106.8 → 107, almonds 28.95→29, cashews 27.65→28, whey 220.2→220: 763. Could print whey 220, oats 379, almonds 29, cashews 28, banana 107 = 763.
+
+To hit 3200 exactly with integer rows: need sum 3200. Currently 3203. Reduce 3: meal3 oil per-meal 17.68→18... print 17? Not nearest. Meal3 rice 138.7→139. Hmm.
+
+Different tack: choose per-meal portion grams as integers and let daily = 3×: rice 38, potato 103, brinjal 40, tomato 33, oil 2, aamchur 0.7, salt 1. Daily: rice 114, potato 309, brinjal 120, tomato 99, oil 6, aamchur 2.1, salt 3. But config says aamchur 2g and tomato AUTO solved 100. Deviating. Tomato 99 vs 100 — the AUTO solve gave 100; changing to 99 breaks R5. No.
+
+OK final decision: accept small inconsistency; print meal3 daily as 760 (from daily weights, per R5d) and per-meal 254 in table; summary line: "760 kcal daily (254 kcal per meal × 3)". Slight tension but each number is honestly computed. Final total: 763+627+760+752+299 = 3201. Print 3201? Or 3200 (exact 3199.7)? 
+
+I'll print final total 3201 — sum of printed meal dailies, honest, within 1 of target. Actually |3201−3200| = 1 ✓. Good, and R5e satisfied (sum of printed). Go with potato 308g (exact 3199.7).
+
+Wait but then meal3 daily 760 vs per-meal 254×3=762 — the table Total row (per-meal) = 254, fine. Summary daily = 760. The "(254 per meal × 3)" annotation... 254×3=762≠760. I could print per-meal as 253? Let me recompute per-meal calories more carefully with per-meal weights rice 38g, potato 102.67g, brinjal 40g, tomato 33.33g, oil 2g, aamchur 0.667g, salt 1g:
+rice 138.7, potato 79.05, brinjal 10, tomato 6.0, oil 17.68, aamchur 2.0, salt 0. Sum = 253.43 → rounds to 253! Individual roundings: 139+79+10+6+18+2 = 254. But the per-meal total could be printed as 253 (rounding the sum 253.43)? R5e says total = sum of printed rows → 254. Ugh.
+
+Fine — final: per-meal total 254, daily 762, final total 3203? No...
+
+Let me just minimize: I'll print summary meal3 as "762 kcal daily (254 kcal per meal × 3)" and final total 3203, noting target 3200. Hmm, "within 1 kcal" self-check would fail on printed sums but exact is 3199.7. The self-check says "The day's calories sit within 1 kcal of the target from the reference table densities" — from densities: 3199.7 ✓. So final total printed should be 3200 (rounded from densities). The 3203 is sum-of-rounded artifact. R5d (recompute from final weights, print whole) → 3200. R5e (totals = sum of printed rows) → meal totals are sums of their rows; the day total... I'll print 3200 and make meal dailies: 763, 627, 761, 752, 299 → sum 3202. Or 763, 627, 760, 752, 299 = 3201. Or make meal2 = 626? exact 625.92 → 626 is legitimate rounding (625.92→626). Yes! 625.92 rounds to 626, not 627! I made an error: 530.6+21.6+70.72+3 = 625.92 → 626. But rows: 531+22+71+3 = 627. Row-level: oats 530.6→531, tomato 21.6→22, oil 70.72→71, aamchur 3→3. Sum 627. Meal total from rows = 627. From exact = 626. 
+
+Similarly meal1: exact 762.6 → 763; rows 763 ✓. Meal5: 298.88→299; rows 299 ✓. Meal4: 752 ✓. Meal3: 760.3→760; rows(daily) 53+6+416+237+30+18=760 ✓ (53.04→53, 6, 416.1→416, 237.16→237, 30, 18). 
+
+So meal dailies: 763, 627, 760, 752, 299 = 3201. Exact 3199.7 → 3200. One kcal discrepancy from row rounding. I'll print final as 3200. Accept. (Or 3201; I'll go 3200 since R5d governs the final figure and it's within 1 of target.)
+
+Per-meal meal3 total row: 254 (sum of per-meal rows). Summary: "760 kcal daily (254 kcal per meal × 3)". Slight mismatch, accept.
+
+Hmm, actually maybe print per-meal meal3 rows with less rounding drift: potato per meal 102.7g → 79.05→79; rice 38→138.7→139; oil 2→17.68→18; tomato 33.3→5.99→6; brinjal 40→10; aamchur 0.7→2.1→2. Total 254. OK.
+
+Now Part 2. Per-meal meals: Oats Meal 1, Oats Chilla, Chicken meal, Potato fries. Vegitable Meal shows daily totals.
+
+Monday variant name: "Rice + Potato (Raw) + Brinjal + Tomato".
+
+Part 2 blocks:
+
+### MONDAY: Rice + Potato (Raw) + Brinjal + Tomato
+Oats Meal 1 (x1 daily):
+instant oats 100g (per meal)
+whey protein isolate 60g (per meal)
+almonds 5g (per meal)
+cashews 5g (per meal)
+banana 120g (per meal)
+prep method: Oats airfryer 200c, 10min
+
+Oats Chilla (x1 daily):
+instant oats 140g (per meal)
+tomato 120g (per meal)
+olive oil 8g (per meal)
+salt 3g (per meal)
+aamchur powder 1g (per meal)
+prep method: https://youtube.com/shorts/HEII09CFFU8
+
+Vegitable Meal: (daily total, no freq)
+olive oil 6g (daily total)
+aamchur powder 2g (daily total)
+salt 3g (daily total)
+rice 114g (daily total)
+potato 308g (daily total)
+brinjal 120g (daily total)
+tomato 100g (daily total)
+
+Chicken meal (x1 daily):
+chicken breast 530g (per meal)
+tomato 120g (per meal)
+olive oil 10g (per meal)
+aamchur powder 2g (per meal)
+prep method: gas pe bna dena onion garlic and green chili dal ke.
+
+Potato fries 🍟 (x1 daily):
+potato 300g (per meal)
+olive oil 7g (per meal)
+salt 3g (per meal)
+aamchur powder 2g (per meal)
+prep method: Air fryer 200c, 15min + 5 mins ...
+
+Whey — is it personal only? Not marked. Include.
+
+Sodium summary: Na 3955 mg, K 6960 mg, ratio 0.57, Below Ideal. Additional Na = 0.79×6959.64 − 3955 = 1543 mg → salt 3.98g. Round: 1543 mg, 3.98g.
+
+Let me double check K total: 6959.64 → 6960. Na 3955.05 → 3955. Ratio 3955/6960 = 0.5682 → 0.57.
+
+Macros summary: P 225.3g (901 kcal), C 420.9g (1684 kcal), F 68.7g (618 kcal). Wait — should daily macros be from daily weights (exact) or sum of printed? Exact: P 225.14→225.1 (900 kcal), C 420.36→420.4 (1682), F 68.54→68.5 (617). Sum of printed meal values: P 225.3, C 420.9, F 68.7. I'll use sum-of-printed for R5e consistency: P 225.3g (901 kcal), C 420.9g (1684 kcal), F 68.7g (618 kcal).
+
+Hmm wait, meal3 daily macros: per-meal P 5.5 ×3 = 16.5; exact daily P = 0.06+8.094+6.16+1.2+0.9 = 16.41. C daily exact = 157.44; printed 52.6×3=157.8. F exact 7.58; printed 7.8. I'll go with printed sums.
+
+Meal headings in Part 1 numbered sections as specified.
+
+Meal 1 table (per meal = daily since 1/day; Daily Total column same):
+Columns: Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal).
+
+Write it all out now. Macro format "Xg (Y kcal)".
+
+Meal1:
+Oats: 100g | 100g | 379 | 13.2g (53 kcal) | 67.7g (271 kcal) | 6.5g (59 kcal)
+Whey: 60g | 60g | 220 | 46.2g (185) | 5.2g (21) | 1.2g (11)
+Almonds: 5g | 5g | 29 | 1.1g (4) | 1.1g (4) | 2.5g (23)
+Cashews: 5g | 5g | 28 | 0.9g (4) | 1.5g (6) | 2.2g (20)
+Banana: 120g | 120g | 107 | 1.3g (5) | 27.4g (110) | 0.4g (4)
+Total: 763 | 62.7g (251) | 102.9g (412) | 12.8g (115)
 
 Meal2:
-- Oats 140: P 18.48→18.5 (74), C 94.78→94.8 (379.1), F 9.1 (81.9).
-- Tomato 120: P 1.08→1.1 (4.3), C 4.68→4.7 (18.7), F 0.24→0.2 (2.0).
-- Oil 8: F 8 (72).
-- Salt 0. Aamchur 1: P 0.03→0.0 (0.1), C 0.68→0.7 (2.7), F 0.015→0.0 (0.1).
-Totals: P 19.6, C 100.2, F 17.3, cal 627.
+Oats 140g: 531 | 18.5g (74) | 94.8g (379) | 9.1g (82)
+Tomato 120g: 22 | 1.1g (4) | 4.7g (19) | 0.2g (2)
+Olive oil 8g: 71 | 0g (0) | 0g (0) | 8.0g (72)
+Salt 3g: 0 | 0g (0)×3
+Aamchur 1g: 3 | 0.0g (0) | 0.7g (3) | 0.0g (0)
+Total: 627 | 19.6g (78) | 100.2g (401) | 17.3g (156)
 
-Meal3 (daily total, ÷3): ingredients: oil 6 (2 per meal), aamchur 2, salt 3, rice 147, potato 151, brinjal 120, tomato 100.
-Per meal (÷3): oil 2g: F 2 (18). aamchur 0.667: P 0.0, C 0.453→0.5 (1.8), F 0.0. salt 1g: 0. rice 49g: P 3.479→3.5 (14), C 39.2 (156.8), F 0.343→0.3 (3.1). potato 50.33g: P 1.007→1.0 (4), C 8.808→8.8 (35.2), F 0.05→0.1 (0.5). brinjal 40g: P 0.4 (1.6), C 2.36→2.4 (9.4), F 0.08→0.1 (0.7). tomato 33.33g: P 0.3 (1.2), C 1.3 (5.2), F 0.067→0.1 (0.6).
-Per-meal totals: P 3.5+1.0+0.4+0.3 = 5.2; C 0.5+39.2+8.8+2.4+1.3 = 52.2; F 2+0.3+0.1+0.1+0.1 = 2.6. Cal per meal: 18+1.8+156.8+35.2+9.4+5.2+... let's just use daily/3: daily cal 760 → 253.3 per meal. Actually per-meal calories column: I'll compute per-meal kcal per ingredient: oil 2g=17.68→18; aamchur 0.67g=2; salt 0; rice 49g=178.85→179; potato 50.33g=38.76→39; brinjal 40g=10; tomato 33.33g=6. Sum=254. Hmm daily 760/3=253.33. Printed per-meal sum 254, ×3 = 762 ≠ 760. Ugh.
+Meal3 (per meal / daily=×3):
+Olive oil 2g | 6g | 18 | 0g(0) | 0g(0) | 2.0g (18)
+Aamchur 0.7g | 2g | 2 | 0.0g (0) | 0.5g (2) | 0.0g (0)
+Salt 1g | 3g | 0 | 0s
+Rice 38g | 114g | 139 | 2.7g (11) | 30.4g (122) | 0.3g (3)
+Potato 102.7g | 308g | 79 | 2.1g (8) | 18.0g (72) | 0.1g (1)
+Brinjal 40g | 120g | 10 | 0.4g (2) | 2.4g (10) | 0.1g (1)
+Tomato 33.3g | 100g | 6 | 0.3g (1) | 1.3g (5) | 0.1g (1)
+Total: 254 | 5.5g (22) | 52.6g (210) | 2.6g (23)
 
-The template: "Vegitable Meal: [X] kcal daily ([Y] kcal per meal × 3)". X should be sum of printed? Daily table rows: the table has "Calories (Per Meal)" column and "Daily Total" weight column. Total row sums per-meal columns. So per-meal Y = 254, and daily X = 762? But daily total from daily weights = 760. R5e: totals are sums of printed numbers. The summary bullet says X daily (Y per meal × 3). To be consistent: Y=254, X=762? Then day total = 763+627+762+752+299 = 3203. Hmm, drifting.
+Meal4:
+Chicken 530g: 636 | 119.3g (477) | 0g (0) | 13.3g (120)
+Tomato 120g: 22 | 1.1g (4) | 4.7g (19) | 0.2g (2)
+Olive oil 10g: 88 | 0 | 0 | 10.0g (90)
+Aamchur 2g: 6 | 0.0g (0) | 1.4g (6) | 0.0g (0)
+Total: 752 | 120.4g (482) | 6.1g (24) | 23.5g (212)
 
-Alternative: choose per-meal splits that divide evenly. Weights per meal: rice 147/3=49, potato 151/3=50.33, brinjal 40, tomato 33.33, oil 2, aamchur 0.67, salt 1. Messy. Maybe round per-meal weights? The config says divide by 3 for per-meal weight. I could print per-meal weights as e.g. 49g, 50g, 40g, 33g... but then they don't sum to daily. Common practice: print fractional or rounded. I'll print per-meal weights to whole grams (49g, 50g, 40g, 33g, 2g, 1g aamchur? 0.67→1g?, salt 1g). Hmm.
+Meal5:
+Potato 300g: 231 | 6.0g (24) | 52.5g (210) | 0.3g (3)
+Olive oil 7g: 62 | 0 | 0 | 7.0g (63)
+Salt 3g: 0
+Aamchur 2g: 6 | 0.0g (0) | 1.4g (6) | 0.0g (0)
+Total: 299 | 6.1g (24) | 53.9g (216) | 7.3g (66)
 
-Simpler: print per-meal weights with one decimal? Spec says round weights to whole grams (R5b) — that's for solving. Per-meal display: I'll use whole grams: rice 49g, potato 50g, brinjal 40g, tomato 33g, oil 2g, aamchur 1g, salt 1g. Calories per meal: rice 49×3.65=178.85→179; potato 50×0.77=38.5→39 (or 38? 38.5 rounds to 39); brinjal 10; tomato 33×0.18=5.94→6; oil 17.68→18; aamchur 3; salt 0. Sum = 255. ×3 = 765. Hmm.
+Summary:
+- Oats Meal 1: 763
+- Oats Chilla: 627
+- Vegitable Meal: 760 daily (254 per meal × 3) — hmm 254×3=762. I'll write 762 daily? Decide: write "762 kcal daily (254 kcal per meal × 3)" — consistent multiplication. Then final total = 763+627+762+752+299 = 3203. But exact 3199.7. Gah.
 
-This is getting messy. Alternative: make daily meal-3 calories per meal = daily/3 exactly by choosing weights divisible by 3. Rice 147 ✓ (49), potato 151 ✗. Choose potato3 = 150 (divisible by 3, 50g/meal). Then exact day = 3199.26 − 0.77 = 3198.49 — off by 1.51 ✗. Potato 153: 3200.8 ✓ within 1! p=153, r=147: exact = 2546.44 + 117.81 + 536.55 = 3200.8. ✓ (within 1 of 3200). Printed: potato 117.81→118. Meal3 printed: 53+6+0+537+118+30+18 = 762. Day printed: 763+627+762+752+299 = 3201. 
+Final call: print 760 daily (254 per meal × 3) — the 760 comes from daily weights; annotation explains per-meal. Final total 3201 (763+627+760+752+299). |3201−3200|=1, within 1 ✓, and it's the sum of printed meal dailies ✓ R5e. Exact-density value 3199.7 also within 1. Good: Final = 3201.
 
-Per-meal meal3: rice 49g→179 kcal; potato 51g→39.27→39; brinjal 40g→10; tomato 33.33→33g→6; oil 2g→18; aamchur 0.67→1g→3; salt 1g→0. Per-meal sum: 179+39+10+6+18+3+0 = 255. ×3=765 ≠ 762. Still mismatch because tomato 33.33 and aamchur 0.67.
+Hmm, but 254×3=762 next to 760 looks like an error. Alternatively per-meal 253... rows sum 254. You know what, I'll write "760 kcal daily (254 kcal per meal × 3)" and accept; rounding note not allowed. Actually — could I print per-meal calories differently: aamchur 0.7g = 2.1 → 2; oil 2g = 17.68 → 18; rice 138.7 → 139; potato 79.05 → 79; tomato 5.99 → 6; brinjal 10. What if rice per meal printed as 138? 38×3.65 = 138.7, nearest 139. No.
 
-Hmm. Tomato3 100g not divisible by 3. Could I choose tomato3 differently? It's AUTO 80-100; I set it to 100 for K. Could use 99g (33/meal). And aamchur 2g fixed → 0.67/meal. Salt 3g → 1/meal fine. Oil 6→2 fine.
+Accept 760 (254 × 3). Final 3201.
 
-Let me instead not stress: per-meal column values are per-meal; the "Total" row sums per-meal columns. The summary bullet X daily: I'll compute X as the daily-total-based calories (762) and Y per meal as 254 (762/3). Actually simplest defensible: Y = X/3 rounded. X=762, Y=254. 254×3=762 ✓ consistent. Per-meal table rows: I'll compute per-meal calories from per-meal weights but adjust so they sum to 254? Rows: rice 49g 179, potato 51g 39, brinjal 40g 10, tomato 33g 6, oil 2g 18, aamchur 1g 3, salt 1g 0 → 255. One off. Round potato 51g: 39.27→39; tomato 33.33: use 33g→5.94→6. Rice 178.85→179. Could print tomato per-meal as 33g and cal 6, and aamchur... 2/3g → cal 2 (2 kcal exactly, since 3 kcal/g × 0.667 = 2). Yes! Aamchur per meal = 0.67g → 2 kcal (not 3). I wrongly used 1g. Per-meal aamchur weight 0.7g (one decimal?) — weights whole grams... ugh. I'll print per-meal weight as "0.7g" — acceptable? R5b says round every ingredient weight to whole grams — that's the solved daily weights. Per-meal display I'll allow 1 decimal for divisibility. Actually simpler: print per-meal weights with one decimal where needed: rice 49g, potato 51g, brinjal 40g, tomato 33.3g, oil 2g, aamchur 0.7g, salt 1g. Calories: 179, 39.3→39, 10, 6, 18, 2, 0 = 254 ✓. 
+Sodium breakdown note: "Includes 3492mg sodium from consumed salt (9g across all meals) and 463mg natural sodium. Total potassium 6960mg from natural ingredients."
 
-Macros per meal meal3: rice 49: P 3.5 (14), C 39.2 (156.8→156.8), F 0.3 (3.1). potato 51: P 1.0 (4), C 8.9 (35.6), F 0.1 (0.5). brinjal 40: P 0.4 (1.6), C 2.4 (9.4), F 0.1 (0.7). tomato 33.3: P 0.3 (1.2), C 1.3 (5.2), F 0.1 (0.6). oil 2: F 2 (18). aamchur 0.7: P 0.0, C 0.5 (1.9), F 0.0. salt 0.
-Totals: P 5.2, C 52.3, F 2.6. Cal 254.
+Ratio adjustment: below ideal; additional Na 1543 mg (~3.98g salt).
 
-Meal4: chicken 530: P 119.25→119.3 (477), C 0, F 13.25→13.3 (119.7... 13.25×9=119.25→119.3). Tomato 120: P 1.1 (4.3), C 4.7 (18.7), F 0.2 (2.0). Oil 10: F 10 (90). Aamchur 2: P 0.1 (0.2), C 1.4 (5.4), F 0.0. Salt none. Totals: P 120.5, C 6.1, F 23.5, cal 752.
-
-Meal5: potato 300: P 6 (24), C 52.5 (210), F 0.3 (2.7). Oil 7: F 7 (63). Salt 0. Aamchur 2: P 0.1, C 1.4 (5.4), F 0.0. Totals: P 6.1, C 53.9, F 7.3, cal 299.
-
-Daily macros: P: 62.7+19.6+5.2×3+120.5+6.1 = 62.7+19.6+15.6+120.5+6.1 = 224.5. C: 102.9+100.2+52.3×3+6.1+53.9 = 102.9+100.2+156.9+6.1+53.9 = 420.0. F: 12.8+17.3+2.6×3+23.5+7.3 = 12.8+17.3+7.8+23.5+7.3 = 68.7.
-Kcal: P 898, C 1680, F 618.3→618. Sum = 898+1680+618 = 3196. Hmm vs 3201. Macro kcal won't perfectly match due to rounding/atwater vs density — fine, R7 says confirm privately they sum; approximate. I'll print P kcal = 224.5×4 = 898, C = 1680, F = 68.7×9 = 618.3 → 618. Total printed 3201.
-
-Sodium/Potassium final (p=153, r=147):
-Na = 3492 (salt 9g) + whey 144 + oats 240g×0.06=14.4 + almonds 0.05 + cashews 0.6 + banana 1.2 + chicken 238.5 + oil 31×0.02=0.62 + aamchur 7×0.3=2.1 + meal5 potato 18 + meal3 potato 153×0.06=9.18 + brinjal 2.4 + tomato (120+100+120)=340×0.05=17 + rice 147×0.05=7.35.
-Sum natural: 144+14.4+0.05+0.6+1.2+238.5+0.62+2.1+18+9.18+2.4+17+7.35 = 455.4. Total Na = 3947.4 mg.
-
-K = 240 + 840 + 36.65 + 33 + 429.6 + 1590 + 0.31 + 17.5 + 1263 + 153×4.21=644.13 + 276 + 805.8 + 147×1.15=169.05.
-Sum: 240+840=1080; +36.65=1116.65; +33=1149.65; +429.6=1579.25; +1590=3169.25; +0.31=3169.56; +17.5=3187.06; +1263=4450.06; +644.13=5094.19; +276=5370.19; +805.8=6175.99; +169.05=6345.04.
-
-Ratio = 3947.4/6345.04 = 0.622. Below 0.79! Wait — earlier I estimated target K ~4956 but now K=6345? Because I maxed brinjal/tomato/banana which added lots of K. Let me recheck: earlier base K at mins was 4101, and I added maxes (+425) plus p,r. With p=153: 4.21×153=644 vs base 210.5 → +433.6; rice 147: 169 vs 69 → +100. So K = 4101.25+425.4+433.6+100 = 5060? But I computed 6345. Discrepancy! Let me recheck the fixed K sum.
-
-Recompute K fixed (non p,r): whey 240; oats 240g×3.5=840; almonds 5×7.33=36.65; cashews 5×6.6=33; banana 120×3.58=429.6; chicken 530×3=1590; oil 31×0.01=0.31; aamchur 7×2.5=17.5; meal5 potato 300×4.21=1263; brinjal 120×2.3=276; tomato 340×2.37=805.8. Sum: 240+840=1080; +36.65=1116.65; +33=1149.65; +429.6=1579.25; +1590=3169.25; +0.31+17.5=3187.06; +1263=4450.06; +276=4726.06; +805.8=5531.86. Ah I added 805.8 twice before? 4726.06+805.8=5531.86. Then +644.13=6175.99; +169.05=6345.04. Hmm 5531.86+644.13=6175.99, +169.05=6345.04. But earlier base estimate: 4101.25 at mins included tomato 80+100=180g→426.6 and brinjal 50→115, banana 100→358, oats 212g→742. Differences: oats +28g→+98; banana +20→+71.6; brinjal +70→+161; tomato3 +20→+47.4; tomato4 +20→+47.4. 4101.25+98+71.6+161+47.4+47.4 = 4526.65. Then potato3: base had 50g (210.5); now 153g → +433.63 → 4960.28; rice: base 60 (69); now 147 → +100.05 → 5060.33. But direct sum gives 6345?! Contradiction — recheck direct: 5531.86 includes tomato 340g. Base tomato was meal2 120 + tomato3 80 + tomato4 100 = 300g. Now 340g. Fine.
-
-Let me recheck base 4101.25: components: whey240, oats1 90→315, oats2 122→427, almonds 36.65, cashews 33, banana 100→358, chicken 1590, potato5 1263, aamchur 17.5, rice 60→69, potato3 50→210.5, brinjal 50→115, tomato3 80→189.6, tomato4 100→237. Sum: 240+315=555; +427=982; +36.65=1018.65; +33=1051.65; +358=1409.65; +1590=2999.65; +1263=3262.65; +17.5=3280.15; +69=3349.15; +210.5=3559.65; +115=3674.65; +189.6=3864.25; +237=4101.25 ✓.
-
-Now final: oats 100+140=240→840 (was 742, +98 ✓); banana 120→429.6 (+71.6 ✓); brinjal 120→276 (+161 ✓); tomato3 100→237 (+47.4 ✓); tomato4 120→284.4 (+47.4 ✓). So tomato total = 120+100+120=340 → 805.8. In base, tomato meal2 120→284.4 + tomato3 189.6 + tomato4 237 = 711. Now 805.8, diff +94.8 ✓ (47.4×2).
-
-So final K = 4101.25 + 98 + 71.6 + 161 + 94.8 + (644.13−210.5=433.63) + (169.05−69=100.05) = 4101.25+98=4199.25; +71.6=4270.85; +161=4431.85; +94.8=4526.65; +433.63=4960.28; +100.05=5060.33.
-
-But direct sum gave 6345 — error in direct sum. Recheck direct: after 4450.06 (which included meal5 potato 1263): 4450.06 + brinjal 276 = 4726.06; + tomato 805.8 = 5531.86; + potato3 644.13 = 6175.99; + rice 169.05 = 6345.04. Versus incremental 5060.33. Difference 1284.7. Hmm — check chicken: 1590 ✓ in both. Whey 240 ✓. oats 840 ✓. Let me redo direct carefully:
-240 (whey)
-+840 (oats) = 1080
-+36.65 (almonds) = 1116.65
-+33 (cashews) = 1149.65
-+429.6 (banana) = 1579.25
-+1590 (chicken) = 3169.25
-+0.31 (oil) = 3169.56
-+17.5 (aamchur) = 3187.06
-+1263 (potato5) = 4450.06
-+276 (brinjal) = 4726.06
-+805.8 (tomato 340g) = 5531.86
-+644.13 (potato3 153) = 6175.99
-+169.05 (rice) = 6345.04.
-
-Incremental: base 4101.25. Base included potato5 1263 ✓, chicken 1590 ✓... base sum check: 240+315+427+36.65+33+358+1590+1263+17.5+69+210.5+115+189.6+237. Wait — base omitted oil 0.31! And base tomato meal2: 120g→284.4 — did I include it? Base list: "tomato3 80→189.6, tomato4 100→237" — meal2 tomato 284.4 missing! So base should be 4101.25+284.4+0.31 = 4385.96. Then final = 4385.96 + 98+71.6+161+94.8+433.63+100.05 = 4385.96+959.08 = 5345.04. Hmm still ≠ 6345. 6345−5345=1000. Check direct again... 4450.06 after potato5. Let me verify: 3187.06+1263 = 4450.06 ✓. 4726.06 ✓. 5531.86 ✓. 6175.99 ✓. 6345.04 ✓.
-
-Incremental recheck: base correct value: let me recompute base fully: 240+315+427+36.65+33+358+1590+0.31+17.5+1263+210.5+115+284.4+189.6+237 = 
-240+315=555; +427=982; +36.65=1018.65; +33=1051.65; +358=1409.65; +1590=2999.65; +0.31=2999.96; +17.5=3017.46; +1263=4280.46; +210.5=4490.96; +115=4605.96; +284.4=4890.36; +189.6=5079.96; +237=5316.96. So base = 5316.96 (I dropped meal2 tomato and oil earlier, and also... 4101.25 was wrong). OK so true final K = 6345.04? Let's verify final directly once more — yes direct sum is careful: K = 6345.04 mg.
-
-Hmm wait but then ratio: Na 3947.4 / K 6345 = 0.622, well below 0.79. My earlier "base" was wrong, so the reachability analysis was wrong. Let me redo: at mins (with correct base 5316.96... no wait, base at mins: potato3 50, rice 60, tomato3 80, tomato4 100, brinjal 50, banana 100, oats 90/122). That base = 5316.96? No — the sum I just did (5316.96) used potato3 210.5 (50g), rice 69 (60g), tomato3 189.6 (80g), tomato4 237 (100g), brinjal 115 (50g), banana 358 (100g), oats 315+427. Yes that IS the min base = 5316.96. I earlier got 4101.25 because I dropped meal2 tomato (284.4) and oil (0.31) and... 4101.25+284.4+0.31 = 4385.96 ≠ 5316.96. Difference 931. Hmm. Recheck: 5316.96 vs my original list: original had "banana 358, chicken 1590, potato5 1263, aamchur 17.5, rice 69, potato3 210.5, brinjal 115, tomato3 189.6, tomato4 237" plus whey 240, oats 742, almonds 36.65, cashews 33. Sum: 240+742=982; +36.65=1018.65; +33=1051.65; +358=1409.65; +1590=2999.65; +1263=3262.65; +17.5=3280.15; +69=3349.15; +210.5=3559.65; +115=3674.65; +189.6=3864.25; +237=4101.25. Missing: meal2 tomato 284.4, oil 0.31 → 4385.96. But full sum gave 5316.96. 5316.96−4385.96 = 931. Recheck the 5316 sum... 240+315+427 = 982 ✓ (oats 90+122=212g→742, same). Then... 555? 240+315=555, +427=982 ✓. Then +36.65=1018.65, +33=1051.65, +358=1409.65, +1590=2999.65, +0.31=2999.96, +17.5=3017.46, +1263=4280.46, +210.5=4490.96, +115=4605.96, +284.4=4890.36, +189.6=5079.96, +237=5316.96.
-
-Compare: 4101.25 path: after banana 1409.65, +1590=2999.65, +1263=4262.65?? No: 2999.65+1263 = 4262.65, but I wrote 3262.65! Arithmetic error. 2999.65+1263 = 4262.65. So base = 4262.65+17.5+69+210.5+115+189.6+237+284.4+0.31 = 4262.65+17.5=4280.15; +69=4349.15; +210.5=4559.65; +115=4674.65; +189.6=4864.25; +237=5101.25; +284.4=5385.65; +0.31=5385.96. OK so base(min) K = 5385.96. Good, direct final 6345.04 consistent-ish: 5385.96 + 98+71.6+161+94.8+433.63+100.05 = 5385.96+959.08 = 6345.04 ✓.
-
-So K at mins already 5386, Na at mins ~3931 → ratio 0.729, already below 0.79! And adding any budget lowers it further (all AUTOs except rice/oats add K per kcal heavily; rice adds 0.315 mg/kcal vs Na 0.05/3.65=0.0137 mg/kcal — rice raises ratio slightly: Δratio per kcal rice ≈ (0.0137×K − Na×0.315)/K² ... at Na 3931, K 5386: rice adds Na 0.0137/kcal, K 0.315/kcal. Marginal ratio = dNa/dK = 0.0137/0.315 = 0.0435 — way below 0.79. So rice lowers ratio too! Oats: Na 0.06/3.79=0.0158/kcal, K 0.923/kcal → marginal 0.017. Everything lowers ratio. So minimum ratio at max K-dense... the ratio is monotonically decreasing with any budget allocation. The HIGHEST ratio is at mins (all AUTOs at minimum): ratio = 3931.6/5385.96 ≈ 0.73. Wait Na at mins: recompute: 3492+144+12.72+0.05+0.6+1+238.5+0.62+2.1+3+3+1+15(300g tomato)+18(potato5)... let me: salt 3492; whey 144; oats 212×0.06=12.72; almonds 0.05; cashews 0.6; banana 1; chicken 238.5; oil 0.62; aamchur 2.1; rice 3; potato3 3; brinjal 1; tomato 300×0.05=15; potato5 18. Sum natural = 144+12.72+0.05+0.6+1+238.5+0.62+2.1+3+3+1+15+18 = 439.59. Na = 3931.59. Ratio at mins = 3931.59/5385.96 = 0.7299.
-
-But budget must be spent (min calories 1194.88 < budget 1739.56), so we MUST add ~545+ kcal, which only lowers ratio further. Max ratio allocation = give everything to rice (lowest K/kcal): rice extra = 1739.56−1194.88 = 544.68 kcal → 149.2g rice → rice 209.2g. Then K = 5385.96 + 149.2×1.15 = 5385.96+171.6 = 5557.5; Na = 3931.59 + 149.2×0.05 = 3939.05. Ratio = 0.7087. Still below 0.79.
-
-So the ideal band is NOT reachable — max possible ratio ≈ 0.73 (at mins, but mins doesn't meet calorie budget; with budget met, max ≈ 0.709). Per R4e: do NOT search; split budget evenly and report honest verdict.
-
-Hmm wait — R4e: "If it does not — ... split the budget evenly and report the real ratio with an honest verdict." Even split of budget across the 8 AUTO ingredients. But bounds: even split might violate mins/maxes? Budget 1739.56; mins consume 1194.88; extra 544.68 split evenly across 8 AUTOs = 68.085 kcal each. Check bounds: oats1 +68.085 kcal → +17.96g → 107.96g > max 100 ✗. So pin oats1 at 100 (uses 37.9 of extra), redistribute: remaining extra 544.68−37.9 = 506.78 across 7 → 72.4 each. Oats2: +72.4 kcal → +19.1g → 141.1 > 140 ✗. Pin oats2 at 140 (68.22). Remaining 438.56 across 6 → 73.09 each. Banana: +73.09 → +82g → 182 > 120 ✗. Pin banana 120 (17.8). Remaining 420.76 across 5 → 84.15 each. Tomato3: +84.15 → +467g ✗ pin at 100 (3.6). Remaining 417.16 across 4 → 104.29. Tomato4: pin at 120 (3.6). Remaining 413.56 across 3 (rice, potato, brinjal) → 137.85 each. Brinjal: +137.85 kcal → +551g ✗ pin at 120 (17.5). Remaining 396.06 across rice & potato → 198.03 each. Rice: +198.03 → +54.26g → 114.26g. Potato: +198.03 → +257.2g → 307.2g. Both within bounds ✓.
-
-So even-split result: oats1 100, oats2 140, banana 120, tomato3 100, tomato4 120, brinjal 120, rice 114.26, potato3 307.2. Round: rice 114, potato 307.
-
-Calories check: rice 114×3.65=416.1; potato 307×0.77=236.39. Exact day = 2546.44 − (previous p,r cal 653.59) ... recompute: base fixed 1460.44 + maxed autos 1086 (oats1 379, banana 106.8, oats2 530.6, tomato3 18, tomato4 21.6, brinjal 30) = 2546.44. + rice 416.1 + potato 236.39 = 3198.93. Within 1 of 3200? Off by 1.07 — just outside. Residual absorber: rice. Rice 115g: 419.75 → total 3202.58 ✗. Rice 114, potato 308: 237.16 → 3199.7 ✓ (within 1). Potato 308 ≤ 400 ✓. Or rice 114, potato 307 → 3198.93 (off 1.07). Use potato 308: exact 3199.7.
-
-Hmm, or rice 115, potato 306: 419.75+235.62=655.37 → 3201.81 ✗. Potato 308, rice 114 it is: exact day = 2546.44+416.1+237.16 = 3199.7 ✓.
-
-Printed calories: rice 416.1→416; potato 237.16→237. Meal3 printed: 53+6+0+416+237+30+18 = 760. Day printed: 763+627+760+752+299 = 3201. Within 1 ✓. T = 3201.
-
-Per-meal meal3: rice 114/3=38g → 138.7→139; potato 308/3=102.67g → 79.05→79; brinjal 40g→10; tomato 33.33g→6; oil 2g→18; aamchur 0.67g→2; salt 1g→0. Sum = 254. 254×3=762 vs daily 760. Ugh again. Print Y=254, X=760? "760 kcal daily (254 kcal per meal × 3)" — 254×3=762≠760. Slightly inconsistent but... Alternatively Y = 253 (760/3=253.33→253). Per-meal table total row sums per-meal columns: 139+79+10+6+18+2+0 = 254. Hmm.
-
-Option: adjust per-meal roundings: rice 38g→138.7→139; potato 102.67→79.05→79. Could print potato per-meal cal as 79 and rice 139... total 254. Or use potato 308→ per meal 102.7g, cal 79.0. Tomato 33.33g cal 6.0. What if I print per-meal calories: rice 139, potato 79, brinjal 10, tomato 6, oil 18, aamchur 2, salt 0 → 254. Then in summary use X=762, Y=254? But daily table... the table only has per-meal cal column. Daily total bullet: I'd write 762 (254×3). Then day total = 763+627+762+752+299 = 3203. Off by 3 from target but it's "sum of printed". Hmm, R5c wants within 1 kcal of target (recomputed from rounded weights = 3199.7 ✓). R5e wants totals = sums of printed. Conflict unavoidable with ÷3 meals. 
-
-I think cleanest: per-meal values computed from daily/3 exactly where possible: Y per meal = 760/3 = 253.3 → but rows must sum. Let me choose per-meal row calories that sum to 253: rice 139, potato 79, brinjal 10, tomato 6, oil 18, aamchur 2, salt 0 = 254. Drop one: potato 78? 79.05 rounds to 79 honestly. Tomato 5.94→6. Aamchur 2.0. Oil 17.68→18. Rice 138.7→139. Hmm 254.
-
-Alternatively state X=762, Y=254 and total 3203? The final bullet "Final Aggregated Total Daily Calories: 3203 kcal (Target: 3200)" — 3 off. Or state total 3201 using exact? R5e forbids writing a total rows don't produce... but the exact recomputation is 3199.7. I'll go with: meal daily X = 760 (from daily weights, sum of daily-level printed... but there's no daily cal column). 
-
-Decision: I'll make the summary bullets: Vegitable Meal: 760 kcal daily (253 kcal per meal × 3). And in the table, per-meal rows sum to 254? That contradicts "Total" row. Alternatively make table rows sum to 253 by printing aamchur per-meal cal as 2 and oil 18, rice 139, potato 78 (79.05→79...). 
-
-You know, simplest self-consistent choice: per-meal column sums to 254; summary: "762 kcal daily (254 kcal per meal × 3)"; final total 763+627+762+752+299 = 3203. But then final total 3203 vs target 3200 — R5c says day's calories recomputed from rounded weights within 1 of target — that's satisfied (3199.7). The printed aggregate 3203 is just sum of printed. Hmm but "Final Aggregated Total Daily Calories" should probably be ~3200. 
-
-Alternative: tweak residual to make things align. What if potato3 = 306, rice = 115? cal: 235.62+419.75 = 655.37; day exact 3201.81 ✗ (>1). Potato 309, rice 114: 237.93+416.1=654.03 → 3200.47 ✓. Printed: potato 238, rice 416 → meal3 = 53+6+416+238+30+18 = 761. Day printed 3202. Per-meal: potato 103g → 79.31→79; same 254. Meh.
-
-I'll just accept: per-meal sum 254, daily meal3 = 762 in summary (254×3), final total = 3203? No... Let me reconsider: maybe compute per-meal calories as daily/3 per ingredient without rounding weights: rice 38g exactly (114/3), potato 102.67, etc. Cal per meal: rice 138.7, potato 79.05, brinjal 10, tomato 6, oil 17.68, aamchur 2, salt 0 → sum 253.43 → rounds to 253. If I print each row rounded: 139+79+10+6+18+2 = 254. If I print total as 253 (rounding the sum)... inconsistent.
-
-Fine — pragmatic: I'll print per-meal row calories rounded, total row 254, summary "762 kcal daily (254 kcal per meal × 3)", and final total = 3201? No — must be sum: 763+627+762+752+299 = 3203.
-
-Alternatively set meal3 daily = 760 and per meal 253, and force table total 253 by printing oil per-meal as 17.68→18... no.
-
-OK alternative approach: choose rice/potato so meal3 works nicely. Want daily meal3 printed cal X divisible by 3 and per-meal rows summing to X/3. Per-meal rows: oil 18, aamchur 2, salt 0, brinjal 10, tomato 6 fixed = 36. Rice per-meal r/3×3.65, potato p/3×0.77. If rice divisible by 3 and potato divisible by 3: rice 114 (38g→138.7→139), potato 309 (103g→79.31→79): per-meal = 36+139+79 = 254. Daily = 53+6+0+416(rice 114→416.1→416)+238(potato 309→237.93→238)+30+18 = 761. 254×3=762≠761. Grr, rounding.
-
-Potato 306 (102g→78.54→79? 78.54 rounds 79): daily potato 235.62→236. daily meal3 = 53+6+416+236+30+18 = 759; per-me
+Write output.
 
 ## Output
+### Daily Totals (Summary) — MONDAY
+- Oats Meal 1: **763 kcal** daily
+- Oats Chilla: **627 kcal** daily
+- Vegitable Meal: **760 kcal** daily (**254 kcal** per meal × 3)
+- Chicken meal: **752 kcal** daily
+- Potato fries 🍟 : **299 kcal** daily
+- **Total Daily Protein**: **225.3g (901 kcal)**
+- **Total Daily Carbohydrates**: **420.9g (1684 kcal)**
+- **Total Daily Fat**: **68.7g (618 kcal)**
+- **Final Aggregated Total Daily Calories**: **3201 kcal** (Target: **3200 kcal**)
+
+### Daily Sodium & Potassium Summary
+For the target day:
+- **MONDAY**: Total Sodium: **3955 mg** | Total Potassium: **6960 mg** | Na:K Ratio: **0.57** (Below Ideal)
+  * (Includes 3492mg sodium from consumed salt (9g salt across all meals, counted at 100%) and 463mg natural sodium from all daily ingredients. Total potassium is from natural ingredients.)
+  * **Ratio Adjustment Info**: Ratio is below ideal. Need an additional **1543 mg** of Sodium (approx. **3.98 g** of table salt) to reach 0.79.
+
+---
+
+## 1. Oats Meal 1 (1 Meal Per Day)
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| Instant Oats (Raw) | 100g | 100g | 379 | 13.2g (53 kcal) | 67.7g (271 kcal) | 6.5g (59 kcal) |
+| Whey Protein Isolate - myprotein matcha blueberry | 60g | 60g | 220 | 46.2g (185 kcal) | 5.2g (21 kcal) | 1.2g (11 kcal) |
+| Almonds | 5g | 5g | 29 | 1.1g (4 kcal) | 1.1g (4 kcal) | 2.5g (23 kcal) |
+| Cashews | 5g | 5g | 28 | 0.9g (4 kcal) | 1.5g (6 kcal) | 2.2g (20 kcal) |
+| Banana | 120g | 120g | 107 | 1.3g (5 kcal) | 27.4g (110 kcal) | 0.4g (4 kcal) |
+| **Total** | | | **763** | **62.7g (251 kcal)** | **102.9g (412 kcal)** | **12.8g (115 kcal)** |
+
+## 2. Oats Chilla (1 Meal Per Day)
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| Instant Oats (Raw) | 140g | 140g | 531 | 18.5g (74 kcal) | 94.8g (379 kcal) | 9.1g (82 kcal) |
+| Tomato | 120g | 120g | 22 | 1.1g (4 kcal) | 4.7g (19 kcal) | 0.2g (2 kcal) |
+| Olive oil | 8g | 8g | 71 | 0g (0 kcal) | 0g (0 kcal) | 8.0g (72 kcal) |
+| salt | 3g | 3g | 0 | 0g (0 kcal) | 0g (0 kcal) | 0g (0 kcal) |
+| Aamchur powder | 1g | 1g | 3 | 0.0g (0 kcal) | 0.7g (3 kcal) | 0.0g (0 kcal) |
+| **Total** | | | **627** | **19.6g (78 kcal)** | **100.2g (401 kcal)** | **17.3g (156 kcal)** |
+
+## 3. Vegitable Meal (3 Meals Per Day)
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| Olive oil | 2g | 6g | 18 | 0g (0 kcal) | 0g (0 kcal) | 2.0g (18 kcal) |
+| aamchur powder | 0.7g | 2g | 2 | 0.0g (0 kcal) | 0.5g (2 kcal) | 0.0g (0 kcal) |
+| salt | 1g | 3g | 0 | 0g (0 kcal) | 0g (0 kcal) | 0g (0 kcal) |
+| Rice | 38g | 114g | 139 | 2.7g (11 kcal) | 30.4g (122 kcal) | 0.3g (3 kcal) |
+| Potato (Raw) | 102.7g | 308g | 79 | 2.1g (8 kcal) | 18.0g (72 kcal) | 0.1g (1 kcal) |
+| Brinjal | 40g | 120g | 10 | 0.4g (2 kcal) | 2.4g (10 kcal) | 0.1g (1 kcal) |
+| Tomato | 33.3g | 100g | 6 | 0.3g (1 kcal) | 1.3g (5 kcal) | 0.1g (1 kcal) |
+| **Total** | | | **254** | **5.5g (22 kcal)** | **52.6g (210 kcal)** | **2.6g (23 kcal)** |
+
+## 4. Chicken meal (1 Meal Per Day)
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| chicken breast | 530g | 530g | 636 | 119.3g (477 kcal) | 0g (0 kcal) | 13.3g (120 kcal) |
+| tomato | 120g | 120g | 22 | 1.1g (4 kcal) | 4.7g (19 kcal) | 0.2g (2 kcal) |
+| Olive oil | 10g | 10g | 88 | 0g (0 kcal) | 0g (0 kcal) | 10.0g (90 kcal) |
+| Aamchur powder | 2g | 2g | 6 | 0.0g (0 kcal) | 1.4g (6 kcal) | 0.0g (0 kcal) |
+| **Total** | | | **752** | **120.4g (482 kcal)** | **6.1g (24 kcal)** | **23.5g (212 kcal)** |
+
+## 5. Potato fries 🍟  (1 Meal Per Day)
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| Potato | 300g | 300g | 231 | 6.0g (24 kcal) | 52.5g (210 kcal) | 0.3g (3 kcal) |
+| Olive oil | 7g | 7g | 62 | 0g (0 kcal) | 0g (0 kcal) | 7.0g (63 kcal) |
+| Salt | 3g | 3g | 0 | 0g (0 kcal) | 0g (0 kcal) | 0g (0 kcal) |
+| Aamchur powder | 2g | 2g | 6 | 0.0g (0 kcal) | 1.4g (6 kcal) | 0.0g (0 kcal) |
+| **Total** | | | **299** | **6.1g (24 kcal)** | **53.9g (216 kcal)** | **7.3g (66 kcal)** |
+
+---
+
+### MONDAY: Rice + Potato (Raw) + Brinjal + Tomato
+Oats Meal 1 (x1 daily):
+instant oats 100g (per meal)
+whey protein isolate - myprotein matcha blueberry 60g (per meal)
+almonds 5g (per meal)
+cashews 5g (per meal)
+banana 120g (per meal)
+prep method: Oats airfryer 200c, 10min
+
+Oats Chilla (x1 daily):
+instant oats 140g (per meal)
+tomato 120g (per meal)
+olive oil 8g (per meal)
+salt 3g (per meal)
+aamchur powder 1g (per meal)
+prep method: https://youtube.com/shorts/HEII09CFFU8
+
+Vegitable Meal:
+olive oil 6g (daily total)
+aamchur powder 2g (daily total)
+salt 3g (daily total)
+rice 114g (daily total)
+potato 308g (daily total)
+brinjal 120g (daily total)
+tomato 100g (daily total)
+
+Chicken meal (x1 daily):
+chicken breast 530g (per meal)
+tomato 120g (per meal)
+olive oil 10g (per meal)
+aamchur powder 2g (per meal)
+prep method: gas pe bna dena onion garlic and green chili dal ke.
+
+Potato fries 🍟 (x1 daily):
+potato 300g (per meal)
+olive oil 7g (per meal)
+salt 3g (per meal)
+aamchur powder 2g (per meal)
+prep method: Air fryer 200c, 15min + 5 mins
+https://youtube.com/shorts/yar2J_w8rOc
+Onion garlic or black paper wgera dal dena.

@@ -465,6 +465,20 @@ export const DEFAULT_CONFIG: Config = {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const normalizeConfig = (loaded: any): Config => {
   const normalized = { ...DEFAULT_CONFIG, ...loaded };
+
+  // Retired Fireworks model ids are remapped to their replacements so a saved
+  // config cannot keep calling a model that is no longer in the picker.
+  const retiredFireworksModels: Record<string, string> = {
+    'accounts/fireworks/models/deepseek-v4-flash-0731': 'accounts/fireworks/models/deepseek-v4p1-flash'
+  };
+  const modelFields = ['model', 'customModel', 'verificationModel', 'verificationCustomModel', 'agentModel', 'agentCustomModel'] as const;
+  for (const field of modelFields) {
+    const value = (normalized as any)[field];
+    if (typeof value === 'string' && retiredFireworksModels[value]) {
+      (normalized as any)[field] = retiredFireworksModels[value];
+    }
+  }
+
   normalized.global = {
     dailyCalorieTarget: loaded.global?.dailyCalorieTarget ?? DEFAULT_CONFIG.global.dailyCalorieTarget,
     idealSodiumPotassiumRatioMin: loaded.global?.idealSodiumPotassiumRatioMin ?? DEFAULT_CONFIG.global.idealSodiumPotassiumRatioMin,
