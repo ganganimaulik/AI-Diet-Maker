@@ -24,6 +24,7 @@ const eslintConfig = defineConfig([
     "src/lib/agent-complete.js",
     "src/lib/agent-prompt.js",
     "src/lib/verification-runner.js",
+    "scripts/**",
     ".wwebjs_auth/**",
   ]),
 ]);

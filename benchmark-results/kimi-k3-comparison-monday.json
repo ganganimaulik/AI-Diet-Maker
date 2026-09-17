@@ -1,0 +1,34 @@
+{
+  "targetDay": "MONDAY",
+  "timestamp": "2026-09-17T08:54:38.083Z",
+  "comparison": [
+    {
+      "version": "Previous Prompt (HEAD)",
+      "durationSec": "119.96",
+      "ttft": "1.19",
+      "thoughtChars": 20706,
+      "outputChars": 5768,
+      "finishReason": "stop",
+      "errorCount": 0,
+      "warningCount": 0,
+      "issues": []
+    },
+    {
+      "version": "New Prompt (Uncommitted)",
+      "durationSec": "87.11",
+      "ttft": "0.69",
+      "thoughtChars": 12495,
+      "outputChars": 5789,
+      "finishReason": "stop",
+      "errorCount": 1,
+      "warningCount": 0,
+      "issues": [
+        {
+          "severity": "error",
+          "category": "sodium",
+          "message": "Total potassium: the plan says 6149 mg, computed 6144 mg (off by 5 mg)."
+        }
+      ]
+    }
+  ]
+}

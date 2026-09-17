@@ -22,7 +22,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 10;
+const PROMPT_TEMPLATE_VERSION = 11;
 
 /**
  * The reference nutrition table, one entry per line, exactly as it is printed.
@@ -36,7 +36,7 @@ const PROMPT_TEMPLATE_VERSION = 10;
  * matched them — salt is referenced by the sodium rules themselves.
  */
 const REFERENCE_TABLE = [
-  { alwaysInclude: true, line: 'Table Salt (NaCl) / salt / Table Salt: 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt (38,800mg/100g), 0mg Potassium' },
+  { alwaysInclude: true, line: 'Table Salt (NaCl) / salt / Table Salt: 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt, 0mg Potassium' },
   { line: 'Water / water: 0 kcal (0.00 kcal/g), 0.0g Protein, 0.0g Carbs, 0.0g Fat, 0mg Sodium, 0mg Potassium' },
   { line: 'Whey Protein Isolate - myprotein matcha blueberry: 367 kcal (3.67 kcal/g), 77.0g Protein, 8.71g Carbs, 2.03g Fat, 240mg Sodium, 400mg Potassium' },
   { line: 'Fast & up Whey Protein Isolate: 375 kcal (3.75 kcal/g), 81.0g Protein, 3.50g Carbs, 1.50g Fat, 180mg Sodium, 350mg Potassium' },
@@ -214,7 +214,7 @@ function compilePromptText(c, options) {
     .map((meal, idx) => {
       const activeIngs = meal.ingredients.filter(ing => !ing.disabled);
       return `
-[MEAL ${idx + 1} WEIGHTS: ${meal.name} (WHOLE DAY TOTAL — divide by ${meal.mealsPerDay} for per-meal weight)]
+[MEAL ${idx + 1} WEIGHTS: ${meal.name} (WHOLE-DAY TOTALS per R2)]
 ${activeIngs.map(ing => `- ${ing.name}: ${weightLabel(ing)}${ingredientSuffix(ing)}`).join('\n')}
 ${String(meal.prepMethod || '').trim() ? `- prep method: ${meal.prepMethod.trim().split('\n').map((line, i) => i === 0 ? line : `  ${line}`).join('\n')}` : ''}
 `;
@@ -237,7 +237,7 @@ ${String(meal.prepMethod || '').trim() ? `- prep method: ${meal.prepMethod.trim(
 
 Your task is to automatically calculate all calories using standard nutritional values for raw/uncooked ingredients, round them to the nearest whole number, solve for any ingredients marked as \`[AUTO]\`, and generate a dual-purpose diet plan document.
 - PART 1 must be a detailed macro and meal breakdown for myself (using markdown tables and your computed calories).
-- PART 2 must be a raw, copy-pasteable text plan for my cook containing ONLY strict text blocks for each day with absolutely no conversational text, tables, or calorie explanations.
+- PART 2 must be a raw, copy-pasteable text plan for my cook: strict text blocks per day, nothing else.
 
 Work through the rules in order, do the arithmetic privately, and emit only the two parts.
 
@@ -268,7 +268,10 @@ R4. SOLVING \`[AUTO]\` WEIGHTS.
    b. Convert that budget into grams for the \`[AUTO]\` ingredients using their exact kcal/g. Their calories must sum to the budget, and every weight must be non-negative.
    c. Bounds are hard. \`[AUTO, min Xg]\` may never solve below X; \`[AUTO, max Yg]\` may never solve above Y. If a value would breach a bound, pin it to that bound and redistribute the rest across the \`[AUTO]\` ingredients that still have room. If every one is pinned and the budget still cannot be met, say so explicitly rather than breaking a bound.
    d. When two or more \`[AUTO]\` ingredients exist, the split between them is free calories-wise, so use it to steer the day's Na:K ratio (R6) into the ideal band — more of the budget to high-potassium ingredients lowers the ratio, more to low-potassium ones raises it.
-   e. Check reachability BEFORE searching for a split. The day's ratio is bounded by its two extreme allocations: work out the ratio once with the budget pushed as far as the bounds allow toward the \`[AUTO]\` ingredients carrying the most potassium per kcal, and once toward those carrying the least. The ideal band is reachable only if it falls between those two ratios. If it does not — or if the \`[AUTO]\` profiles are too similar to move the ratio, or a 50-50 split already lands in the band — do NOT search: split the budget evenly and report the real ratio with an honest verdict. A ratio outside the band that is stated truthfully is correct output; a ratio bent to look ideal is not.
+   e. Check reachability BEFORE searching for a split:
+      - The day's ratio is bounded by its two extreme allocations. Compute it twice: once with the budget pushed as far as the bounds allow toward the \`[AUTO]\` ingredients carrying the most potassium per kcal, and once toward those carrying the least.
+      - The ideal band is reachable only if it falls between those two ratios.
+      - If it does not — or if the \`[AUTO]\` profiles are too similar to move the ratio, or a 50-50 split already lands in the band — do NOT search: split the budget evenly and report the real ratio with an honest verdict. A ratio outside the band that is stated truthfully is correct output; a ratio bent to look ideal is not.
 
 R5. ROUNDING PROTOCOL, in this order:
    a. Solve at full precision.
@@ -278,7 +281,7 @@ R5. ROUNDING PROTOCOL, in this order:
    e. Every total is the sum of the numbers you actually printed. Never write a total your own rows do not produce, and never nudge one to make the target appear met.
 
 R6. SODIUM & POTASSIUM (whole day).
-   - Table salt (NaCl) delivers exactly 388 mg of sodium per 1g of salt, and ALL salt in the day counts in full: salt in the marinade, in the subji, boiled in water, or added while cooking. There is no discount for cooking water that gets discarded.
+   - ALL salt in the day counts in full at the reference table's sodium-per-gram: salt in the marinade, in the subji, boiled in water, or added while cooking. There is no discount for cooking water that gets discarded.
    - Scan every meal and every daily variable for salt, and use the natural sodium and potassium values from the reference table for all other ingredients.
    - Total Daily Sodium (mg) = sodium from salt + natural sodium from all daily ingredients.
    - Total Daily Potassium (mg) = natural potassium from all daily ingredients.
@@ -287,7 +290,7 @@ R6. SODIUM & POTASSIUM (whole day).
      - Above ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium ÷ ${idealMaxStr}) − Total Daily Potassium, and Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium ÷ ${idealMinStr}) − Total Daily Potassium, both to the nearest whole mg.
      - Between ${idealMinStr} and ${idealMaxStr} inclusive: the ratio is ideal.
 
-R7. MACROS. Compute daily Protein, Carbohydrates and Fat in grams from the final weights, convert them at Protein 4 kcal/g, Carbohydrates 4 kcal/g, Fat 9 kcal/g, and confirm privately that they sum to the day's calorie total.
+R7. MACROS. Compute daily Protein, Carbohydrates and Fat in grams from the final weights, and convert them at Protein 4 kcal/g, Carbohydrates 4 kcal/g, Fat 9 kcal/g for the printed kcal figures. These macro-kcal equivalents are a reporting convention only: whole-food calorie densities are not exactly 4/4/9, so they will naturally differ from the day's calorie total, which comes from the reference table densities. Never adjust macro grams to force the two to agree.
 
 R8. SPLIT INSTRUCTIONS. An ingredient carrying a split instruction (e.g. '50% in subji, remaining in chicken', '3g in subji, remaining in marinate') keeps its full daily weight in the calculations. Resolve the percentages or allocations into exact grams that sum to that weight, and print the resulting split — in PART 1 inside its meal's table row, and in PART 2 inside its owning meal's block.
 
@@ -300,7 +303,7 @@ R9. Do every calculation privately in your reasoning. The final output contains 
 PART 1: FOR MYSELF (User Breakdown)
 Generate this section first, using markdown tables and bullet points, based strictly on your calculations.
 
-Open Part 1 with a Daily Totals (Summary) section aggregating the calculated daily sum total across all meals to prove it hits your configured target. It sits at the very top of Part 1, above the sodium summary and above any meal breakdowns/tables — so settle the per-meal arithmetic below first, then print the finished figures here. Format it EXACTLY as the template below — same heading, same bullets, in this same order. Every bullet is a top-level "- " bullet: never indent a bullet, never nest sub-bullets under the day, never merge several meals onto one line, and add no extra bullets, notes, ticks or commentary of your own.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
+Open Part 1 with a Daily Totals (Summary) section at the very top — above the sodium summary and all meal tables — aggregating the whole day across all meals. Settle the per-meal arithmetic first, then print the finished figures here. Format it EXACTLY as the template below — same heading, same bullets, same order. Every bullet is a top-level "- " bullet: never indent, never nest sub-bullets, never merge meals onto one line, and add no extra bullets, notes, ticks or commentary.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
 ### Daily Totals (Summary) — [DAY NAME]   <- replace [DAY NAME] with the day named in DAY DATA
 ${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 1 ? ` (**[Y] kcal** per meal × ${meal.mealsPerDay})` : ''}`).join('\n')}
 - **Total Daily Protein**: **[P]g ([P kcal] kcal)**
@@ -308,10 +311,10 @@ ${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 
 - **Total Daily Fat**: **[F]g ([F kcal] kcal)**
 - **Final Aggregated Total Daily Calories**: **[T] kcal** (Target: **${c.global.dailyCalorieTarget} kcal**)
 
-Next, still above any meal breakdowns/tables, you MUST print a bolded summary block for the daily sodium and potassium levels for each day generated. Format it exactly as follows:
+Next, still above any meal tables, print the daily sodium & potassium summary, formatted exactly as follows:
 ### Daily Sodium & Potassium Summary
 For ${isSingle ? 'the target day' : 'each day from Monday to Sunday'}:
-- **[Day Name] (e.g. MONDAY)**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
+- **[Day Name]**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
   * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt sums ALL salt across ALL meals at 100%. Total potassium is from natural ingredients.")
   * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (${idealMinStr} - ${idealMaxStr})." If below ${idealMinStr}: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach ${idealMinStr}." If above ${idealMaxStr}: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach ${idealMaxStr} (or [D] mg to reach ${idealMinStr})."]
 
@@ -357,6 +360,12 @@ first ingredient name 150g (daily total)
 second ingredient name 190g (daily total)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
+
+FINAL SELF-CHECK (silent — none of this appears in the output, per R9):
+- Every printed calorie, macro and mineral figure is recomputed from the FINAL rounded weights (R5d), and every total equals the sum of the rows above it (R5e).
+- The day's calories sit within 1 kcal of the target from the reference table densities. Macro calorie equivalents (4P, 4C, 9F) are for reporting and will naturally differ slightly from the target due to whole-food combustion values (R7).
+- No ingredient appears that is not configured for the day, and nothing configured is missing.
+- Part 2 carries no personal-only ingredient, no standalone line for a split ingredient, and each meal's quantities follow its quantity mode.
 
 ===================================================================
                  DAY DATA — GENERATE ${isSingle ? selectedDay : 'MONDAY TO SUNDAY'}

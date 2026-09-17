@@ -961,8 +961,14 @@ function checkDailyTotals(sink, stated, computed) {
     if (sum !== stated.crossCheck.sum) {
       sink.error('macros', `Macro cross-check arithmetic: ${stated.crossCheck.protein} + ${stated.crossCheck.carbs} + ${stated.crossCheck.fat} = ${sum}, but it prints ${stated.crossCheck.sum}.`);
     }
-    if (computed.target > 0 && Math.abs(stated.crossCheck.sum - computed.target) > 3) {
-      sink.error('macros', `The macro cross-check lands on ${stated.crossCheck.sum} kcal instead of the ${computed.target} kcal target — the plan is rationalising a gap rather than closing it.`);
+    // Macro-kcal (4/4/9) is a reporting convention; whole-food densities never
+    // reproduce it exactly, so the sum is checked against the Atwater value of
+    // the plan's own weights — never against the calorie target.
+    if (Number.isFinite(computed.dayProtein) && Number.isFinite(computed.dayCarbs) && Number.isFinite(computed.dayFat)) {
+      const atwater = 4 * computed.dayProtein + 4 * computed.dayCarbs + 9 * computed.dayFat;
+      if (Math.abs(stated.crossCheck.sum - atwater) > 3) {
+        sink.error('macros', `The macro cross-check lands on ${stated.crossCheck.sum} kcal, but the plan's own weights give 4P+4C+9F = ${fmt(atwater, 0)} kcal.`);
+      }
     }
   }
 }

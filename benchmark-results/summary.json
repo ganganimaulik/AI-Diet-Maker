@@ -1,0 +1,63 @@
+{
+  "targetDay": "MONDAY",
+  "results": [
+    {
+      "name": "Kimi K3 Fast",
+      "modelId": "accounts/fireworks/routers/kimi-k3-fast",
+      "status": "FAIL",
+      "durationSec": "106.37",
+      "promptTokens": 4562,
+      "completionTokens": 16384,
+      "thinkingChars": 0,
+      "errorCount": 1,
+      "warningCount": 0,
+      "issues": [
+        {
+          "severity": "error",
+          "category": "format",
+          "message": "Could not find any \"N. Meal name (X Meals Per Day)\" tables in Part 1 — the plan does not follow the expected format."
+        }
+      ]
+    },
+    {
+      "name": "DeepSeek V4.1 Flash",
+      "modelId": "accounts/fireworks/models/deepseek-v4p1-flash",
+      "status": "FAILED",
+      "error": "API Error or Empty Response",
+      "durationSec": "-",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "thinkingChars": 0,
+      "errorCount": "-",
+      "warningCount": "-",
+      "issues": []
+    },
+    {
+      "name": "GLM 5.3 (Reasoning)",
+      "modelId": "accounts/fireworks/models/glm-5p3",
+      "status": "FAILED",
+      "error": "API Error or Empty Response",
+      "durationSec": "-",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "thinkingChars": 0,
+      "errorCount": "-",
+      "warningCount": "-",
+      "issues": []
+    },
+    {
+      "name": "Qwen 3.8 Max",
+      "modelId": "accounts/fireworks/models/qwen3p8-max",
+      "status": "FAILED",
+      "error": "API Error or Empty Response",
+      "durationSec": "-",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "thinkingChars": 0,
+      "errorCount": "-",
+      "warningCount": "-",
+      "issues": []
+    }
+  ],
+  "timestamp": "2026-09-16T10:19:48.284Z"
+}
