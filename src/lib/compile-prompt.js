@@ -61,7 +61,14 @@ const REFERENCE_TABLE = [
   { line: 'Raisins: 299 kcal (2.99 kcal/g), 3.1g Protein, 79.2g Carbs, 0.50g Fat, 20mg Sodium, 749mg Potassium' },
   { line: 'Kimia Dates: 277 kcal (2.77 kcal/g), 1.8g Protein, 75.0g Carbs, 0.20g Fat, 2mg Sodium, 696mg Potassium' },
   { line: 'Eggs / egg / eggs: 143 kcal (1.43 kcal/g), 12.6g Protein, 0.7g Carbs, 9.50g Fat, 142mg Sodium, 138mg Potassium' },
-  { line: 'aamchur powder: 300 kcal (3.00 kcal/g), 3.0g Protein, 68.0g Carbs, 1.50g Fat, 30mg Sodium, 250mg Potassium' }
+  { line: 'aamchur powder: 300 kcal (3.00 kcal/g), 3.0g Protein, 68.0g Carbs, 1.50g Fat, 30mg Sodium, 250mg Potassium' },
+  // Everest Chaat Masala, read off the per-100g panel on the box: 1414 kJ = 338 kcal,
+  // 5.0g protein, 71.7g carbs, 3.5g fat, 20010mg sodium (the blend is ~50% salt, so a
+  // 2g sprinkle carries ~400mg sodium — about 1g of table salt).
+  // Potassium is NOT on the label (it only says "not a significant source", i.e. under
+  // ~1880mg/100g); 500mg is a deliberately conservative estimate for the spice half of
+  // the blend (amchur, cumin, coriander, dried ginger, black pepper).
+  { line: 'Chaat Masala / chat masala / Everest Chaat Masala: 338 kcal (3.38 kcal/g), 5.0g Protein, 71.7g Carbs, 3.50g Fat, 20010mg Sodium, 500mg Potassium' }
 ];
 
 /**
