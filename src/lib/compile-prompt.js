@@ -15,6 +15,12 @@
  * verify-plan.js parses this output (the reference table, and every heading and
  * phrase the templates below ask for), so those strings are a contract — change
  * one and change the verifier with it.
+ *
+ * Worked examples in the templates must use placeholder names only. An example
+ * built from real ingredients gets copied instead of the configuration: a
+ * "Table Salt (NaCl)" row in a sample table had both DeepSeek and Kimi renaming
+ * the configured "salt" ingredient in 5 of 6 runs, which the verifier reports as
+ * one missing and one invented ingredient per meal.
  */
 
 const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -22,7 +28,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 11;
+const PROMPT_TEMPLATE_VERSION = 13;
 
 /**
  * The reference nutrition table, one entry per line, exactly as it is printed.
@@ -240,13 +246,12 @@ ${String(meal.prepMethod || '').trim() ? `- prep method: ${meal.prepMethod.trim(
     return `- ${day} (${variant}): ${itemsText}`;
   }).join('\n');
 
-  return `Act as a strict meal prep calculator and format generator. Below is a centralized configuration section containing weights, targets, and cooking instructions.
-
-Your task is to automatically calculate all calories using standard nutritional values for raw/uncooked ingredients, round them to the nearest whole number, solve for any ingredients marked as \`[AUTO]\`, and generate a dual-purpose diet plan document.
-- PART 1 must be a detailed macro and meal breakdown for myself (using markdown tables and your computed calories).
-- PART 2 must be a raw, copy-pasteable text plan for my cook: strict text blocks per day, nothing else.
-
-Work through the rules in order, do the arithmetic privately, and emit only the two parts.
+  return `Act as a strict meal prep calculator and format generator. Using the configuration and nutritional reference below:
+1. Automatically calculate all calories using raw/uncooked nutritional values, round them to whole numbers, and solve for any \`[AUTO]\` ingredients.
+2. Emit ONLY two parts:
+   - PART 1: Macro and meal breakdown for myself (using markdown tables).
+   - PART 2: Copy-pasteable text plan for my cook (strict daily text blocks, no tables, no calories).
+Work through the rules in order, do all arithmetic privately in your reasoning, and emit only the two parts with zero commentary.
 
 ===================================================================
        CONFIGURABLE VARIABLES (EDIT TARGETS & WEIGHTS HERE)
@@ -262,55 +267,52 @@ ${mealsDetailsText}
                         CALCULATION RULES
 ===================================================================
 
-Every nutritional value you use comes from the reference table in the DAY DATA section at the end of this brief. Those figures are per 100g of the RAW/UNCOOKED ingredient, and the bracketed figure is its calorie density in kcal per 1g. If an ingredient is not listed there, use standard raw USDA FoodData Central values.
+Every nutritional value comes from the reference table in DAY DATA (per 100g raw/uncooked; bracketed figure is kcal/g). If an ingredient is not listed there, use standard raw USDA FoodData Central values.
 
-R1. FIXED vs [AUTO]. Every configured weight is either a fixed number of grams or \`[AUTO]\`. A fixed weight is a decision already made — copy it exactly and never adjust it to close a gap. \`[AUTO]\` weights are the only ones you solve.
+R1. FIXED vs [AUTO]. Fixed weights are already decided — copy them exactly. Solve only \`[AUTO]\` weights.
 
-R2. WHOLE-DAY WEIGHTS. Every weight in the configuration — meal ingredients and daily variables alike — is already a WHOLE-DAY total. Never multiply by meals per day. A per-meal weight is that whole-day weight divided by the meal's daily frequency.
+R2. WHOLE-DAY WEIGHTS. Every configured weight is already a WHOLE-DAY total. Never multiply by meals per day. A per-meal weight is that whole-day weight divided by the meal's daily frequency.
 
-R3. OWNERSHIP. Each daily variable ingredient carries a "(belongs to [Meal Name])" suffix naming the meal it joins. Add it to that meal and to no other, in both PART 1 and PART 2.
+R3. OWNERSHIP. Each daily variable ingredient joins the meal named in its "(belongs to [Meal Name])" suffix, in both PART 1 and PART 2.
 
 R4. SOLVING \`[AUTO]\` WEIGHTS.
-   a. Remaining budget = Daily Calorie Target − the calories of every fixed weight in the day (all meals plus all daily variables).
-   b. Convert that budget into grams for the \`[AUTO]\` ingredients using their exact kcal/g. Their calories must sum to the budget, and every weight must be non-negative.
-   c. Bounds are hard. \`[AUTO, min Xg]\` may never solve below X; \`[AUTO, max Yg]\` may never solve above Y. If a value would breach a bound, pin it to that bound and redistribute the rest across the \`[AUTO]\` ingredients that still have room. If every one is pinned and the budget still cannot be met, say so explicitly rather than breaking a bound.
-   d. When two or more \`[AUTO]\` ingredients exist, the split between them is free calories-wise, so use it to steer the day's Na:K ratio (R6) into the ideal band — more of the budget to high-potassium ingredients lowers the ratio, more to low-potassium ones raises it.
-   e. Check reachability BEFORE searching for a split:
-      - The day's ratio is bounded by its two extreme allocations. Compute it twice: once with the budget pushed as far as the bounds allow toward the \`[AUTO]\` ingredients carrying the most potassium per kcal, and once toward those carrying the least.
-      - The ideal band is reachable only if it falls between those two ratios.
-      - If it does not — or if the \`[AUTO]\` profiles are too similar to move the ratio, or a 50-50 split already lands in the band — do NOT search: split the budget evenly and report the real ratio with an honest verdict. A ratio outside the band that is stated truthfully is correct output; a ratio bent to look ideal is not.
+   a. Remaining budget = Daily Calorie Target − calories of all fixed weights in the day.
+   b. Convert budget into grams for \`[AUTO]\` ingredients using their exact kcal/g (non-negative, sum to budget).
+   c. Bounds are hard: \`[AUTO, min Xg]\` may never solve below X; \`[AUTO, max Yg]\` may never solve above Y. If a bound is reached, pin it and redistribute across remaining \`[AUTO]\` ingredients.
+   d. When multiple \`[AUTO]\` ingredients exist, allocate to steer the whole-day Na:K ratio (R6) into the ideal band.
+   e. Reachability check:
+      - Compute extreme ratios: once with budget pushed toward the most potassium-dense AUTO ingredients, once toward the least.
+      - If the ideal band is unreachable, or profiles are too similar, split the budget evenly and report the real ratio truthfully. Never force or fake a ratio.
 
-R5. ROUNDING PROTOCOL, in this order:
-   a. Solve at full precision.
-   b. Round every ingredient weight to a whole number of grams.
-   c. Rounding moves the day's calories, so nominate one \`[AUTO]\` ingredient that still has room inside its bounds as the residual absorber and shift it by whole grams until the day's calories — recomputed from the rounded weights — sit within 1 kcal of the Daily Calorie Target.
-   d. Recompute every calorie, macro and mineral figure you print from those FINAL rounded weights. Print calories as whole numbers and macro grams to one decimal.
-   e. Every total is the sum of the numbers you actually printed. Never write a total your own rows do not produce, and never nudge one to make the target appear met.
+R5. ROUNDING PROTOCOL:
+   a. Solve at full precision, then round every ingredient weight to a whole number of grams.
+   b. Nominate one \`[AUTO]\` ingredient with headroom as the residual absorber and shift it by whole grams so the recomputed daily calories sit within 1 kcal of the target.
+   c. Recompute every printed calorie, macro, and mineral figure from those FINAL rounded weights. Print calories as whole numbers and macro grams to one decimal.
+   d. Every printed total must equal the exact sum of the rows you printed.
 
 R6. SODIUM & POTASSIUM (whole day).
-   - ALL salt in the day counts in full at the reference table's sodium-per-gram: salt in the marinade, in the subji, boiled in water, or added while cooking. There is no discount for cooking water that gets discarded.
-   - Scan every meal and every daily variable for salt, and use the natural sodium and potassium values from the reference table for all other ingredients.
-   - Total Daily Sodium (mg) = sodium from salt + natural sodium from all daily ingredients.
-   - Total Daily Potassium (mg) = natural potassium from all daily ingredients.
-   - Na:K Ratio = Total Daily Sodium ÷ Total Daily Potassium, rounded to 2 decimals, judged against the ideal band ${idealMinStr} to ${idealMaxStr}:
-     - Below ${idealMinStr}: Additional Na (mg) = (${idealMinStr} × Total Daily Potassium) − Total Daily Sodium, and Additional Salt (g) = Additional Na ÷ 388, to 2 decimals.
-     - Above ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Daily Sodium ÷ ${idealMaxStr}) − Total Daily Potassium, and Additional Potassium to ${idealMinStr} (mg) = (Total Daily Sodium ÷ ${idealMinStr}) − Total Daily Potassium, both to the nearest whole mg.
+   - ALL salt in the day counts at the reference table's sodium-per-gram (salt in marinade, subji, cooking water, etc. with zero discard discount).
+   - Total Daily Sodium (mg) = sodium from salt + natural sodium from all ingredients.
+   - Total Daily Potassium (mg) = natural potassium from all ingredients.
+   - Na:K Ratio = Total Daily Sodium ÷ Total Daily Potassium, rounded to 2 decimals, judged against ${idealMinStr} to ${idealMaxStr}:
+     - Below ${idealMinStr}: Additional Na (mg) = (${idealMinStr} × Total Potassium) − Total Sodium; Additional Salt (g) = Additional Na ÷ 388, to 2 decimals.
+     - Above ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Sodium ÷ ${idealMaxStr}) − Total Potassium; Additional Potassium to ${idealMinStr} (mg) = (Total Sodium ÷ ${idealMinStr}) − Total Potassium, to nearest whole mg.
      - Between ${idealMinStr} and ${idealMaxStr} inclusive: the ratio is ideal.
 
-R7. MACROS. Compute daily Protein, Carbohydrates and Fat in grams from the final weights, and convert them at Protein 4 kcal/g, Carbohydrates 4 kcal/g, Fat 9 kcal/g for the printed kcal figures. These macro-kcal equivalents are a reporting convention only: whole-food calorie densities are not exactly 4/4/9, so they will naturally differ from the day's calorie total, which comes from the reference table densities. Never adjust macro grams to force the two to agree.
+R7. MACROS. Compute daily Protein, Carbohydrates and Fat in grams from the final weights, and convert at 4 kcal/g (Protein), 4 kcal/g (Carbs), 9 kcal/g (Fat) for the printed macro-kcal figures. These 4/4/9 values are a reporting convention only; whole-food totals naturally differ slightly from reference table combustion densities. Never distort macro grams to force them to match the day's calorie total.
 
-R8. SPLIT INSTRUCTIONS. An ingredient carrying a split instruction (e.g. '50% in subji, remaining in chicken', '3g in subji, remaining in marinate') keeps its full daily weight in the calculations. Resolve the percentages or allocations into exact grams that sum to that weight, and print the resulting split — in PART 1 inside its meal's table row, and in PART 2 inside its owning meal's block.
+R8. SPLIT INSTRUCTIONS. An ingredient with a split instruction keeps its full weight in calculations. Resolve allocations into exact grams and print them inside the owning meal in both PART 1 and PART 2.
 
-R9. Do every calculation privately in your reasoning. The final output contains no step-by-step math, no solving strategy, no commentary on your own process — just the two parts below.
+R9. Do all math privately in reasoning. Emit zero step-by-step arithmetic or conversational commentary.
 
 ===================================================================
                         OUTPUT FORMAT
 ===================================================================
 
 PART 1: FOR MYSELF (User Breakdown)
-Generate this section first, using markdown tables and bullet points, based strictly on your calculations.
+Generate this section first using markdown tables and bullet points.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
 
-Open Part 1 with a Daily Totals (Summary) section at the very top — above the sodium summary and all meal tables — aggregating the whole day across all meals. Settle the per-meal arithmetic first, then print the finished figures here. Format it EXACTLY as the template below — same heading, same bullets, same order. Every bullet is a top-level "- " bullet: never indent, never nest sub-bullets, never merge meals onto one line, and add no extra bullets, notes, ticks or commentary.${isSingle ? '' : ' Repeat this whole block once per day, from Monday to Sunday, in order.'}
+Open with the Daily Totals (Summary) block below, above the sodium summary and every meal table. Every bullet is a top-level "- " bullet: never indent, never nest sub-bullets, never merge meals onto one line, and add no extra bullets or commentary.
 ### Daily Totals (Summary) — [DAY NAME]   <- replace [DAY NAME] with the day named in DAY DATA
 ${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 1 ? ` (**[Y] kcal** per meal × ${meal.mealsPerDay})` : ''}`).join('\n')}
 - **Total Daily Protein**: **[P]g ([P kcal] kcal)**
@@ -318,61 +320,70 @@ ${mealsList.map(meal => `- ${meal.name}: **[X] kcal** daily${meal.mealsPerDay > 
 - **Total Daily Fat**: **[F]g ([F kcal] kcal)**
 - **Final Aggregated Total Daily Calories**: **[T] kcal** (Target: **${c.global.dailyCalorieTarget} kcal**)
 
-Next, still above any meal tables, print the daily sodium & potassium summary, formatted exactly as follows:
 ### Daily Sodium & Potassium Summary
 For ${isSingle ? 'the target day' : 'each day from Monday to Sunday'}:
 - **[Day Name]**: Total Sodium: **[X] mg** | Total Potassium: **[Y] mg** | Na:K Ratio: **[Z]** ([Ideal / Below Ideal / Above Ideal])
   * (Include a brief breakdown note showing how you calculated this: e.g., "Includes [X_salt]mg sodium from consumed salt and [X_natural]mg natural sodium. Consumed salt sums ALL salt across ALL meals at 100%. Total potassium is from natural ingredients.")
   * **Ratio Adjustment Info**: [If ideal: "Ratio is in the ideal range (${idealMinStr} - ${idealMaxStr})." If below ${idealMinStr}: "Ratio is below ideal. Need an additional [A] mg of Sodium (approx. [B] g of table salt) to reach ${idealMinStr}." If above ${idealMaxStr}: "Ratio is above ideal. Need an additional [C] mg of Potassium to reach ${idealMaxStr} (or [D] mg to reach ${idealMinStr})."]
 
-Then one numbered section per meal, in this order and with these exact headings:
+Then output each meal in this order with its exact numbered heading (do NOT rephrase or omit this heading, and do NOT replace it with "Meal 1:" or "Meal 1 table:"):
 ${mealsList.map((meal, idx) => `${idx + 1}. ${meal.name} (${meal.mealsPerDay} Meal${meal.mealsPerDay > 1 ? 's' : ''} Per Day)`).join('\n')}
 
-Each section holds one markdown table with exactly these columns, in this order: Ingredient, Weight Per Meal, Daily Total, Calories (Per Meal), Protein (Per Meal), Carbs (Per Meal), Fat (Per Meal).
-- One row per ingredient: the meal's own ingredients plus the daily variables that belong to it (R3). List every configured ingredient and nothing else — no ingredient that is not in the configuration for this day.
-- Protein, Carbs and Fat print as "Xg (Y kcal)". Water and Table Salt (NaCl) are 0g (0 kcal) on every macro and on calories.
-- The last row's first cell is exactly "Total", summing the four PER-MEAL columns above it.
+Under each meal heading, print ONE markdown table with these exact 7 columns in this order:
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+
+Table Rules & Constraints:
+- Every configured ingredient for this meal (including daily variables assigned to it) gets one row, and nothing that is not configured for this day gets a row.
+- Copy each ingredient's name EXACTLY as the configuration spells it, character for character. Never swap in a reference-table alias, a fuller name or a tidier spelling, and use that same spelling in Part 1 and Part 2.
+- "Calories (Per Meal)" must be a bare whole integer (e.g. 636, NOT 636 kcal).
+- "Protein (Per Meal)", "Carbs (Per Meal)", "Fat (Per Meal)" must be formatted as "Xg (Y kcal)". Salt and water rows are 0g (0 kcal) on all macros and 0 calories.
+- The last row's first cell is exactly "Total". Leave "Weight Per Meal" and "Daily Total" empty.
+- CRITICAL: All 4 nutrition columns (Calories, Protein, Carbs, Fat) in EVERY row and in the "Total" row are strictly PER MEAL. For meals eaten multiple times a day (e.g. 3x/day), the "Total" row sums the per-meal columns above it, NOT the daily total.
+
+Example table for a meal eaten 3 times a day — the names below are placeholders, the real ones come from the configuration:
+
+| Ingredient | Weight Per Meal | Daily Total | Calories (Per Meal) | Protein (Per Meal) | Carbs (Per Meal) | Fat (Per Meal) |
+|---|---|---|---|---|---|---|
+| first ingredient name | 40g | 120g | 146 | 2.8g (11 kcal) | 32.0g (128 kcal) | 0.3g (3 kcal) |
+| second ingredient name | 2g | 6g | 18 | 0.0g (0 kcal) | 0.0g (0 kcal) | 2.0g (18 kcal) |
+| Total | | | 164 | 2.8g (11 kcal) | 32.0g (128 kcal) | 2.3g (21 kcal) |
 
 ---
 
 PART 2: FOR MY COOK (Text Plan)
-Separate this from Part 1 with a horizontal rule (---), then output ${isSingle ? 'the target day only' : 'every day from Monday to Sunday'} using the exact line-by-line template below. Map your calculated weights (including solved \`[AUTO]\` weights) directly. Absolutely no conversational text, tables, or calorie mentions in this section.
+Separate Part 2 from Part 1 with a horizontal rule (---), then output ${isSingle ? 'the target day only' : 'every day from Monday to Sunday'} using the template below. Map calculated weights directly. Output only the template's own lines: no conversational text, no reasoning, no tables, no calorie mentions.
 
-Three exclusions apply to Part 2 only, and the checker enforces all three:
-- Ingredients marked [PERSONAL ONLY - DO NOT SEND TO COOK] do not appear at all — not in an ingredient list, not in a split, not in a variant name.
-- An ingredient carrying a split instruction does not get an ingredient line of its own; it appears only as its computed split, inside its owning meal's block. This is what stops the cook adding it twice.
-- Splits never get their own section or heading. Each one sits inside the block of the meal that owns it.
+Part 2 Rules:
+- Personal-only ingredients ([PERSONAL ONLY - DO NOT SEND TO COOK]) do not appear at all — not in an ingredient list, not in a split, not in the variant name.
+- Split ingredients appear ONLY as their resolved split inside their owning meal's block, never as a separate ingredient line or heading.
+- Quantity mode is set per meal in the configuration. Never infer it from how often a meal is eaten:
+${hasPerMealMode ? `  * PER-MEAL MEALS — exactly these and no others: ${perMealMealNames.join(', ')}. Show per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)", and the heading carries the frequency, e.g. "Meal Name (x[N] daily):".
+  * EVERY OTHER MEAL: show daily total weights followed by "(daily total)", and the heading carries NO frequency suffix, whatever its meals-per-day is.` : '  * All meals show daily total weights followed by "(daily total)", and headings carry NO frequency suffix.'}
 
-${hasPerMealMode ? `CRITICAL QUANTITY MODE — PER-MEAL MEALS: the meals below are configured to show **per-meal weights** (daily total ÷ mealsPerDay) in Part 2, NOT the whole-day total, because the cook needs the quantity for a single preparation. Their headings also carry the frequency, e.g. "Meal Name (x3 daily):".
-Per-meal quantity meals: ${perMealMealNames.join(', ')}
-Every other meal shows daily total weights followed by "(daily total)", and its heading carries NO frequency suffix.` : 'Every meal shows daily total weights followed by "(daily total)", and no meal heading carries a frequency suffix.'}
-
-Exact Output Template to Follow for Each Day:
+Template for Each Day:
 
 ### [DAY]: [Ingredient Variant Name]
-[For each meal, in configuration order, print its block: the meal's own ingredients and the daily variables that belong to it, one per line, in the meal's quantity mode.
-After the ingredient lines, print any split instructions belonging to that meal as their computed exact gram amounts (R8).
-Then, if and only if a prep method is configured for that meal, print "prep method: [prepMethod]".]
+[For each meal in order, print its block: ingredients in the meal's quantity mode, then any split instructions for that meal, then prep method if configured.]
 
-Example for a PER-MEAL mode meal:
+Example (PER-MEAL mode meal):
 Meal Name (x3 daily):
 first ingredient name 50g (per meal)
 second ingredient name 190g (per meal)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
-Example for a DAILY TOTAL mode meal:
+Example (DAILY TOTAL mode meal):
 Meal Name:
 first ingredient name 150g (daily total)
 second ingredient name 190g (daily total)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
-FINAL SELF-CHECK (silent — none of this appears in the output, per R9):
-- Every printed calorie, macro and mineral figure is recomputed from the FINAL rounded weights (R5d), and every total equals the sum of the rows above it (R5e).
-- The day's calories sit within 1 kcal of the target from the reference table densities. Macro calorie equivalents (4P, 4C, 9F) are for reporting and will naturally differ slightly from the target due to whole-food combustion values (R7).
-- No ingredient appears that is not configured for the day, and nothing configured is missing.
-- Part 2 carries no personal-only ingredient, no standalone line for a split ingredient, and each meal's quantities follow its quantity mode.
+FINAL SELF-CHECK (silent in reasoning):
+- All calories/macros/minerals recomputed from final rounded weights; totals match row sums.
+- Day calories sit within 1 kcal of target from reference densities.
+- No unconfigured ingredients added, no configured ingredients omitted.
+- Part 2 omits personal-only items and follows per-meal vs daily-total modes accurately.
 
 ===================================================================
                  DAY DATA — GENERATE ${isSingle ? selectedDay : 'MONDAY TO SUNDAY'}
