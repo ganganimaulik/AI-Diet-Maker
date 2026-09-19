@@ -28,7 +28,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 13;
+const PROMPT_TEMPLATE_VERSION = 14;
 
 /**
  * The reference nutrition table, one entry per line, exactly as it is printed.
@@ -280,21 +280,27 @@ R4. SOLVING \`[AUTO]\` WEIGHTS.
    b. Convert budget into grams for \`[AUTO]\` ingredients using their exact kcal/g (non-negative, sum to budget).
    c. Bounds are hard: \`[AUTO, min Xg]\` may never solve below X; \`[AUTO, max Yg]\` may never solve above Y. If a bound is reached, pin it and redistribute across remaining \`[AUTO]\` ingredients.
    d. When multiple \`[AUTO]\` ingredients exist, allocate to steer the whole-day Na:K ratio (R6) into the ideal band.
-   e. Reachability check:
-      - Compute extreme ratios: once with budget pushed toward the most potassium-dense AUTO ingredients, once toward the least.
-      - If the ideal band is unreachable, or profiles are too similar, split the budget evenly and report the real ratio truthfully. Never force or fake a ratio.
+   e. Reachability. Compute the whole-day ratio at both extremes ONCE, and do not re-derive or re-check them afterwards:
+      - LOWEST reachable ratio: spend the budget on the most potassium-dense \`[AUTO]\` ingredients (highest mg K per kcal) that the bounds allow.
+      - HIGHEST reachable ratio: spend it on the least potassium-dense ones.
+      Then pick the allocation by where the band falls:
+      - Band inside [lowest, highest]: solve for a mix that lands in the band.
+      - Band entirely ABOVE the highest reachable ratio: use the highest-ratio allocation, i.e. the least potassium-dense mix the bounds allow.
+      - Band entirely BELOW the lowest reachable ratio: use the lowest-ratio allocation.
+      Always land as close to the band as the ingredients allow. NEVER split the budget evenly — an even split pins the small-max ingredients at their maximums and lands on the potassium-dense extreme, which is the furthest point from the band. Never force or fake a ratio; report the real one.
 
 R5. ROUNDING PROTOCOL:
    a. Solve at full precision, then round every ingredient weight to a whole number of grams.
-   b. Nominate one \`[AUTO]\` ingredient with headroom as the residual absorber and shift it by whole grams so the recomputed daily calories sit within 1 kcal of the target.
-   c. Recompute every printed calorie, macro, and mineral figure from those FINAL rounded weights. Print calories as whole numbers and macro grams to one decimal.
-   d. Every printed total must equal the exact sum of the rows you printed.
+   b. Nominate one \`[AUTO]\` ingredient with headroom as the residual absorber and shift it by whole grams so the recomputed daily calories sit within 2 kcal of the target.
+   c. Recompute every printed calorie, macro, and mineral figure from those FINAL rounded weights. Print calories as whole numbers and macro grams to one decimal. Round half away from zero (2.5 to 3, 0.05 to 0.1); never use banker's rounding.
+   d. A "Total" row is the arithmetic sum of the rows printed directly above it. A figure in the Daily Totals block is computed from the exact final weights, NOT by summing rounded meal totals. The two may disagree in the last decimal; that is expected and correct, so do not adjust either to match the other.
+   e. TOLERANCES. Printed figures are checked with slack: 1 kcal per ingredient row, 1.5 kcal per meal total, 2 kcal per day, 0.1g per macro row, 0.5g per daily macro, 2mg per mineral, 0.006 on the ratio. Any self-consistent rounding convention passes. Do not deliberate over rounding modes, tie-breaks or .5 cases — apply (c) and move on.
 
 R6. SODIUM & POTASSIUM (whole day).
    - ALL salt in the day counts at the reference table's sodium-per-gram (salt in marinade, subji, cooking water, etc. with zero discard discount).
    - Total Daily Sodium (mg) = sodium from salt + natural sodium from all ingredients.
    - Total Daily Potassium (mg) = natural potassium from all ingredients.
-   - Na:K Ratio = Total Daily Sodium ÷ Total Daily Potassium, rounded to 2 decimals, judged against ${idealMinStr} to ${idealMaxStr}:
+   - Na:K Ratio = Total Daily Sodium ÷ Total Daily Potassium. PRINT it rounded to 2 decimals, but decide Ideal / Below Ideal / Above Ideal from the UNROUNDED value against ${idealMinStr} to ${idealMaxStr}. A ratio of 0.789 prints as "0.79" and is still Below Ideal for a 0.79 to 0.80 band:
      - Below ${idealMinStr}: Additional Na (mg) = (${idealMinStr} × Total Potassium) − Total Sodium; Additional Salt (g) = Additional Na ÷ 388, to 2 decimals.
      - Above ${idealMaxStr}: Additional Potassium to ${idealMaxStr} (mg) = (Total Sodium ÷ ${idealMaxStr}) − Total Potassium; Additional Potassium to ${idealMinStr} (mg) = (Total Sodium ÷ ${idealMinStr}) − Total Potassium, to nearest whole mg.
      - Between ${idealMinStr} and ${idealMaxStr} inclusive: the ratio is ideal.
@@ -336,7 +342,7 @@ Table Rules & Constraints:
 - Every configured ingredient for this meal (including daily variables assigned to it) gets one row, and nothing that is not configured for this day gets a row.
 - Copy each ingredient's name EXACTLY as the configuration spells it, character for character. Never swap in a reference-table alias, a fuller name or a tidier spelling, and use that same spelling in Part 1 and Part 2.
 - "Calories (Per Meal)" must be a bare whole integer (e.g. 636, NOT 636 kcal).
-- "Protein (Per Meal)", "Carbs (Per Meal)", "Fat (Per Meal)" must be formatted as "Xg (Y kcal)". Salt and water rows are 0g (0 kcal) on all macros and 0 calories.
+- "Protein (Per Meal)", "Carbs (Per Meal)", "Fat (Per Meal)" must be formatted as "X.Xg (Y kcal)" with exactly one decimal, zeros included: "0.0g (0 kcal)". Salt and water rows are 0.0g (0 kcal) on all three macros and 0 calories.
 - The last row's first cell is exactly "Total". Leave "Weight Per Meal" and "Daily Total" empty.
 - CRITICAL: All 4 nutrition columns (Calories, Protein, Carbs, Fat) in EVERY row and in the "Total" row are strictly PER MEAL. For meals eaten multiple times a day (e.g. 3x/day), the "Total" row sums the per-meal columns above it, NOT the daily total.
 
@@ -379,10 +385,11 @@ second ingredient name 190g (daily total)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
-FINAL SELF-CHECK (silent in reasoning):
-- All calories/macros/minerals recomputed from final rounded weights; totals match row sums.
-- Day calories sit within 1 kcal of target from reference densities.
-- No unconfigured ingredients added, no configured ingredients omitted.
+FINAL SELF-CHECK (silent in reasoning) — check these five points once, then emit. Do NOT re-derive the plan a second time:
+- Every "Total" row equals the sum of the rows printed above it.
+- Daily macro grams carry one decimal, and day calories sit within 2 kcal of target.
+- The Ideal / Below Ideal / Above Ideal verdict matches the UNROUNDED ratio, and the chosen [AUTO] mix is as close to the band as R4e allows.
+- No unconfigured ingredients added, none omitted, every name spelled exactly as configured.
 - Part 2 omits personal-only items and follows per-meal vs daily-total modes accurately.
 
 ===================================================================
