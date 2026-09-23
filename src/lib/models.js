@@ -62,6 +62,10 @@ const ConfigSchema = new Schema({
   maxTokens: { type: Number, default: 0 },
   // 'default' = omit reasoning_effort from the request (Fireworks only)
   reasoningEffort: { type: String, default: 'default' },
+  // Which engine writes a plan. 'deterministic' solves the [AUTO] weights and
+  // renders both parts locally (src/lib/build-plan.js) with no provider call,
+  // no API key and no retry loop — the arithmetic is the plan.
+  generationEngine: { type: String, enum: ['llm', 'deterministic'], default: 'llm' },
   // Plan verification. The arithmetic checker always runs and never calls a
   // model; these settings only drive the optional second-opinion AI review,
   // which may use a different provider/model than plan generation.
@@ -234,6 +238,9 @@ const GenerationJobSchema = new Schema({
   // resume an abandoned job. select:false keeps it out of ordinary reads and
   // API serialization; the runner opts in explicitly.
   prompt: { type: String, required: true, select: false },
+  // Snapshotted at enqueue time so a mid-run settings change cannot switch the
+  // engine under a job that is already executing.
+  engine: { type: String, enum: ['llm', 'deterministic'], default: 'llm' },
   provider: { type: String, default: 'google-ai-studio' },
   model: { type: String, default: 'gemini-3.7-flash' },
   thinkingLevel: { type: String, default: 'default' },

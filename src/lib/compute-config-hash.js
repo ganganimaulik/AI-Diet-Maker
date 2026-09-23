@@ -10,6 +10,7 @@
 
 const { createHash } = require('crypto');
 const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
+const { PLAN_BUILDER_VERSION } = require('./build-plan.js');
 
 /**
  * Compute a SHA-256 hash of the configuration that feeds ONE day's prompt.
@@ -26,6 +27,8 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  *   - provider, model, customModel, thinkingLevel
  *   - maxTokens, reasoningEffort (only once moved off their defaults, so
  *     existing caches are not invalidated by simply adding the settings)
+ *   - generationEngine + PLAN_BUILDER_VERSION (deterministic runs only, so a
+ *     model-written plan and a computed one never share a cache entry)
  *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
  *
  * Excluded fields (changes do NOT invalidate cache):
@@ -84,6 +87,13 @@ function computeConfigHash(config, day) {
   }
   if (config.reasoningEffort && config.reasoningEffort !== 'default') {
     hashableFields.reasoningEffort = config.reasoningEffort;
+  }
+  // Only stamped for the deterministic engine, so switching to it invalidates
+  // the day's cached model plan (and back again re-uses it) while configs that
+  // never leave the default keep the hashes they already have.
+  if (config.generationEngine === 'deterministic') {
+    hashableFields.generationEngine = 'deterministic';
+    hashableFields.planBuilderVersion = PLAN_BUILDER_VERSION;
   }
 
   const jsonStr = JSON.stringify(hashableFields, (key, value) => {

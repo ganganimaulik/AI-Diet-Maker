@@ -31,8 +31,17 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Structured Dual-Part Output**:
   - **Part 1 (User Plan)**: Complete nutrition tables, macros (protein, carbs, fat, fiber), micro-nutrients (sodium, potassium), and meal schedules.
   - **Part 2 (Cook Instructions)**: Clean, cook-friendly preparation instructions, ingredient weights, and seasoning splits in clear language.
-- **Hash-Based MongoDB Caching**: Hashes full configuration state to cache generated plans per day. Unchanged days load instantaneously with zero API latency.
+- **Hash-Based MongoDB Caching**: Hashes full configuration state to cache generated plans per day. Unchanged days load instantaneously with zero API latency. A model-written plan and a computed one never share a cache entry, so switching engines regenerates rather than reusing.
 - **Batch 7-Day Generation**: Generate all 7 days of the week in a single batch with live progress tracking.
+
+### 🧮 No-LLM Mode (Deterministic Plan Builder)
+- **Compute Instead of Generate**: A **Compute without AI** switch beside the generate button swaps the model out for a solver. The `[AUTO]` weights are solved, both parts of the document are written, and the day is cached — with no provider call, no API key and no worker running.
+- **Same Arithmetic, Both Directions**: The builder uses the verifier's own reference-table lookup, per-day ingredient grouping and calorie-budget solver, so a computed plan is judged by exactly the arithmetic that produced it. Every day it writes passes the checker with zero errors and zero warnings.
+- **Exact Targets**: The AUTO weights are solved so the day's calories land on the target (within a fraction of a kcal), every `min`/`max` bound is respected, and the calorie split is steered to put the Na:K ratio inside the ideal band whenever that band is reachable.
+- **Even Split by Default**: Calories are spread evenly across the `[AUTO]` ingredients unless that lands the ratio outside the band, in which case the split shifts just far enough to reach it. When the band is physically unreachable the plan lands on the closest ratio the ingredients allow and says so in as many words.
+- **Instant and Free**: Runs inside `/api/generate` in milliseconds, so there is no queue, no streaming, no retry budget and no token cost. The **Thoughts** tab shows the derivation instead of a model's reasoning: the calorie budget, each solved weight with its bounds, and the resulting totals.
+- **Refuses to Guess**: A model can fall back on "standard USDA values" for an ingredient the reference table does not list; arithmetic cannot. Those configs are refused by name rather than quietly costed at zero, as are `[AUTO]` bounds no weight can satisfy.
+- **Scheduler Support**: The WhatsApp scheduler honours the same setting, so a daily dispatch can generate its missing day locally with no credentials configured at all.
 
 ### ✅ Plan Verification & Automatic Retries
 - **Deterministic Arithmetic Checker**: Every number in a generated plan is re-derived from the same reference nutrition table the model was given — per-row and per-meal calories, macros, sodium/potassium, the Na:K ratio, AUTO weight bounds, and whether the cook's copy matches Part 1. No model is involved, so the checker cannot be talked out of a number.
@@ -104,6 +113,7 @@ flowchart TD
     API -.->|"Assistant tool calls (read-only, secrets redacted)"| ConfigDoc & CacheDoc & VerifyDoc & JobDoc & SchedulerDoc
     WorkerScript <--> GridFS & ConfigDoc & SchedulerDoc & CacheDoc & JobDoc & VerifyDoc
     WorkerScript -->|Generate, verify, regenerate on a failed verdict| GeminiFlash
+    API -.->|"No-LLM mode: solve + verify locally, no provider call"| CacheDoc
     WorkerScript --> PuppeteerEngine
     PuppeteerEngine -->|Daily Scheduled Dispatch| UserPhone & CookPhone
 ```
@@ -291,6 +301,7 @@ docker run -d \
 │       ├── agent-tools.js      # Read-only DB tools, redaction & query guardrails
 │       ├── agent.ts            # Typed wrapper over the assistant modules
 │       ├── auth.ts             # Password authentication & cookie helpers
+│       ├── build-plan.js       # Deterministic plan builder (no-LLM mode): AUTO solver + renderer
 │       ├── compile-prompt.js   # Dynamic prompt compiler & template engine
 │       ├── compute-config-hash.js # Deterministic configuration hash generator
 │       ├── ai-complete.js      # Single-shot completion across all three providers

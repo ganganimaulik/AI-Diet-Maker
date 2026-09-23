@@ -2,21 +2,30 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
 import {
+  CachedResponse,
   Config,
   GenerationJob,
+  VerificationResult,
   dbConnect,
   type IConfig,
   type IGenerationJob,
   type IGenerationVerificationAttempt
 } from '@/lib/db';
 import { computeConfigHash } from '@/lib/config-hash';
+import { buildPlan } from '@/lib/build-plan';
+import { runPlanVerification } from '@/lib/verification-runner';
 
 import { requeueStaleJobs, requestCancelJob } from '@/lib/generation-runner';
 
-// Generation no longer executes in this serverless function. POST persists a
-// durable GenerationJob and the always-on whatsapp-worker process claims and
+// Model generation does not execute in this serverless function. POST persists
+// a durable GenerationJob and the always-on whatsapp-worker process claims and
 // runs it (see src/lib/generation-runner.js), so a long plan cannot hit
 // Vercel's per-invocation timeout. This route only enqueues and reports status.
+//
+// The deterministic engine is the exception: it is pure arithmetic over the
+// config, finishes in milliseconds and calls nothing over the network, so it
+// runs here and the job comes back already completed. That also means it works
+// with the worker down and with no API key configured at all.
 
 const VALID_DAYS = new Set([
   'MONDAY',
@@ -59,6 +68,7 @@ interface PublicGenerationJob {
   error: string;
   cacheable: boolean;
   isCurrentConfig: boolean;
+  engine: 'llm' | 'deterministic';
   autoVerify: boolean;
   generationAttempt: number;
   maxGenerationAttempts: number;
@@ -92,6 +102,19 @@ function normalizeDay(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const day = value.trim().toUpperCase();
   return VALID_DAYS.has(day) ? day : null;
+}
+
+/**
+ * The engine a run executes on.
+ *
+ * Read from the saved configuration and nowhere else, because computeConfigHash
+ * stamps the engine from that same document. Honouring a per-request override
+ * would let the two disagree — a stale browser tab could run the model while
+ * the hash said "computed", and the model's plan would then be cached under the
+ * deterministic hash and served back as a computed one.
+ */
+function resolveEngine(config: IConfig): 'llm' | 'deterministic' {
+  return config.generationEngine === 'deterministic' ? 'deterministic' : 'llm';
 }
 
 function normalizeMaxTokens(value: unknown): number {
@@ -152,6 +175,7 @@ function serializeJob(job: IGenerationJob, config: IConfig | null): PublicGenera
     error: job.error || '',
     cacheable: !!job.cacheable,
     isCurrentConfig: isCurrentConfig(job, config),
+    engine: job.engine === 'deterministic' ? 'deterministic' : 'llm',
     autoVerify: !!job.autoVerify,
     generationAttempt: job.generationAttempt || 0,
     maxGenerationAttempts: job.maxGenerationAttempts || 1,
@@ -191,6 +215,7 @@ async function createOrReuseJob(
     day,
     status: 'queued' as const,
     prompt: stringValue(body.prompt),
+    engine: 'llm' as const,
     provider: stringValue(body.provider, config.provider || 'google-ai-studio'),
     model: stringValue(body.model, config.model || 'gemini-3.7-flash'),
     thinkingLevel: stringValue(body.thinkingLevel, config.thinkingLevel || 'default'),
@@ -240,6 +265,166 @@ async function createOrReuseJob(
   }
 }
 
+/**
+ * Claim a day by replacing its terminal job document with a finished one.
+ *
+ * The filter deliberately skips active jobs, so the upsert collides with the
+ * unique day index when a run starts in the gap between the caller's check and
+ * this write. Returns null on that collision: another run owns the day, and the
+ * caller must leave its cache entry and its verdict alone rather than
+ * overwriting them with a plan that lost the race.
+ */
+async function upsertCompletedJob(day: string, values: Record<string, unknown>) {
+  try {
+    return await GenerationJob.findOneAndUpdate(
+      { day, status: { $nin: ACTIVE_JOB_STATUSES } },
+      { $set: values },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    if (isDuplicateKeyError(error)) return null;
+    throw error;
+  }
+}
+
+/**
+ * Compute one day's plan without a model and store it as a finished job.
+ *
+ * The plan is verified by the same arithmetic checker that judges a model's,
+ * because a builder bug should surface as a failed verdict rather than as a
+ * plan nobody checked. The second-opinion AI review is deliberately skipped:
+ * this path exists to run without a provider, and that review never decides
+ * pass/fail anyway. There is no retry loop either — the same config yields the
+ * same plan, so regenerating it would only produce the same verdict.
+ */
+async function runDeterministicJob(
+  day: string,
+  configHash: string,
+  body: GenerationRequestBody,
+  config: IConfig
+) {
+  const built = buildPlan(config, day);
+  const generatedAt = new Date();
+
+  const record = await runPlanVerification(config, day, built.text, {
+    aiReview: false,
+    configHash,
+    planGeneratedAt: generatedAt
+  });
+
+  const attempt: IGenerationVerificationAttempt = {
+    attempt: 1,
+    status: record.ok ? 'passed' : 'failed',
+    errorCount: record.errorCount,
+    warningCount: record.warningCount,
+    issues: record.issues,
+    aiStatus: 'skipped',
+    aiVerdict: '',
+    aiSummary: '',
+    error: '',
+    generatedAt,
+    checkedAt: record.checkedAt
+  };
+
+  // Only now that a verified plan exists is it safe to stand down a job that
+  // was queued for the worker. Doing it earlier would throw away a viable run
+  // for a config that then turned out to be unsolvable.
+  await GenerationJob.updateOne(
+    { day, status: 'queued' },
+    {
+      $set: {
+        status: 'cancelled',
+        cancelRequested: true,
+        error: 'Superseded by a computed plan.',
+        completedAt: new Date()
+      }
+    }
+  );
+
+  const job = await upsertCompletedJob(day, {
+    jobId: randomUUID(),
+    day,
+    status: 'completed' as const,
+    // The compiled brief is stored even though nothing read it, so the
+    // verification tab and the assistant still see what this day was
+    // planned against.
+    prompt: stringValue(body.prompt),
+    engine: 'deterministic' as const,
+    provider: 'deterministic',
+    model: 'deterministic',
+    thinkingLevel: 'default',
+    maxTokens: 0,
+    reasoningEffort: 'default',
+    enterpriseAuthMethod: config.enterpriseAuthMethod || 'api-key',
+    enterpriseProjectId: config.enterpriseProjectId || '',
+    enterpriseLocation: config.enterpriseLocation || 'global',
+    configHash,
+    cacheable: true,
+    autoVerify: true,
+    maxGenerationAttempts: 1,
+    phase: 'generating' as const,
+    generationAttempt: 1,
+    verificationAttempts: [attempt],
+    verificationOk: record.ok,
+    cancelRequested: false,
+    responseText: built.text,
+    thinkingText: built.thinking,
+    error: '',
+    leaseId: '',
+    leaseExpiresAt: null,
+    heartbeatAt: null,
+    requestedAt: generatedAt,
+    startedAt: generatedAt,
+    completedAt: new Date(),
+    attempts: 1
+  });
+
+  // Lost the race for the day: another run's plan is the day's plan now, and
+  // this one must not overwrite the cache entry or the verdict that belong to it.
+  if (!job) return null;
+
+  try {
+    await Promise.all([
+      CachedResponse.findOneAndUpdate(
+        { day },
+        {
+          $set: {
+            configHash,
+            responseText: built.text,
+            thinkingText: built.thinking,
+            generatedAt
+          }
+        },
+        { upsert: true }
+      ),
+      VerificationResult.findOneAndUpdate(
+        { day },
+        { $set: { ...record, planGeneratedAt: generatedAt } },
+        { upsert: true }
+      )
+    ]);
+  } catch (error) {
+    // The job document already says this day completed. Leaving it that way
+    // after failing to store the plan would have the dashboard show a plan the
+    // cache and the WhatsApp dispatch do not have, so the claim is withdrawn
+    // before the error surfaces.
+    await GenerationJob.updateOne(
+      { jobId: job.jobId },
+      {
+        $set: {
+          status: 'failed',
+          error: 'The computed plan could not be stored.',
+          verificationOk: null,
+          completedAt: new Date()
+        }
+      }
+    ).catch(() => {});
+    throw error;
+  }
+
+  return job;
+}
+
 export async function POST(req: Request) {
   try {
     if (!(await isAuthenticated())) {
@@ -262,6 +447,46 @@ export async function POST(req: Request) {
     }
 
     const configHash = computeConfigHash(config, day);
+
+    if (resolveEngine(config) === 'deterministic') {
+      // A day a worker is actively generating must not be replaced mid-flight.
+      // A merely *queued* job is different: nothing has claimed it, and if the
+      // worker is down nothing ever will — which is the situation this engine
+      // exists to get out of. Cancelling it and computing the day is what the
+      // user just asked for, so a dead queue cannot leave a day stuck.
+      const running = await GenerationJob.findOne({ day, status: 'running' });
+      if (running) {
+        return NextResponse.json(
+          { job: serializeJob(running, config) },
+          { status: 202, headers: { 'Cache-Control': 'no-store' } }
+        );
+      }
+      try {
+        const job = await runDeterministicJob(day, configHash, body, config);
+        if (!job) {
+          // Another run claimed the day between the check above and the write.
+          // Its plan is the day's plan; nothing here was stored.
+          const winner = await GenerationJob.findOne({ day });
+          return NextResponse.json(
+            { job: winner ? serializeJob(winner, config) : null },
+            { status: 202, headers: { 'Cache-Control': 'no-store' } }
+          );
+        }
+        return NextResponse.json(
+          { job: serializeJob(job, config) },
+          { headers: { 'Cache-Control': 'no-store' } }
+        );
+      } catch (error) {
+        // A config the arithmetic cannot solve (an ingredient the reference
+        // table does not price, contradictory AUTO bounds) is a bad request,
+        // not a server fault, and its message is the actionable part.
+        if (error instanceof Error && error.name === 'PlanBuildError') {
+          return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        throw error;
+      }
+    }
+
     // Persist the job as queued; the whatsapp-worker claims and executes it.
     const job = await createOrReuseJob(day, configHash, body, config);
 

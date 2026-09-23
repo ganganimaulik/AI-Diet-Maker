@@ -6,6 +6,7 @@ import { CacheEntryStatus } from '@/hooks/useDietCache';
 interface GenerationControlsProps {
   config: Config;
   setSelectedGenerationDay: (day: string) => void;
+  setGenerationEngine: (engine: 'llm' | 'deterministic') => void;
   cacheStatus: Record<string, CacheEntryStatus>;
   currentCacheDay: string;
   isGenerating: boolean;
@@ -65,6 +66,7 @@ function dayChipState(status: CacheEntryStatus | undefined, progress: DayProgres
 export default function GenerationControls({
   config,
   setSelectedGenerationDay,
+  setGenerationEngine,
   cacheStatus,
   currentCacheDay,
   isGenerating,
@@ -84,6 +86,7 @@ export default function GenerationControls({
   onVerifyDay,
   onVerifyAll
 }: GenerationControlsProps) {
+  const isDeterministic = config.generationEngine === 'deterministic';
   const cached = cacheStatus[currentCacheDay];
   // Queued + generating days have a live server job; the cache-checking phase
   // is cancellable too — the client aborts the flow before any job is created.
@@ -186,6 +189,24 @@ export default function GenerationControls({
       </div>
 
       <div className="generation-actions">
+        <div className="engine-toggle">
+          <button
+            type="button"
+            className={`switch-container ${isDeterministic ? 'checked' : ''}`}
+            role="switch"
+            aria-checked={isDeterministic}
+            onClick={() => setGenerationEngine(isDeterministic ? 'llm' : 'deterministic')}
+          >
+            <span className="switch-control"></span>
+            <span className="engine-toggle__label">Compute without AI</span>
+          </button>
+          <p className="note-text engine-toggle__note">
+            {isDeterministic
+              ? 'Solving the [AUTO] weights here from the reference nutrition table — no model call, no API key, instant. Every ingredient must be in that table, and a hand-written prompt is not used.'
+              : 'Plans are written by the configured AI provider and re-checked by the arithmetic verifier.'}
+          </p>
+        </div>
+
         {cached && (
           <div className={`cache-status-bar ${cached.isValid ? 'cache-valid' : 'cache-stale'}`}>
             <div className="cache-status-bar__info">
@@ -242,7 +263,7 @@ export default function GenerationControls({
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
                   <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
                 </svg>
-                Generate {config.selectedGenerationDay || 'Day'}
+                {isDeterministic ? 'Compute' : 'Generate'} {config.selectedGenerationDay || 'Day'}
               </>
             )}
           </button>
@@ -362,7 +383,7 @@ export default function GenerationControls({
               <line x1="8" y1="2" x2="8" y2="6"/>
               <line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
-            ⚡ Generate All 7 Days (Parallel)
+            {isDeterministic ? '⚡ Compute All 7 Days' : '⚡ Generate All 7 Days (Parallel)'}
           </button>
         )}
       </div>

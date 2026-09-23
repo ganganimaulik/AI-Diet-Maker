@@ -89,6 +89,7 @@ const normalizeGenerationJob = (value: unknown): GenerationJob | null => {
     error: typeof job.error === 'string' ? job.error : '',
     cacheable: job.cacheable !== false,
     isCurrentConfig: job.isCurrentConfig !== false,
+    engine: job.engine === 'deterministic' ? 'deterministic' : 'llm',
     autoVerify: job.autoVerify === true,
     generationAttempt: Number(job.generationAttempt) || 0,
     maxGenerationAttempts: Math.max(1, Number(job.maxGenerationAttempts) || 1),
@@ -722,6 +723,34 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticatedState, savedConfig]);
 
+  /**
+   * Block a run that has no chance of reaching its provider. The deterministic
+   * engine reaches no provider at all, so it is deliberately exempt: requiring
+   * an API key to compute a plan locally would defeat the point of it.
+   */
+  const ensureProviderCredentials = (cfg: Config): boolean => {
+    if ((cfg.generationEngine || 'llm') === 'deterministic') return true;
+
+    const missing = cfg.provider === 'fireworks'
+      ? (!cfg.fireworksApiKey
+        ? 'Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.' : '')
+      : cfg.provider === 'gemini-enterprise'
+        ? (cfg.enterpriseAuthMethod === 'api-key' && !cfg.enterpriseApiKey
+          ? 'API Key is missing. Please enter your Agent Platform API Key in Settings.'
+          : cfg.enterpriseAuthMethod === 'service-account' && !cfg.enterpriseServiceAccountJson
+            ? 'Service Account JSON is missing. Please enter your Service Account JSON in Settings.'
+            : !cfg.enterpriseProjectId
+              ? 'GCP Project ID is missing. Please enter your GCP Project ID in Settings.'
+              : '')
+        : (!cfg.apiKey
+          ? 'API Key is missing. Please enter your Gemini API Key in Settings.' : '');
+
+    if (!missing) return true;
+    setConfigErrorMsg(missing);
+    setCurrentView('connections');
+    return false;
+  };
+
   // Run AI Generation for one day. The target day is pinned when the request
   // starts, so a second day can be launched while this one is still running.
   // `targetDay` regenerates a day other than the selected one; `configOverride`
@@ -736,35 +765,7 @@ export default function Home() {
       setLayoutMode('results');
     }
 
-    if (cfg.provider === 'fireworks') {
-      if (!cfg.fireworksApiKey) {
-        setConfigErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    } else if (cfg.provider === 'gemini-enterprise') {
-      if (cfg.enterpriseAuthMethod === 'api-key' && !cfg.enterpriseApiKey) {
-        setConfigErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-      if (cfg.enterpriseAuthMethod === 'service-account' && !cfg.enterpriseServiceAccountJson) {
-        setConfigErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-      if (!cfg.enterpriseProjectId) {
-        setConfigErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    } else {
-      if (!cfg.apiKey) {
-        setConfigErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    }
+    if (!ensureProviderCredentials(cfg)) return;
 
     // Claim the day before the first await so a double click can't start it twice
     markDayProgress(day, 'checking');
@@ -793,8 +794,13 @@ export default function Home() {
     }
 
     // The hand-written prompt belongs to the day it was authored against, so
-    // regenerating any other day falls back to the compiled prompt.
-    const useCustomPrompt = isCustomMode && day === (config.selectedGenerationDay || 'MONDAY');
+    // regenerating any other day falls back to the compiled prompt. The
+    // deterministic engine reads the config, not a prompt, so a custom prompt
+    // is simply not part of that run.
+    const engine = cfg.generationEngine === 'deterministic' ? 'deterministic' : 'llm';
+    const useCustomPrompt = engine === 'llm'
+      && isCustomMode
+      && day === (config.selectedGenerationDay || 'MONDAY');
 
     // Compile for the pinned day — the user may switch days while this runs
     const dayPrompt = useCustomPrompt
@@ -863,8 +869,10 @@ export default function Home() {
       if (!job) throw new Error('Server did not return a valid generation job.');
 
       // Cancelled while the POST was in flight: cancel the freshly queued job
-      // instead of starting to track it.
-      if (cancelRequestedDaysRef.current.has(day)) {
+      // instead of starting to track it. A computed run is already finished and
+      // stored by the time the response arrives, so there is nothing to cancel
+      // — showing it beats leaving the day blank over a plan that exists.
+      if (cancelRequestedDaysRef.current.has(day) && isActiveJob(job)) {
         await handleCancelGeneration(day, job.jobId);
         return;
       }
@@ -999,35 +1007,7 @@ export default function Home() {
       setLayoutMode('results');
     }
 
-    if (config.provider === 'fireworks') {
-      if (!config.fireworksApiKey) {
-        setConfigErrorMsg('Fireworks API Key is missing. Please enter your Fireworks API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    } else if (config.provider === 'gemini-enterprise') {
-      if (config.enterpriseAuthMethod === 'api-key' && !config.enterpriseApiKey) {
-        setConfigErrorMsg('API Key is missing. Please enter your Agent Platform API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-      if (config.enterpriseAuthMethod === 'service-account' && !config.enterpriseServiceAccountJson) {
-        setConfigErrorMsg('Service Account JSON is missing. Please enter your Service Account JSON in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-      if (!config.enterpriseProjectId) {
-        setConfigErrorMsg('GCP Project ID is missing. Please enter your GCP Project ID in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    } else {
-      if (!config.apiKey) {
-        setConfigErrorMsg('API Key is missing. Please enter your Gemini API Key in Settings.');
-        setCurrentView('connections');
-        return;
-      }
-    }
+    if (!ensureProviderCredentials(config)) return;
 
     if (hasUnsavedChanges) {
       try {
@@ -1253,6 +1233,7 @@ export default function Home() {
                 <GenerationControls
                   config={config}
                   setSelectedGenerationDay={(day) => setConfig(prev => ({ ...prev, selectedGenerationDay: day }))}
+                  setGenerationEngine={(engine) => setConfig(prev => ({ ...prev, generationEngine: engine }))}
                   cacheStatus={cacheStatus}
                   currentCacheDay={getCurrentCacheDay()}
                   isGenerating={isGenerating}
@@ -1297,6 +1278,8 @@ export default function Home() {
             onCancelDay={handleCancelGeneration}
             hidden={layoutMode === 'builder'}
             provider={config.provider}
+            engine={dayJobs[config.selectedGenerationDay || 'MONDAY']?.engine
+              ?? (config.generationEngine === 'deterministic' ? 'deterministic' : 'llm')}
             verifications={verification.verifications}
             verifyingDays={verification.verifyingDays}
             verifyErrors={verification.verifyErrors}
