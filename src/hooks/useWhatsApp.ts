@@ -8,14 +8,15 @@ interface UseWhatsAppArgs {
   activeTab: string;
   currentView: string;
   config: Config;
-  saveConfig: (configToSave?: Config) => Promise<void>;
+  /** Asks before saving unsaved config edits (see page.tsx); false = don't proceed. */
+  ensureConfigSaved: (otherUnsavedChanges?: boolean) => Promise<boolean>;
 }
 
 /**
  * WhatsApp worker status polling, contacts, scheduler settings and
  * Hugging Face Space status — extracted from page.tsx.
  */
-export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, saveConfig }: UseWhatsAppArgs) {
+export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, ensureConfigSaved }: UseWhatsAppArgs) {
   const [whatsappState, setWhatsappState] = useState<WhatsAppStatus>({
     status: 'disconnected',
     qr: '',
@@ -193,10 +194,14 @@ export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, s
   const handleSendTestMessage = async (type: 'myself' | 'cook') => {
     setTestSendStatus({ status: 'sending', message: `Triggering test send for ${type === 'myself' ? 'Myself' : 'Cook'}...` });
     try {
-      // Auto-save the config first to ensure today's test matches edits
-      await saveConfig(config);
+      // The worker builds the test from the saved config and scheduler, so
+      // unsaved edits to either are saved first — after a single confirm.
+      if (!(await ensureConfigSaved(isSchedulerDirtyRef.current))) {
+        setTestSendStatus({ status: 'idle', message: '' });
+        return;
+      }
 
-      // Auto-save scheduler settings first to ensure the recipient JID is updated in the DB
+      // Save scheduler settings first to ensure the recipient JID is updated in the DB
       await saveSchedulerDb(schedulerState);
       setIsSchedulerDirty(false);
 

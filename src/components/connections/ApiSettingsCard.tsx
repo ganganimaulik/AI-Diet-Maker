@@ -14,6 +14,19 @@ const REASONING_EFFORT_LABELS: Record<string, string> = {
   none: 'None (no reasoning)'
 };
 
+// Every field this card edits. Save API Settings persists only these, so
+// unsaved Diet Builder edits stay unsaved until Save Configuration.
+export const API_SETTINGS_FIELDS = [
+  'apiKey', 'provider', 'fireworksApiKey',
+  'enterpriseAuthMethod', 'enterpriseApiKey', 'enterpriseProjectId', 'enterpriseServiceAccountJson',
+  'model', 'customModel', 'thinkingLevel', 'maxTokens', 'reasoningEffort',
+  'verificationAiReview', 'verificationProvider', 'verificationModel', 'verificationCustomModel',
+  'verificationThinkingLevel', 'verificationReasoningEffort', 'verificationMaxTokens',
+  'verificationAutoRetry', 'verificationMaxRetries',
+  'agentProvider', 'agentModel', 'agentCustomModel',
+  'agentThinkingLevel', 'agentReasoningEffort', 'agentMaxTokens'
+] as const satisfies readonly (keyof Config)[];
+
 interface ApiSettingsCardProps {
   config: Config;
   setConfig: Dispatch<SetStateAction<Config>>;

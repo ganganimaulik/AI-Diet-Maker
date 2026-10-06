@@ -17,7 +17,7 @@ import PromptTab from '@/components/planner/PromptTab';
 import GenerationControls from '@/components/planner/GenerationControls';
 import OutputPanel, { OutputTab } from '@/components/planner/OutputPanel';
 import LayoutModeToggle, { LayoutMode } from '@/components/planner/LayoutModeToggle';
-import ApiSettingsCard from '@/components/connections/ApiSettingsCard';
+import ApiSettingsCard, { API_SETTINGS_FIELDS } from '@/components/connections/ApiSettingsCard';
 import WhatsAppConnectionCard from '@/components/connections/WhatsAppConnectionCard';
 import HuggingFaceCard from '@/components/connections/HuggingFaceCard';
 import SchedulerCard from '@/components/connections/SchedulerCard';
@@ -187,9 +187,12 @@ export default function Home() {
   const [loginError, setLoginError] = useState('');
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
-  const hasUnsavedChanges = savedConfig
-    ? stableStringify(config) !== stableStringify(savedConfig)
-    : false;
+  // The selected generation day is stored with the config but only picks which
+  // plan is on screen, so switching days is never an unsaved change by itself.
+  const hasConfigChanges = (cfg: Config): boolean => !!savedConfig
+    && stableStringify({ ...cfg, selectedGenerationDay: '' })
+      !== stableStringify({ ...savedConfig, selectedGenerationDay: '' });
+  const hasUnsavedChanges = hasConfigChanges(config);
 
   const verification = useVerification(isAuthenticatedState);
   const cache = useDietCache(isAuthenticatedState);
@@ -226,12 +229,46 @@ export default function Home() {
     }
   };
 
+  // Generation, verification and WhatsApp test sends all read the config
+  // stored in the database, so unsaved edits must be saved before they run.
+  // That save only ever happens with the user's go-ahead: an edit that was
+  // never saved must not survive a page refresh.
+  const confirmSaveChanges = () =>
+    window.confirm('You have unsaved changes. Save them and continue?');
+
+  // Asks, then saves unsaved config edits. `otherUnsavedChanges` folds a
+  // caller's own unsaved state into the same prompt; the caller saves that part
+  // itself. Resolves false when the user declines or the save fails.
+  const ensureConfigSaved = async (otherUnsavedChanges = false): Promise<boolean> => {
+    if (!hasUnsavedChanges && !otherUnsavedChanges) return true;
+    if (!confirmSaveChanges()) return false;
+    if (!hasUnsavedChanges) return true;
+    try {
+      await saveConfig(config);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // A settings card saves only the fields it edits, so unsaved Diet Builder
+  // edits stay unsaved until Save Configuration.
+  const saveConfigFields = (fields: readonly (keyof Config)[]) => {
+    if (!savedConfig) return saveConfig();
+    // Skip absent fields: stableStringify tells a key holding undefined apart
+    // from a missing one, so copying them would read as an unsaved change.
+    const edited = Object.fromEntries(
+      fields.filter(field => config[field] !== undefined).map(field => [field, config[field]])
+    );
+    return saveConfig({ ...savedConfig, ...edited });
+  };
+
   const whatsapp = useWhatsApp({
     isAuthenticated: isAuthenticatedState,
     activeTab,
     currentView,
     config,
-    saveConfig
+    ensureConfigSaved
   });
 
   const actions = useConfigActions(setConfig, setActiveTab);
@@ -732,6 +769,11 @@ export default function Home() {
     const day = targetDay || cfg.selectedGenerationDay || 'MONDAY';
     if (isDayBusy(day)) return;
 
+    // Unsaved edits get saved before the run, so ask before anything on screen
+    // changes and stop here if the user declines.
+    const isDirty = hasConfigChanges(cfg);
+    if (isDirty && !confirmSaveChanges()) return;
+
     if (layoutMode === 'builder') {
       setLayoutMode('results');
     }
@@ -773,9 +815,8 @@ export default function Home() {
     // A new explicit run supersedes any earlier cancel intent for the day.
     cancelRequestedDaysRef.current.delete(day);
 
-    // Auto-save config if there are unsaved changes so the config hash
-    // in the database reflects the current state before cache validation
-    const isDirty = savedConfig ? stableStringify(cfg) !== stableStringify(savedConfig) : false;
+    // Save the edits the user agreed to so the config hash in the database
+    // reflects the current state before cache validation
     if (isDirty) {
       try {
         await saveConfig(cfg);
@@ -889,22 +930,10 @@ export default function Home() {
     }
   };
 
-  // Regenerate one specific day straight from the results view. The day is
-  // brought on screen first so its stream is visible, and the config carrying
-  // that selection is handed to handleGenerate so the auto-save writes it too.
-  // Verification always runs against the config stored in the database, so an
-  // unsaved edit is saved first — otherwise the checker would judge the plan
-  // against different targets than the ones on screen.
-  const ensureConfigSaved = async (): Promise<boolean> => {
-    if (!hasUnsavedChanges) return true;
-    try {
-      await saveConfig(config);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
+  // Verification always runs against the config stored in the database, so
+  // unsaved edits are saved first (once the user agrees) — otherwise the
+  // checker would judge the plan against different targets than the ones on
+  // screen.
   const handleVerifyDay = async (day: string) => {
     if (!(await ensureConfigSaved())) return;
     await verification.verifyDay(day);
@@ -919,6 +948,9 @@ export default function Home() {
     await verification.verifyDays(days);
   };
 
+  // Regenerate one specific day straight from the results view. The day is
+  // brought on screen first so its stream is visible, and the config carrying
+  // that selection is handed to handleGenerate so a confirmed save writes it too.
   const handleRegenerateDay = (day: string) => {
     if (isDayBusy(day)) return;
     const nextConfig = { ...config, selectedGenerationDay: day };
@@ -994,6 +1026,9 @@ export default function Home() {
   // Parallel AI Generation for all 7 days
   const handleGenerateAllDays = async () => {
     if (isBatchGenerating) return;
+
+    // Same as a single day: ask before saving unsaved edits for the batch.
+    if (hasUnsavedChanges && !confirmSaveChanges()) return;
 
     if (layoutMode === 'builder') {
       setLayoutMode('results');
@@ -1312,7 +1347,7 @@ export default function Home() {
             config={config}
             setConfig={setConfig}
             isSavingConfig={isSavingConfig}
-            onSave={() => saveConfig()}
+            onSave={() => saveConfigFields(API_SETTINGS_FIELDS)}
           />
 
           <div className="settings-column">
