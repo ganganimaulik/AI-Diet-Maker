@@ -469,7 +469,8 @@ export const normalizeConfig = (loaded: any): Config => {
   // Retired Fireworks model ids are remapped to their replacements so a saved
   // config cannot keep calling a model that is no longer in the picker.
   const retiredFireworksModels: Record<string, string> = {
-    'accounts/fireworks/models/deepseek-v4-flash-0731': 'accounts/fireworks/models/deepseek-v4p1-flash'
+    'accounts/fireworks/models/deepseek-v4-flash-0731': 'accounts/fireworks/models/deepseek-v4p1-flash-1017',
+    'accounts/fireworks/models/deepseek-v4p1-flash': 'accounts/fireworks/models/deepseek-v4p1-flash-1017'
   };
   const modelFields = ['model', 'customModel', 'verificationModel', 'verificationCustomModel', 'agentModel', 'agentCustomModel'] as const;
   for (const field of modelFields) {

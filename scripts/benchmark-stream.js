@@ -24,7 +24,7 @@ const {
 const CANDIDATE_MODELS = [
   {
     name: 'DeepSeek V4.1 Flash',
-    id: 'accounts/fireworks/models/deepseek-v4p1-flash',
+    id: 'accounts/fireworks/models/deepseek-v4p1-flash-1017',
     reasoningEffort: 'low',
     maxTokens: 32768
   },
