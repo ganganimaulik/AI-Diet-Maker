@@ -7,9 +7,11 @@ import { useWhatsApp } from '@/hooks/useWhatsApp';
 import { useDietCache } from '@/hooks/useDietCache';
 import { useVerification } from '@/hooks/useVerification';
 import { useAssistant } from '@/hooks/useAssistant';
+import { useBuilderHistory } from '@/hooks/useBuilderHistory';
 import LoginScreen from '@/components/LoginScreen';
 import AppHeader from '@/components/AppHeader';
 import BuilderSidebar from '@/components/planner/BuilderSidebar';
+import BuilderHistoryControls from '@/components/planner/BuilderHistoryControls';
 import GlobalTargetsTab from '@/components/planner/GlobalTargetsTab';
 import MealEditorTab from '@/components/planner/MealEditorTab';
 import DailyVariablesTab from '@/components/planner/DailyVariablesTab';
@@ -194,6 +196,13 @@ export default function Home() {
       !== stableStringify({ ...savedConfig, selectedGenerationDay: '' });
   const hasUnsavedChanges = hasConfigChanges(config);
 
+  // Undo/redo for Diet Builder edits, kept across refreshes. A step opens the
+  // tab it changed, so what came back is on screen.
+  const builderHistory = useBuilderHistory(config, setConfig, ({ tab, day }) => {
+    setActiveTab(tab);
+    if (day) setActiveDay(day);
+  });
+
   const verification = useVerification(isAuthenticatedState);
   const cache = useDietCache(isAuthenticatedState);
   const {
@@ -218,6 +227,7 @@ export default function Home() {
         throw new Error('Failed to save configuration.');
       }
       setSavedConfig(configToSave);
+      builderHistory.markSaved(configToSave);
       // Refresh cache status — config hash may have changed, invalidating cached responses
       fetchCacheStatus();
     } catch (e) {
@@ -285,6 +295,7 @@ export default function Home() {
       selectedDayRef.current = normalized.selectedGenerationDay || 'MONDAY';
       setConfig(normalized);
       setSavedConfig(normalized);
+      builderHistory.load(normalized);
     } else {
       // First time setup, save default config to DB
       await fetch('/api/config', {
@@ -295,6 +306,7 @@ export default function Home() {
       selectedDayRef.current = DEFAULT_CONFIG.selectedGenerationDay || 'MONDAY';
       setConfig(DEFAULT_CONFIG);
       setSavedConfig(DEFAULT_CONFIG);
+      builderHistory.load(DEFAULT_CONFIG);
     }
     whatsapp.fetchWhatsAppStatus();
     whatsapp.fetchContacts();
@@ -357,6 +369,7 @@ export default function Home() {
       await fetch('/api/auth/login', { method: 'DELETE' });
       setIsAuthenticatedState(false);
       setSavedConfig(null);
+      builderHistory.clear();
       hasRestoredJobsRef.current = false;
       pollingEpochRef.current += 1;
       pollingJobsRef.current = {};
@@ -1228,6 +1241,12 @@ export default function Home() {
                 </svg>
                 Diet Builder
               </h2>
+              <BuilderHistoryControls
+                canUndo={builderHistory.canUndo}
+                canRedo={builderHistory.canRedo}
+                onUndo={builderHistory.undo}
+                onRedo={builderHistory.redo}
+              />
             </div>
 
             {hasUnsavedChanges && (
