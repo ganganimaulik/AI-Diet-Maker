@@ -19,6 +19,7 @@ const eslintConfig = defineConfig([
     "src/lib/gemini.js",
     "src/lib/generation-runner.js",
     "src/lib/verify-plan.js",
+    "src/lib/build-plan.js",
     "src/lib/ai-complete.js",
     "src/lib/agent-tools.js",
     "src/lib/agent-complete.js",

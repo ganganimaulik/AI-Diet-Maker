@@ -47,6 +47,8 @@ export interface Config {
   maxTokens?: number;
   /** Fireworks reasoning_effort; 'default' = don't send it. */
   reasoningEffort?: string;
+  /** 'deterministic' solves and writes the plan locally, with no model call. */
+  generationEngine?: 'llm' | 'deterministic';
   /** Run a second-opinion AI review on top of the arithmetic check. */
   verificationAiReview?: boolean;
   /** Verification provider/model; blank = reuse the generation ones. */
@@ -171,6 +173,8 @@ export interface GenerationJob {
   error: string;
   cacheable: boolean;
   isCurrentConfig: boolean;
+  /** Which engine produced this job's plan. */
+  engine: 'llm' | 'deterministic';
   /** This run verifies each plan and regenerates until it passes. */
   autoVerify: boolean;
   /** 1-based generation pass currently running (0 before the first starts). */
@@ -287,6 +291,7 @@ export const DEFAULT_CONFIG: Config = {
   thinkingLevel: 'high',
   maxTokens: 65536,
   reasoningEffort: 'default',
+  generationEngine: 'llm',
   verificationAiReview: false,
   verificationProvider: '',
   verificationModel: '',

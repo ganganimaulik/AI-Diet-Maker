@@ -101,6 +101,8 @@ export interface IConfig {
   thinkingLevel: string;
   maxTokens?: number;
   reasoningEffort?: string;
+  /** 'deterministic' computes the plan locally instead of calling a model. */
+  generationEngine?: 'llm' | 'deterministic';
   verificationAiReview?: boolean;
   verificationProvider?: string;
   verificationModel?: string;
@@ -232,6 +234,8 @@ export interface IGenerationJob {
   phase: GenerationJobPhase;
   cancelRequested: boolean;
   prompt: string;
+  /** Engine this job was queued for; snapshotted from the config. */
+  engine: 'llm' | 'deterministic';
   provider: string;
   model: string;
   thinkingLevel: string;
