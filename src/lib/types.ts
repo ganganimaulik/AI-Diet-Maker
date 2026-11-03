@@ -246,11 +246,47 @@ export interface ChatToolStep {
   ms: number;
 }
 
+/** One drafted Diet Builder edit, in the canonical form builder-ops.js returns. */
+export interface BuilderOperation {
+  action: string;
+  [field: string]: unknown;
+}
+
+/** One value a drafted change touches, worded for its confirmation card. */
+export interface BuilderChange {
+  kind: 'add' | 'remove' | 'change';
+  /** What it belongs to, e.g. "Chicken meal · chicken breast" or "Monday · Vegetable Meal". */
+  where: string;
+  field: string;
+  /** '' for an addition. */
+  before: string;
+  /** '' for a removal. */
+  after: string;
+}
+
+export type ProposalStatus = 'pending' | 'applied' | 'rejected';
+
+/**
+ * A Diet Builder edit the assistant drafted. Nothing changes until the user
+ * applies it, which puts it into the builder as an unsaved edit.
+ */
+export interface BuilderProposal {
+  id: string;
+  title: string;
+  reason: string;
+  operations: BuilderOperation[];
+  changes: BuilderChange[];
+  status: ProposalStatus;
+  decidedAt: string | null;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   /** Lookups behind this answer, shown as an expandable trace. */
   steps: ChatToolStep[];
+  /** Builder edits drafted in this answer, each waiting for or carrying the user's decision. */
+  proposals: BuilderProposal[];
   /** Set when the turn failed; the message stays so the transcript shows why. */
   error: string;
   createdAt: string;
@@ -263,6 +299,9 @@ export interface ChatThreadSummary {
   messageCount: number;
 }
 
+/** The assistant's drafting tool (see agent-proposals.js); its steps are drafts, not lookups. */
+export const PROPOSE_TOOL = 'propose_builder_change';
+
 /** Human wording for each assistant tool, shown while it runs. */
 export const TOOL_LABELS: Record<string, string> = {
   db_schema: 'Checking what the database holds',
@@ -270,7 +309,8 @@ export const TOOL_LABELS: Record<string, string> = {
   get_diet_config: 'Reading your diet setup',
   get_day_plan: 'Reading the plan',
   db_query: 'Querying the database',
-  db_count: 'Counting records'
+  db_count: 'Counting records',
+  [PROPOSE_TOOL]: 'Drafting a change for you to approve'
 };
 
 export const DEFAULT_CONFIG: Config = {

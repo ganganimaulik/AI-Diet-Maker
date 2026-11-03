@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChatMessage, ChatThreadSummary, ChatToolStep } from '@/lib/types';
+import { BuilderOperation, BuilderProposal, ChatMessage, ChatThreadSummary, ChatToolStep } from '@/lib/types';
+import { BuilderLocation, BuilderSnapshot } from '@/lib/builder-history';
+import { applyBuilderOperations } from '@/lib/builder-ops';
 
 /** A tool call that has started but not yet returned. */
 export interface PendingToolCall {
@@ -9,14 +11,39 @@ export interface PendingToolCall {
   args: Record<string, unknown>;
 }
 
+/** What the assistant needs from the Diet Builder on the planner page. */
+export interface AssistantBuilder {
+  /** The builder as it is on screen, sent with each question so answers and drafts match it. */
+  snapshot: BuilderSnapshot;
+  /** Whether the builder differs from the saved config. */
+  hasUnsavedChanges: boolean;
+  /** Puts an approved change into the builder as one undoable, unsaved edit. */
+  apply: (operations: BuilderOperation[]) => void;
+  /** Brings the builder up where a change lives. */
+  show: (location: BuilderLocation) => void;
+}
+
+/** The builder tab that shows a proposal's first edit. */
+function locateProposal(proposal: BuilderProposal): BuilderLocation {
+  const first = proposal.operations[0];
+  if (!first || first.action === 'update_targets' || first.action === 'remove_meal') return { tab: 'global' };
+  if (typeof first.day === 'string') return { tab: 'daily', day: first.day };
+  const mealId = first.action === 'add_meal' ? first.id : first.meal;
+  return { tab: typeof mealId === 'string' ? mealId : 'global' };
+}
+
 /**
  * Chat state against /api/chat.
  *
  * The answer arrives as SSE rather than one JSON body because a turn can spend
  * several seconds reading the database before it writes a word — showing which
  * lookups are running is the difference between "thinking" and "hung".
+ *
+ * Changes the assistant drafts arrive as proposals on its answer. They reach
+ * the Diet Builder only through applyProposal, which runs when the user
+ * presses Apply on one.
  */
-export function useAssistant(isAuthenticated: boolean | null) {
+export function useAssistant(isAuthenticated: boolean | null, builder: AssistantBuilder) {
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [threadId, setThreadId] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -34,6 +61,11 @@ export function useAssistant(isAuthenticated: boolean | null) {
       nesting a state update inside another updater (double-invoked in
       StrictMode, which would append the answer twice). */
   const streamingTextRef = useRef('');
+  /** The latest builder, for callbacks that run long after the render that made them. */
+  const builderRef = useRef(builder);
+  useEffect(() => {
+    builderRef.current = builder;
+  });
 
   const appendStreamingText = (delta: string) => {
     streamingTextRef.current += delta;
@@ -127,14 +159,19 @@ export function useAssistant(isAuthenticated: boolean | null) {
     setIsSending(true);
     setMessages(prev => [
       ...prev,
-      { role: 'user', content: question, steps: [], error: '', createdAt: new Date().toISOString() }
+      { role: 'user', content: question, steps: [], proposals: [], error: '', createdAt: new Date().toISOString() }
     ]);
 
     try {
+      const { snapshot, hasUnsavedChanges } = builderRef.current;
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: threadId || undefined, message: question }),
+        body: JSON.stringify({
+          threadId: threadId || undefined,
+          message: question,
+          builder: { snapshot, hasUnsavedChanges }
+        }),
         signal: controller.signal
       });
 
@@ -210,7 +247,7 @@ export function useAssistant(isAuthenticated: boolean | null) {
         if (partial) {
           setMessages(prev => [
             ...prev,
-            { role: 'assistant', content: partial, steps: [], error: '', createdAt: new Date().toISOString() }
+            { role: 'assistant', content: partial, steps: [], proposals: [], error: '', createdAt: new Date().toISOString() }
           ]);
         } else {
           setError('The answer stream ended early. Try asking again.');
@@ -223,7 +260,7 @@ export function useAssistant(isAuthenticated: boolean | null) {
         if (partial) {
           setMessages(prev => [
             ...prev,
-            { role: 'assistant', content: partial, steps: [], error: '', createdAt: new Date().toISOString() }
+            { role: 'assistant', content: partial, steps: [], proposals: [], error: '', createdAt: new Date().toISOString() }
           ]);
         }
       } else {
@@ -237,6 +274,64 @@ export function useAssistant(isAuthenticated: boolean | null) {
       fetchThreads();
     }
   }, [isSending, threadId, fetchThreads]);
+
+  /** Mirrors a recorded decision into the open conversation. */
+  const markProposal = (id: string, decision: Pick<BuilderProposal, 'status' | 'decidedAt'>) => {
+    setMessages(prev => prev.map(message => (
+      message.proposals?.some(proposal => proposal.id === id)
+        ? { ...message, proposals: message.proposals.map(proposal => (proposal.id === id ? { ...proposal, ...decision } : proposal)) }
+        : message
+    )));
+  };
+
+  /**
+   * Stores the user's decision on a draft. Resolves '' once it is recorded,
+   * else the reason it was not; a draft already decided in another tab shows
+   * that decision instead.
+   */
+  const recordDecision = useCallback(async (proposal: BuilderProposal, status: 'applied' | 'rejected'): Promise<string> => {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId, proposalId: proposal.id, status })
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.proposal) markProposal(proposal.id, { status: data.proposal.status, decidedAt: data.proposal.decidedAt });
+      if (!res.ok) return (data && data.error) || 'Could not record your decision. Try again.';
+      return '';
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Could not record your decision. Try again.';
+    }
+  }, [threadId]);
+
+  /**
+   * The human-in-the-loop step, run only by the user's Apply click: puts a
+   * drafted change into the Diet Builder as one undoable, unsaved edit. The
+   * draft is first checked against the builder as it is now, so a change
+   * that no longer fits is refused before the go-ahead is recorded, never
+   * applied halfway. Resolves '' on success, else the reason.
+   */
+  const applyProposal = useCallback(async (proposal: BuilderProposal): Promise<string> => {
+    try {
+      applyBuilderOperations(builderRef.current.snapshot, proposal.operations);
+    } catch (e) {
+      return `Can't apply this to the Diet Builder as it is now. ${e instanceof Error ? e.message : ''}`.trim();
+    }
+    const problem = await recordDecision(proposal, 'applied');
+    if (problem) return problem;
+    builderRef.current.apply(proposal.operations);
+    return '';
+  }, [recordDecision]);
+
+  const rejectProposal = useCallback(
+    (proposal: BuilderProposal) => recordDecision(proposal, 'rejected'),
+    [recordDecision]
+  );
+
+  const showProposal = useCallback((proposal: BuilderProposal) => {
+    builderRef.current.show(locateProposal(proposal));
+  }, []);
 
   return {
     threads,
@@ -253,6 +348,10 @@ export function useAssistant(isAuthenticated: boolean | null) {
     startNewThread,
     deleteThread,
     stop,
-    setError
+    setError,
+    applyProposal,
+    rejectProposal,
+    showProposal,
+    builderHasUnsavedChanges: builder.hasUnsavedChanges
   };
 }

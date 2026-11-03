@@ -270,10 +270,30 @@ export interface IChatToolStep {
   ms: number;
 }
 
+export interface IChatProposalChange {
+  kind: 'add' | 'remove' | 'change';
+  where: string;
+  field: string;
+  before: string;
+  after: string;
+}
+
+/** A Diet Builder edit the assistant drafted, and what the user decided. */
+export interface IChatProposal {
+  id: string;
+  title: string;
+  reason: string;
+  operations: Array<{ action: string; [field: string]: unknown }>;
+  changes: IChatProposalChange[];
+  status: 'pending' | 'applied' | 'rejected';
+  decidedAt: Date | null;
+}
+
 export interface IChatMessage {
   role: 'user' | 'assistant';
   content: string;
   steps: IChatToolStep[];
+  proposals: IChatProposal[];
   error: string;
   createdAt: Date;
 }
@@ -281,7 +301,8 @@ export interface IChatMessage {
 /**
  * One assistant conversation. Written by the app on the assistant's behalf —
  * the assistant's own database access stays read-only, and it cannot read this
- * collection at all.
+ * collection at all. A proposal's decision is recorded here when the user
+ * applies or rejects it.
  */
 export interface IChatThread {
   threadId: string;

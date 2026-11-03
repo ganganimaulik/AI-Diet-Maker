@@ -3900,6 +3900,205 @@ input[type="radio"]:disabled {
   font-size: 0.7rem;
 }
 
+/* ---- Drafted builder changes ----
+   The human-in-the-loop step: every value a draft would touch is on the
+   card, before → after, and only Apply puts it into the builder. */
+
+.proposal-card {
+  margin-top: 0.75rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.04);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.proposal-card--applied {
+  background: rgba(16, 185, 129, 0.04);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.proposal-card--rejected {
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+.proposal-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.proposal-card__eyebrow {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.proposal-card__status {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+
+.proposal-card__status--pending {
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.proposal-card__status--applied {
+  color: var(--accent-green);
+  background: var(--accent-green-glow);
+}
+
+.proposal-card__status--rejected {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.proposal-card__title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.proposal-card__reason {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.proposal-card__groups {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0.55rem 0.7rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.proposal-card__where {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.proposal-card__changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.proposal-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.4rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.proposal-change__field {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.proposal-change ins {
+  color: #6ee7b7;
+  text-decoration: none;
+}
+
+.proposal-change del {
+  color: #fda4af;
+  text-decoration: line-through;
+  text-decoration-color: rgba(253, 164, 175, 0.6);
+}
+
+.proposal-change__sign {
+  width: 0.7rem;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.proposal-change--add .proposal-change__sign {
+  color: var(--accent-green);
+}
+
+.proposal-change--remove .proposal-change__sign {
+  color: var(--accent-rose);
+}
+
+.proposal-change__arrow {
+  color: var(--text-muted);
+}
+
+.proposal-card__problem {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: #fca5a5;
+}
+
+.proposal-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* Side by side when they fit, else stacked at full width. */
+.proposal-card__actions .btn-primary {
+  width: auto;
+  flex: 1 1 12rem;
+}
+
+.proposal-card__actions .btn-secondary {
+  flex: 1 1 6rem;
+}
+
+.proposal-card__outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.proposal-card__outcome--muted {
+  color: var(--text-muted);
+}
+
+/* A chat bubble is no place for full-size call-to-action buttons once the
+   pointer is precise enough not to need the phone tap height. */
+@media (min-width: 768px) {
+  .proposal-card__actions .btn-primary,
+  .proposal-card__actions .btn-secondary {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    border-radius: 10px;
+  }
+}
+
 /* ---- Assistant markdown ---- */
 
 .chat-markdown > *:first-child { margin-top: 0; }

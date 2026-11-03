@@ -1,14 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
-import { dbConnect, ChatThread, Config, type IChatMessage, type IConfig } from '@/lib/db';
+import { dbConnect, ChatThread, Config, type IChatMessage, type IChatProposal, type IConfig } from '@/lib/db';
+import type { BuilderSnapshot } from '@/lib/builder-history';
+import type { BuilderProposal } from '@/lib/types';
 import {
   TOOL_SCHEMAS,
+  PROPOSAL_TOOL_SCHEMAS,
+  PROPOSE_TOOL_NAME,
   runTool,
   runAgentTurn,
   buildSystemPrompt,
+  createProposalDrafts,
+  formatChange,
+  isBuilderSnapshot,
   type AgentEvent,
-  type AgentMessage
+  type AgentMessage,
+  type OnScreenBuilder
 } from '@/lib/agent';
 
 // A turn is one short model call per tool round-trip, so unlike plan
@@ -24,12 +32,37 @@ const MAX_MESSAGE_CHARS = 8000;
 
 const TITLE_CHARS = 60;
 
+/** Longest builder state accepted with a question; a real one is about 10 KB. */
+const MAX_BUILDER_CHARS = 200_000;
+
+/** Change lines replayed per earlier draft, so a sweeping one cannot crowd out the conversation. */
+const MAX_REPLAYED_CHANGES = 12;
+
 interface PublicChatMessage {
   role: 'user' | 'assistant';
   content: string;
   steps: Array<{ name: string; args: unknown; ok: boolean; error: string; ms: number }>;
+  proposals: BuilderProposal[];
   error: string;
   createdAt: string;
+}
+
+function serializeProposal(proposal: IChatProposal): BuilderProposal {
+  return {
+    id: proposal.id,
+    title: proposal.title || '',
+    reason: proposal.reason || '',
+    operations: proposal.operations || [],
+    changes: (proposal.changes || []).map((change) => ({
+      kind: change.kind || 'change',
+      where: change.where || '',
+      field: change.field || '',
+      before: change.before || '',
+      after: change.after || ''
+    })),
+    status: proposal.status || 'pending',
+    decidedAt: proposal.decidedAt ? new Date(proposal.decidedAt).toISOString() : null
+  };
 }
 
 function serializeMessage(message: IChatMessage): PublicChatMessage {
@@ -43,10 +76,45 @@ function serializeMessage(message: IChatMessage): PublicChatMessage {
       error: step.error || '',
       ms: step.ms || 0
     })),
+    proposals: (message.proposals || []).map(serializeProposal),
     error: message.error || '',
     createdAt: message.createdAt ? new Date(message.createdAt).toISOString() : new Date().toISOString()
   };
 }
+
+/**
+ * A stored message as the model reads it on later turns. Each draft carries
+ * the user's decision, so the model knows which changes are in the builder
+ * and which were turned down.
+ */
+function replayContent(message: IChatMessage): string {
+  const decisions = (message.proposals || []).map((proposal) => {
+    const outcome = proposal.status === 'applied'
+      ? 'the user applied it to the Diet Builder'
+      : proposal.status === 'rejected'
+        ? 'the user rejected it'
+        : 'still waiting for the user to apply or reject it';
+    const changes = (proposal.changes || [])
+      .slice(0, MAX_REPLAYED_CHANGES)
+      .map((change) => `- ${formatChange(change)}`);
+    return [`[Drafted change "${proposal.title}": ${outcome}]`, ...changes].join('\n');
+  });
+  return [message.content, ...decisions].filter(Boolean).join('\n\n');
+}
+
+/** The Diet Builder as the browser sent it, or null to fall back to the saved config. */
+function readOnScreenBuilder(value: unknown): OnScreenBuilder | null {
+  if (!value || typeof value !== 'object') return null;
+  const { snapshot, hasUnsavedChanges } = value as { snapshot?: unknown; hasUnsavedChanges?: unknown };
+  if (!isBuilderSnapshot(snapshot) || JSON.stringify(snapshot).length > MAX_BUILDER_CHARS) return null;
+  return { snapshot, hasUnsavedChanges: hasUnsavedChanges === true };
+}
+
+const savedBuilder = (config: IConfig): BuilderSnapshot => ({
+  global: config.global,
+  meals: config.meals,
+  dailyVariables: config.dailyVariables
+});
 
 /** First line of the opening question, as the thread's name in the sidebar. */
 function deriveTitle(message: string): string {
@@ -134,9 +202,14 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/chat  { threadId?, message }
+ * POST /api/chat  { threadId?, message, builder?: { snapshot, hasUnsavedChanges } }
  * Streams the assistant's turn as SSE: tool calls as they run, then the answer
- * token by token. The completed turn is appended to the thread before 'done'.
+ * token by token. The completed turn, with any changes it drafted, is appended
+ * to the thread before 'done'.
+ *
+ * `builder` is the Diet Builder as it is on screen. The assistant reads it as
+ * the current setup and checks its drafts against it, so both match what the
+ * user is looking at even before they save.
  */
 export async function POST(req: Request) {
   if (!(await isAuthenticated())) {
@@ -175,8 +248,11 @@ export async function POST(req: Request) {
   const requestedThreadId = typeof body.threadId === 'string' ? body.threadId : '';
   const thread = requestedThreadId ? await ChatThread.findOne({ threadId: requestedThreadId }) : null;
 
+  const builder = readOnScreenBuilder(body.builder);
+  const drafts = createProposalDrafts(builder ? builder.snapshot : savedBuilder(config));
+
   const now = new Date();
-  const userMessage = { role: 'user' as const, content: message, steps: [], error: '', createdAt: now };
+  const userMessage = { role: 'user' as const, content: message, steps: [], proposals: [], error: '', createdAt: now };
 
   let threadId: string;
   let title: string;
@@ -200,8 +276,8 @@ export async function POST(req: Request) {
     { role: 'system', content: buildSystemPrompt({ timezone: 'Asia/Kolkata' }) },
     ...history
       .slice(-HISTORY_TURNS)
-      .filter((entry) => entry.content)
-      .map((entry) => ({ role: entry.role, content: entry.content }) as AgentMessage),
+      .map((entry) => ({ role: entry.role, content: replayContent(entry) }) as AgentMessage)
+      .filter((entry) => entry.content),
     { role: 'user', content: message }
   ];
 
@@ -224,8 +300,8 @@ export async function POST(req: Request) {
         const turn = await runAgentTurn({
           ...settings,
           messages: conversation,
-          tools: TOOL_SCHEMAS,
-          runTool,
+          tools: [...TOOL_SCHEMAS, ...PROPOSAL_TOOL_SCHEMAS],
+          runTool: (name, args) => (name === PROPOSE_TOOL_NAME ? drafts.run(args) : runTool(name, args, { builder })),
           signal: req.signal,
           onEvent: (event: AgentEvent) => {
             if (event.type === 'thinking') return; // Not surfaced in chat.
@@ -244,6 +320,7 @@ export async function POST(req: Request) {
             error: step.error,
             ms: step.ms
           })),
+          proposals: drafts.proposals.map((proposal) => ({ ...proposal, decidedAt: null })),
           error: '',
           createdAt: new Date()
         };
@@ -262,6 +339,7 @@ export async function POST(req: Request) {
             role: 'assistant' as const,
             content: '',
             steps: [],
+            proposals: [],
             error: detail,
             createdAt: new Date()
           };
@@ -291,6 +369,68 @@ export async function POST(req: Request) {
       'X-Accel-Buffering': 'no'
     }
   });
+}
+
+/**
+ * PATCH /api/chat  { threadId, proposalId, status: 'applied' | 'rejected' }
+ * Records the user's decision on a drafted change. The browser puts an applied
+ * change into the builder itself, and only after this succeeds. A proposal is
+ * decided once, so a second tab cannot apply it again.
+ */
+export async function PATCH(req: Request) {
+  try {
+    if (!(await isAuthenticated())) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const threadId = typeof body.threadId === 'string' ? body.threadId : '';
+    const proposalId = typeof body.proposalId === 'string' ? body.proposalId : '';
+    const status = body.status === 'applied' || body.status === 'rejected' ? body.status : '';
+    if (!threadId || !proposalId || !status) {
+      return NextResponse.json(
+        { error: 'threadId, proposalId and a status of applied or rejected are required.' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+    const decidedAt = new Date();
+    const result = await ChatThread.updateOne(
+      { threadId, messages: { $elemMatch: { proposals: { $elemMatch: { id: proposalId, status: 'pending' } } } } },
+      {
+        $set: {
+          'messages.$[message].proposals.$[proposal].status': status,
+          'messages.$[message].proposals.$[proposal].decidedAt': decidedAt
+        }
+      },
+      { arrayFilters: [{ 'message.proposals.id': proposalId }, { 'proposal.id': proposalId }] }
+    );
+
+    if (result.modifiedCount === 0) {
+      const thread = await ChatThread.findOne({ threadId }, { messages: 1 }).lean();
+      const existing = (thread?.messages || [])
+        .flatMap((entry) => entry.proposals || [])
+        .find((proposal) => proposal.id === proposalId);
+      if (!existing) return NextResponse.json({ error: 'That change no longer exists.' }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: `This change was already ${existing.status}.`,
+          proposal: {
+            id: existing.id,
+            status: existing.status,
+            decidedAt: existing.decidedAt ? new Date(existing.decidedAt).toISOString() : null
+          }
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ proposal: { id: proposalId, status, decidedAt: decidedAt.toISOString() } });
+  } catch (error) {
+    console.error('Error recording a proposal decision:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 /** DELETE /api/chat?threadId=x */

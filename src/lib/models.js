@@ -288,11 +288,35 @@ const ChatToolStepSchema = new Schema({
   ms: { type: Number, default: 0 }
 }, { _id: false });
 
+// One before → after line on a proposal's confirmation card.
+const ChatProposalChangeSchema = new Schema({
+  kind: { type: String, enum: ['add', 'remove', 'change'], default: 'change' },
+  where: { type: String, default: '' },
+  field: { type: String, default: '' },
+  before: { type: String, default: '' },
+  after: { type: String, default: '' }
+}, { _id: false });
+
+// A Diet Builder edit the assistant drafted. The app applies it in the
+// browser only when the user says so, and records that decision here.
+const ChatProposalSchema = new Schema({
+  id: { type: String, required: true },
+  title: { type: String, default: '' },
+  reason: { type: String, default: '' },
+  // Canonical builder-ops.js operations, replayed against the builder on Apply.
+  operations: { type: [Schema.Types.Mixed], default: [] },
+  changes: [ChatProposalChangeSchema],
+  status: { type: String, enum: ['pending', 'applied', 'rejected'], default: 'pending' },
+  decidedAt: { type: Date, default: null }
+}, { _id: false });
+
 const ChatMessageSchema = new Schema({
   role: { type: String, enum: ['user', 'assistant'], required: true },
   content: { type: String, default: '' },
   // Database reads the assistant made while producing this message.
   steps: [ChatToolStepSchema],
+  // Builder edits drafted in this message, each pending until the user decides.
+  proposals: [ChatProposalSchema],
   // Set when the turn failed; the message is kept so the transcript shows why.
   error: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }

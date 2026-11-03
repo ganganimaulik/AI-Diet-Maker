@@ -8,6 +8,8 @@ import { useDietCache } from '@/hooks/useDietCache';
 import { useVerification } from '@/hooks/useVerification';
 import { useAssistant } from '@/hooks/useAssistant';
 import { useBuilderHistory } from '@/hooks/useBuilderHistory';
+import { toBuilderSnapshot } from '@/lib/builder-history';
+import { applyBuilderOperations } from '@/lib/builder-ops';
 import LoginScreen from '@/components/LoginScreen';
 import AppHeader from '@/components/AppHeader';
 import BuilderSidebar from '@/components/planner/BuilderSidebar';
@@ -283,7 +285,30 @@ export default function Home() {
 
   const actions = useConfigActions(setConfig, setActiveTab);
 
-  const assistant = useAssistant(isAuthenticatedState);
+  // The assistant sees the builder as it is on screen, and a change it drafted
+  // reaches the builder only once the user presses Apply on its card. It then
+  // lands like any other edit: one undo step, unsaved until Save Configuration.
+  const builderSnapshot = toBuilderSnapshot(config);
+  const assistant = useAssistant(isAuthenticatedState, {
+    snapshot: builderSnapshot,
+    hasUnsavedChanges: !!savedConfig
+      && stableStringify(builderSnapshot) !== stableStringify(toBuilderSnapshot(savedConfig)),
+    apply: (operations) => setConfig(prev => {
+      try {
+        return { ...prev, ...applyBuilderOperations(toBuilderSnapshot(prev), operations).builder };
+      } catch {
+        // Checked against the builder just before the go-ahead was recorded,
+        // so only an edit landing in that same moment gets here.
+        return prev;
+      }
+    }),
+    show: ({ tab, day }) => {
+      setCurrentView('planner');
+      setLayoutMode('builder');
+      setActiveTab(tab === 'global' || tab === 'daily' || config.meals.some(meal => meal.id === tab) ? tab : 'global');
+      if (day) setActiveDay(day);
+    }
+  });
 
   // Load config from the database into local state (shared by initial load & login)
   const loadConfig = async () => {

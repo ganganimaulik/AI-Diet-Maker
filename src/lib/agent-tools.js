@@ -286,20 +286,36 @@ async function toolDbCount(args) {
   return { collection: String(args.collection).toLowerCase(), count: await model.countDocuments(filter) };
 }
 
-async function toolGetDietConfig() {
+/**
+ * The diet setup. When the chat request carried the Diet Builder as it is on
+ * screen, that is what this returns — the user asks about, and the assistant
+ * drafts changes to, what they are looking at, including edits not saved yet.
+ * The saved copy stays one db_query on `config` away.
+ */
+async function toolGetDietConfig(_args, context = {}) {
   const config = await Config.findOne().lean();
-  if (!config) return { configured: false, note: 'No configuration has been saved yet.' };
+  const onScreen = context.builder || null;
+  if (!config && !onScreen) return { configured: false, note: 'No configuration has been saved yet.' };
 
-  const clean = sanitize(config);
+  const clean = sanitize(onScreen ? onScreen.snapshot : config);
+  const notes = [
+    'Ingredients with isAuto=true have their weight solved by the plan generator within minGrams/maxGrams; the rest are fixed. Weights are whole-day totals. A meal or ingredient with disabled=true is excluded from plans.'
+  ];
+  if (onScreen) {
+    notes.push(onScreen.hasUnsavedChanges
+      ? 'This is the Diet Builder as the user sees it, and it holds edits that are not saved yet. Plans and verdicts were produced from the saved config (db_query on config), so they do not reflect those edits until the user saves and regenerates.'
+      : 'This is the Diet Builder as the user sees it; it matches the saved config.');
+  }
+
   return capResult({
     configured: true,
+    hasUnsavedChanges: onScreen ? onScreen.hasUnsavedChanges : undefined,
     targets: clean.global || {},
     meals: clean.meals || [],
     dailyVariables: clean.dailyVariables || {},
-    selectedGenerationDay: clean.selectedGenerationDay || '',
-    updatedAt: clean.updatedAt || null,
-    note:
-      'Ingredients with isAuto=true have their weight solved by the plan generator within minGrams/maxGrams; the rest are fixed. A meal or ingredient with disabled=true is excluded from plans.'
+    selectedGenerationDay: config ? config.selectedGenerationDay || '' : '',
+    updatedAt: config && config.updatedAt ? new Date(config.updatedAt).toISOString() : null,
+    note: notes.join(' ')
   });
 }
 
@@ -419,7 +435,7 @@ const TOOL_DEFINITIONS = [
   {
     name: 'get_diet_config',
     description:
-      "The user's full diet setup: calorie and sodium/potassium targets, every meal with its ingredients and weights, per-day ingredient overrides and seasoning splits. Use this for any question about what the user eats or how their plan is configured.",
+      "The user's full diet setup as the Diet Builder shows it: calorie and sodium/potassium targets, every meal (with its id) and its ingredients and weights, per-day ingredient overrides and seasoning splits. Use this for any question about what the user eats or how their plan is configured, and before drafting any change.",
     parameters: { type: 'object', properties: {}, required: [] },
     run: toolGetDietConfig
   },
@@ -511,15 +527,18 @@ const TOOL_SCHEMAS = TOOL_DEFINITIONS.map(({ name, description, parameters }) =>
  *
  * @param {string} name
  * @param {object} args
+ * @param {object} [context]
+ * @param {{ snapshot: object, hasUnsavedChanges: boolean } | null} [context.builder]
+ *   – the Diet Builder as it is on the user's screen, when the request sent it
  * @returns {Promise<{ ok: boolean, result?: object, error?: string }>}
  */
-async function runTool(name, args) {
+async function runTool(name, args, context = {}) {
   const tool = TOOLS_BY_NAME.get(name);
   if (!tool) {
     return { ok: false, error: `Unknown tool "${name}". Available: ${TOOL_SCHEMAS.map((t) => t.name).join(', ')}.` };
   }
   try {
-    return { ok: true, result: await tool.run(args || {}) };
+    return { ok: true, result: await tool.run(args || {}, context) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }

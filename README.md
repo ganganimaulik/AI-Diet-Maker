@@ -42,14 +42,16 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Optional Second-Opinion AI Review**: A separately configurable provider/model can read the plan for instructions it ignored, unusable steps, and claims its own numbers do not support. Its findings are advisory: only the arithmetic pass decides pass/fail and therefore whether a retry happens.
 - **Honest Feedback**: When a configured target is physically unreachable for a day (e.g. no combination of the day's ingredients can hit the Na:K range), the retry prompt says so explicitly and instructs the model to report its real numbers instead of forcing them into range.
 
-### 💬 Diet Assistant (Read-Only Database Agent)
+### 💬 Diet Assistant (Read-Only Database Agent, Approval-Gated Edits)
 - **Chat Grounded in Your Own Data**: A dedicated **Assistant** tab where you can ask about your meals, targets, any day's generated plan, or its verification verdict. Answers are built from tool calls against the live database, not from the model's memory of the conversation.
-- **Strictly Read-Only**: The assistant reaches the database through a tool layer that only ever runs `find` / `count`. There is no code path from chat to a write, a plan generation, or a WhatsApp send. When something needs changing it tells you what and where, and you make the change.
+- **Read-Only Database Access**: The assistant reaches the database through a tool layer that only ever runs `find` / `count`. There is no code path from chat to a database write, a plan generation, or a WhatsApp send.
+- **Drafts Builder Changes, You Approve Them**: Ask for a change — a calorie target, an ingredient weight or AUTO range, a per-day ingredient, a whole meal — and the assistant drafts it as a card listing every before → after value. Nothing changes until you press **Apply**, which puts it into the Diet Builder as an ordinary edit: one undo step, unsaved until **Save Configuration**. Each draft is checked against the builder when it is made and again when you apply it, so a draft that no longer matches is refused rather than half-applied; independent changes get separate cards, and your Apply / Reject decision is stored with the conversation so the assistant knows what you accepted.
+- **Sees What You See**: Each question carries the Diet Builder as it is on screen, so answers and drafts account for edits you have not saved yet.
 - **Secrets Never Leave the Server**: API keys, the service-account JSON, the Hugging Face token and the WhatsApp login QR are redacted at every nesting depth before any document reaches the model — so "read the config" cannot become "read my credentials back to me".
 - **Query Guardrails**: Collections are whitelisted, expression operators (`$where`, `$function`, `$expr`, …) are refused, results are capped at 25 documents and 24 KB per call, and long plan text is truncated in generic queries so one wide read cannot flood the context.
 - **Visible Reasoning Trail**: Each lookup is streamed to the UI as it runs ("Reading the plan · MONDAY"), and stored with the answer as an expandable trace, so you can see exactly which records an answer came from.
 - **Stale-Aware**: Plans and verdicts carry the config hash they were produced under, and the assistant is told to flag an answer built on a plan the configuration has since moved past.
-- **Saved Conversations**: Threads persist in MongoDB, so past advice is still there after a reload. This is the only thing the assistant flow writes — and the app writes it, not the agent.
+- **Saved Conversations**: Threads persist in MongoDB, so past advice — and what you decided about each drafted change — is still there after a reload. This is the only thing the assistant flow writes — and the app writes it, not the agent.
 - **Independently Configurable Model**: Like plan verification, the assistant defaults to reusing the generation provider/model but can point somewhere faster, since one question can mean several model calls in a row.
 
 ### 📲 WhatsApp Automation & Daily Scheduler
@@ -265,7 +267,7 @@ docker run -d \
 │   │   ├── api/
 │   │   │   ├── auth/           # Login & session check routes
 │   │   │   ├── cache/          # Diet plan response cache endpoints
-│   │   │   ├── chat/           # Assistant chat turns (SSE) & thread CRUD
+│   │   │   ├── chat/           # Assistant chat turns (SSE), thread CRUD & Apply/Reject decisions
 │   │   │   ├── config/         # Diet configuration load & save endpoints
 │   │   │   ├── generate/       # Durable generation job queue & status API
 │   │   │   ├── verify/         # Plan verification verdicts (manual "Verify" buttons)
@@ -276,11 +278,11 @@ docker run -d \
 │   ├── components/
 │   │   ├── AppHeader.tsx       # App navigation header & save triggers
 │   │   ├── LoginScreen.tsx     # Authentication modal
-│   │   ├── assistant/          # Chat transcript, bubbles & tool-call trace
+│   │   ├── assistant/          # Chat transcript, bubbles, tool-call trace & change-approval cards
 │   │   ├── connections/        # WhatsApp, Gemini API, Scheduler, & Hugging Face cards
 │   │   └── planner/            # Diet builder, meal editor, daily variables, output panels
 │   ├── hooks/
-│   │   ├── useAssistant.ts     # Chat threads & streamed assistant turns
+│   │   ├── useAssistant.ts     # Chat threads, streamed assistant turns & applying approved changes
 │   │   ├── useConfigActions.ts # Meal & split CRUD operations
 │   │   ├── useDietCache.ts     # Diet plan caching & invalidation hooks
 │   │   ├── useVerification.ts  # Per-day verification verdicts & manual re-checks
@@ -288,9 +290,11 @@ docker run -d \
 │   └── lib/
 │       ├── agent-complete.js   # Streaming tool-calling loop across all three providers
 │       ├── agent-prompt.js     # Assistant system prompt
+│       ├── agent-proposals.js  # Drafting tool: proposes Diet Builder edits for approval
 │       ├── agent-tools.js      # Read-only DB tools, redaction & query guardrails
 │       ├── agent.ts            # Typed wrapper over the assistant modules
 │       ├── auth.ts             # Password authentication & cookie helpers
+│       ├── builder-ops.js      # Builder edits as data: validate, apply & word them (server + browser)
 │       ├── compile-prompt.js   # Dynamic prompt compiler & template engine
 │       ├── compute-config-hash.js # Deterministic configuration hash generator
 │       ├── ai-complete.js      # Single-shot completion across all three providers

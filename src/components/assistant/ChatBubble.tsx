@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { ChatMessage, ChatToolStep, TOOL_LABELS } from '@/lib/types';
+import { ChatMessage, ChatToolStep, PROPOSE_TOOL, TOOL_LABELS } from '@/lib/types';
 import { renderChatMarkdown } from '@/lib/markdown';
+import ProposalCard, { ProposalHandlers } from './ProposalCard';
 
 /**
  * Human wording for one lookup. The arguments matter as much as the tool name —
@@ -12,7 +13,18 @@ export function describeStep(step: { name: string; args?: unknown }): string {
   const args = (step.args || {}) as Record<string, unknown>;
   if (typeof args.day === 'string') return `${label} · ${args.day}`;
   if (typeof args.collection === 'string') return `${label} · ${args.collection}`;
+  if (typeof args.title === 'string') return `${label} · ${args.title}`;
   return label;
+}
+
+/** "3 database lookups · 1 change drafted" — drafts are not lookups. */
+function summarizeSteps(steps: ChatToolStep[]): string {
+  const drafted = steps.filter(step => step.name === PROPOSE_TOOL && step.ok).length;
+  const lookups = steps.filter(step => step.name !== PROPOSE_TOOL).length;
+  const parts = [];
+  if (lookups > 0) parts.push(`${lookups} database ${lookups === 1 ? 'lookup' : 'lookups'}`);
+  if (drafted > 0) parts.push(`${drafted} ${drafted === 1 ? 'change' : 'changes'} drafted`);
+  return parts.join(' · ') || `${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`;
 }
 
 function ToolTrace({ steps }: { steps: ChatToolStep[] }) {
@@ -37,7 +49,7 @@ function ToolTrace({ steps }: { steps: ChatToolStep[] }) {
         >
           <polyline points="9 18 15 12 9 6" />
         </svg>
-        {steps.length} database {steps.length === 1 ? 'lookup' : 'lookups'}
+        {summarizeSteps(steps)}
         {failed > 0 && <span className="tool-trace__failed"> · {failed} failed</span>}
         {total > 0 && <span className="tool-trace__ms"> · {(total / 1000).toFixed(1)}s</span>}
       </button>
@@ -58,9 +70,10 @@ function ToolTrace({ steps }: { steps: ChatToolStep[] }) {
 
 interface ChatBubbleProps {
   message: ChatMessage;
+  proposalHandlers: ProposalHandlers;
 }
 
-export default function ChatBubble({ message }: ChatBubbleProps) {
+export default function ChatBubble({ message, proposalHandlers }: ChatBubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="chat-row chat-row--user">
@@ -75,12 +88,15 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
         <ToolTrace steps={message.steps || []} />
         {message.error ? (
           <p className="chat-bubble__error">⚠️ {message.error}</p>
-        ) : (
+        ) : message.content && (
           <div
             className="chat-markdown"
             dangerouslySetInnerHTML={{ __html: renderChatMarkdown(message.content) }}
           />
         )}
+        {(message.proposals || []).map(proposal => (
+          <ProposalCard key={proposal.id} proposal={proposal} handlers={proposalHandlers} />
+        ))}
       </div>
     </div>
   );

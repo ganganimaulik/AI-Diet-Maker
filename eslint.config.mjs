@@ -23,6 +23,8 @@ const eslintConfig = defineConfig([
     "src/lib/agent-tools.js",
     "src/lib/agent-complete.js",
     "src/lib/agent-prompt.js",
+    "src/lib/agent-proposals.js",
+    "src/lib/builder-ops.js",
     "src/lib/verification-runner.js",
     "scripts/**",
     ".wwebjs_auth/**",

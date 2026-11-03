@@ -5,10 +5,15 @@
  * from whatsapp-worker.js if the assistant is ever wired into WhatsApp).
  */
 
+import type { BuilderSnapshot } from './builder-history';
+import type { BuilderChange, BuilderProposal } from './types';
+
 /* eslint-disable @typescript-eslint/no-require-imports */
 const agentTools = require('./agent-tools.js');
 const agentComplete = require('./agent-complete.js');
 const agentPrompt = require('./agent-prompt.js');
+const agentProposals = require('./agent-proposals.js');
+const builderOps = require('./builder-ops.js');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /** Provider-neutral tool declaration handed to the model. */
@@ -77,11 +82,38 @@ export interface RunAgentTurnResult {
   messages: AgentMessage[];
 }
 
+/** The Diet Builder as it is on the user's screen, sent with each question. */
+export interface OnScreenBuilder {
+  snapshot: BuilderSnapshot;
+  hasUnsavedChanges: boolean;
+}
+
+export interface ToolContext {
+  builder?: OnScreenBuilder | null;
+}
+
 /** Read-only database tools, declarations only. */
 export const TOOL_SCHEMAS: ToolSchema[] = agentTools.TOOL_SCHEMAS;
 
 /** Execute one read-only tool call. Requires an open mongoose connection. */
-export const runTool: (name: string, args: Record<string, unknown>) => Promise<ToolOutcome> = agentTools.runTool;
+export const runTool: (name: string, args: Record<string, unknown>, context?: ToolContext) => Promise<ToolOutcome> =
+  agentTools.runTool;
+
+/** The drafting tool: proposes a Diet Builder edit, never applies one. */
+export const PROPOSE_TOOL_NAME: string = agentProposals.PROPOSE_TOOL_NAME;
+export const PROPOSAL_TOOL_SCHEMAS: ToolSchema[] = agentProposals.PROPOSAL_TOOL_SCHEMAS;
+
+/** One turn's drafts, each checked against `builder`; see agent-proposals.js. */
+export const createProposalDrafts: (builder: BuilderSnapshot) => {
+  proposals: BuilderProposal[];
+  run: (args: Record<string, unknown>) => Promise<ToolOutcome>;
+} = agentProposals.createProposalDrafts;
+
+/** Whether builder state sent by the browser has the builder's shape. */
+export const isBuilderSnapshot: (value: unknown) => value is BuilderSnapshot = builderOps.isBuilderSnapshot;
+
+/** A proposal change as one line of text, for the model. */
+export const formatChange: (change: BuilderChange) => string = builderOps.formatChange;
 
 export const buildSystemPrompt: (options?: { now?: Date; timezone?: string }) => string = agentPrompt.buildSystemPrompt;
 

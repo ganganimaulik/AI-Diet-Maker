@@ -591,9 +591,9 @@ export default function ApiSettingsCard({ config, setConfig, isSavingConfig, onS
         </h4>
         <p className="note-text" style={{ marginTop: 0 }}>
           Powers the Assistant tab. It answers by reading your configuration, plans and
-          verification verdicts straight from the database &mdash; read-only, with no way to change
-          anything or send a message. One question can take several model calls in a row, so a fast
-          model here beats a deep one.
+          verification verdicts straight from the database, which it cannot write to or send a
+          message from. It can draft Diet Builder changes, but each one waits for you to apply it.
+          One question can take several model calls in a row, so a fast model here beats a deep one.
         </p>
 
         <div className="input-row">

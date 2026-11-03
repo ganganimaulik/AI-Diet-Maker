@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { renderChatMarkdown } from '@/lib/markdown';
 import { useAssistant } from '@/hooks/useAssistant';
 import ChatBubble, { describeStep } from './ChatBubble';
+import { ProposalHandlers } from './ProposalCard';
 
 /** Openers for an empty thread, each answerable straight from the database. */
 const SUGGESTIONS = [
@@ -31,8 +32,19 @@ export default function AssistantView({ assistant }: AssistantViewProps) {
     openThread,
     startNewThread,
     deleteThread,
-    stop
+    stop,
+    applyProposal,
+    rejectProposal,
+    showProposal,
+    builderHasUnsavedChanges
   } = assistant;
+
+  const proposalHandlers: ProposalHandlers = {
+    apply: applyProposal,
+    reject: rejectProposal,
+    show: showProposal,
+    builderHasUnsavedChanges
+  };
 
   const [draft, setDraft] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -145,8 +157,11 @@ export default function AssistantView({ assistant }: AssistantViewProps) {
             <span aria-hidden="true">💬</span> Diet Assistant
           </h2>
 
-          <span className="assistant-chat__badge" title="The assistant can read your data but never change it">
-            read-only
+          <span
+            className="assistant-chat__badge"
+            title="The assistant reads your data and can draft Diet Builder changes, but nothing changes until you apply one"
+          >
+            asks first
           </span>
         </div>
 
@@ -157,7 +172,8 @@ export default function AssistantView({ assistant }: AssistantViewProps) {
             <div className="assistant-empty">
               <p className="assistant-empty__lead">
                 Ask about your meals, your targets, or any day&apos;s generated plan. I read your
-                configuration and plans straight from the database — and I can only read them.
+                configuration and plans straight from the database, and I can draft changes to your
+                Diet Builder — nothing changes until you apply them.
               </p>
               <div className="assistant-empty__suggestions">
                 {SUGGESTIONS.map(suggestion => (
@@ -170,7 +186,7 @@ export default function AssistantView({ assistant }: AssistantViewProps) {
           )}
 
           {messages.map((message, index) => (
-            <ChatBubble key={`${message.createdAt}-${index}`} message={message} />
+            <ChatBubble key={`${message.createdAt}-${index}`} message={message} proposalHandlers={proposalHandlers} />
           ))}
 
           {(isSending || streamingText) && (
