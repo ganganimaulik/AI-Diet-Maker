@@ -24,8 +24,13 @@ const { normalizeThinkingLevel } = require('./gemini.js');
 const { FIREWORKS_API_URL, parseFireworksErrorText } = require('./fireworks.js');
 const { parseGeminiErrorText } = require('./gemini.js');
 
-/** Tool round-trips allowed in one turn before the loop gives up. */
-const DEFAULT_MAX_STEPS = 8;
+/**
+ * Tool round-trips allowed in one turn before the loop gives up. Questions that
+ * span a whole week ("total weight for each day") need one or more lookups per
+ * day, so this is sized for that; the real ceiling is the chat route's
+ * maxDuration, not cost.
+ */
+const DEFAULT_MAX_STEPS = 25;
 
 /** Fireworks truncates hard at its own default, so always send a budget. */
 const DEFAULT_MAX_TOKENS = 8192;
