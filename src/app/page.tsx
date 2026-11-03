@@ -722,7 +722,10 @@ export default function Home() {
     return entry.promise;
   };
 
-  const restoreGenerationJobs = async () => {
+  // `presentJob` brings one restored job on screen (its day and the results
+  // view). Only the restore after a page load does that: a later
+  // reconciliation syncs job state and leaves the user on the screen they had.
+  const restoreGenerationJobs = async (presentJob: boolean) => {
     try {
       const res = await fetch('/api/generate', { cache: 'no-store' });
       const data: unknown = await res.json().catch(() => null);
@@ -762,10 +765,12 @@ export default function Home() {
       }
 
       const unpresentedJobs = currentJobs.filter(job => !presentedJobIdsRef.current.has(job.jobId));
-      const jobToPresent = unpresentedJobs.find(job => job.day === selectedDayRef.current)
-        || unpresentedJobs.find(job => job.status === 'completed' && !!job.responseText)
-        || unpresentedJobs.find(isActiveJob)
-        || unpresentedJobs[0];
+      const jobToPresent = !presentJob
+        ? undefined
+        : unpresentedJobs.find(job => job.day === selectedDayRef.current)
+          || unpresentedJobs.find(job => job.status === 'completed' && !!job.responseText)
+          || unpresentedJobs.find(isActiveJob)
+          || unpresentedJobs[0];
 
       for (const job of currentJobs) {
         applyGenerationJob(job, job === jobToPresent);
@@ -786,11 +791,11 @@ export default function Home() {
     if (isAuthenticatedState !== true || !savedConfig) return;
     if (!hasRestoredJobsRef.current) {
       hasRestoredJobsRef.current = true;
-      void restoreGenerationJobs();
+      void restoreGenerationJobs(true);
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void restoreGenerationJobs();
+      if (document.visibilityState === 'visible') void restoreGenerationJobs(false);
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
