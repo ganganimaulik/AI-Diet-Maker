@@ -28,7 +28,7 @@ const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRI
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
-const PROMPT_TEMPLATE_VERSION = 14;
+const PROMPT_TEMPLATE_VERSION = 15;
 
 /**
  * The reference nutrition table, one entry per line, exactly as it is printed.
@@ -150,6 +150,17 @@ function getDayVariantName(ingredients, mealsList) {
   if (nonStapleNames.length === 0) return 'Staples Only';
   if (nonStapleNames.length === 1) return `Just ${nonStapleNames[0]}`;
   return nonStapleNames.join(' + ');
+}
+
+/**
+ * A meal's heading line in the cook's Part 2, e.g. "Vegetable Meal: 4 Meals Per Day".
+ * Every meal carries its count, whatever its quantity mode: the cook needs it to
+ * make that many portions of a per-meal list, or to divide a daily total into
+ * that many. verify-plan.js checks each Part 2 block against this exact line.
+ */
+function cookMealHeading(meal) {
+  const count = meal.mealsPerDay;
+  return `${String(meal.name || '').trim()}: ${count} Meal${count > 1 ? 's' : ''} Per Day`;
 }
 
 /** The tail every ingredient line carries: split instruction, personal-only flag. */
@@ -362,26 +373,28 @@ Separate Part 2 from Part 1 with a horizontal rule (---), then output ${isSingle
 Part 2 Rules:
 - Personal-only ingredients ([PERSONAL ONLY - DO NOT SEND TO COOK]) do not appear at all — not in an ingredient list, not in a split, not in the variant name.
 - Split ingredients appear ONLY as their resolved split inside their owning meal's block, never as a separate ingredient line or heading.
+- Each meal's block opens with that meal's heading line, copied exactly as written below, in this order. Every heading carries how many times a day the meal is eaten, whatever its quantity mode:
+${mealsList.map(cookMealHeading).join('\n')}
 - Quantity mode is set per meal in the configuration. Never infer it from how often a meal is eaten:
-${hasPerMealMode ? `  * PER-MEAL MEALS — exactly these and no others: ${perMealMealNames.join(', ')}. Show per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)", and the heading carries the frequency, e.g. "Meal Name (x[N] daily):".
-  * EVERY OTHER MEAL: show daily total weights followed by "(daily total)", and the heading carries NO frequency suffix, whatever its meals-per-day is.` : '  * All meals show daily total weights followed by "(daily total)", and headings carry NO frequency suffix.'}
+${hasPerMealMode ? `  * PER-MEAL MEALS — exactly these and no others: ${perMealMealNames.join(', ')}. Show per-meal weights (daily total ÷ mealsPerDay) followed by "(per meal)".
+  * EVERY OTHER MEAL: show daily total weights followed by "(daily total)", whatever its meals per day is.` : '  * All meals show daily total weights followed by "(daily total)", whatever their meals per day is.'}
 
 Template for Each Day:
 
 ### [DAY]: [Ingredient Variant Name]
-[For each meal in order, print its block: ingredients in the meal's quantity mode, then any split instructions for that meal, then prep method if configured.]
+[For each meal in order, print its block: its heading line from the list above, then ingredients in the meal's quantity mode, then any split instructions for that meal, then prep method if configured.]
 
-Example (PER-MEAL mode meal):
-Meal Name (x3 daily):
+Example (PER-MEAL mode meal, eaten 3 times a day):
+Meal Name: 3 Meals Per Day
 first ingredient name 50g (per meal)
 second ingredient name 190g (per meal)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
-Example (DAILY TOTAL mode meal):
-Meal Name:
+Example (DAILY TOTAL mode meal, eaten 3 times a day):
+Meal Name: 3 Meals Per Day
 first ingredient name 150g (daily total)
-second ingredient name 190g (daily total)
+second ingredient name 570g (daily total)
 [split instructions belonging to this meal, if any]
 prep method: airfryer 200c, 10min
 
@@ -390,7 +403,7 @@ FINAL SELF-CHECK (silent in reasoning) — check these five points once, then em
 - Daily macro grams carry one decimal, and day calories sit within 2 kcal of target.
 - The Ideal / Below Ideal / Above Ideal verdict matches the UNROUNDED ratio, and the chosen [AUTO] mix is as close to the band as R4e allows.
 - No unconfigured ingredients added, none omitted, every name spelled exactly as configured.
-- Part 2 omits personal-only items and follows per-meal vs daily-total modes accurately.
+- Part 2 omits personal-only items, opens every meal with its listed heading line, and follows per-meal vs daily-total modes accurately.
 
 ===================================================================
                  DAY DATA — GENERATE ${isSingle ? selectedDay : 'MONDAY TO SUNDAY'}
@@ -409,4 +422,4 @@ Now produce PART 1 and PART 2 for ${isSingle ? selectedDay : 'MONDAY through SUN
 `;
 }
 
-module.exports = { getDayVariantName, compilePromptText, PROMPT_TEMPLATE_VERSION };
+module.exports = { getDayVariantName, cookMealHeading, compilePromptText, PROMPT_TEMPLATE_VERSION };

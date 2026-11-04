@@ -13,7 +13,7 @@
  * Keep this file as plain JS so it works in both contexts without a build step.
  */
 
-const { compilePromptText, getDayVariantName } = require('./compile-prompt.js');
+const { compilePromptText, getDayVariantName, cookMealHeading } = require('./compile-prompt.js');
 
 // A plan is judged against the weights it prints, so every tolerance below is
 // about display rounding, not about how close the diet may drift from target.
@@ -328,6 +328,27 @@ function parseDailyTotals(part1) {
   return totals;
 }
 
+// A cook meal block opens with "Meal Name: N Meals Per Day" (cookMealHeading),
+// or the Part 1 style "Meal Name (N Meals Per Day)".
+const COOK_MEAL_HEADINGS = [
+  /^(.+?)\s*:\s*(\d+)\s+Meals?\s+Per\s+Day\s*:?$/i,
+  /^(.+?)\s*\(\s*(\d+)\s+Meals?\s+Per\s+Day\s*\)\s*:?$/i
+];
+// A bare "Meal Name:" (or the pre-v15 "Meal Name (x3 daily):") still opens a
+// block with no count, so a heading that lost its count is reported as exactly
+// that instead of its ingredients merging into the meal above.
+const COUNTLESS_COOK_MEAL_HEADING = /^(.+?)\s*(?:\(x\d+\s*daily\))?\s*:$/i;
+
+function parseCookMealHeading(line) {
+  if (/^(liquids|prep method)/i.test(line)) return null;
+  for (const pattern of COOK_MEAL_HEADINGS) {
+    const match = line.match(pattern);
+    if (match) return { name: match[1].trim(), mealsPerDay: parseInt(match[2], 10) };
+  }
+  const countless = line.match(COUNTLESS_COOK_MEAL_HEADING);
+  return countless ? { name: countless[1].trim(), mealsPerDay: null } : null;
+}
+
 function parseCookPlan(part2Lines, day) {
   const cook = { heading: '', blocks: [] };
   let current = null;
@@ -343,9 +364,9 @@ function parseCookPlan(part2Lines, day) {
     }
     if (/^#{1,6}\s/.test(raw.trim())) continue; // section headings the template never asked for
 
-    const blockHeading = line.match(/^(.+?)\s*(?:\(x(\d+)\s*daily\))?\s*:\s*$/);
-    if (blockHeading && !/^(liquids|prep method)/i.test(line)) {
-      current = { name: blockHeading[1].trim(), frequency: blockHeading[2] ? parseInt(blockHeading[2], 10) : null, lines: [] };
+    const blockHeading = parseCookMealHeading(line);
+    if (blockHeading) {
+      current = { ...blockHeading, lines: [] };
       cook.blocks.push(current);
       continue;
     }
@@ -996,11 +1017,9 @@ function checkCookPlan(sink, plan, expected, day, config) {
     if (block.name.toLowerCase() !== mealName.toLowerCase()) {
       sink.error('cook', `Part 2 block ${index + 1} is "${block.name}", expected "${mealName}".`);
     }
-    if (isPerMeal && block.frequency !== expectedMeal.meal.mealsPerDay) {
-      sink.error('cook', `Part 2 "${block.name}": per-meal meals need an "(x${expectedMeal.meal.mealsPerDay} daily)" suffix, found ${block.frequency === null ? 'none' : `x${block.frequency}`}.`);
-    }
-    if (!isPerMeal && block.frequency !== null) {
-      sink.error('cook', `Part 2 "${block.name}": daily-total meals must not carry a frequency suffix (found x${block.frequency}).`);
+    if (block.mealsPerDay !== expectedMeal.meal.mealsPerDay) {
+      const found = block.mealsPerDay === null ? 'it gives no meals per day' : `it says ${block.mealsPerDay}`;
+      sink.error('cook', `Part 2 "${block.name}": the heading must read "${cookMealHeading(expectedMeal.meal)}", but ${found}.`);
     }
 
     const table = plan.meals[index];
