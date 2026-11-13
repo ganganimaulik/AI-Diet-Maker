@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const { compilePromptText } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
+const { loadIngredientLibrary } = require('./src/lib/ingredient-store.js');
 const {
   assertGeminiFinishReason,
   extractPartsText,
@@ -348,7 +349,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
       headless: true,
       args: puppeteerArgs,
       protocolTimeout: 180000, // Wait up to 3 mins for Puppeteer protocol calls
-      timeout: 180000, // Page navigation timeout: 3 mins (default 30s is too short for HF Spaces)
+      timeout: 180000, // Page navigation timeout: 3 mins (default 30s is too short on a small VM)
     }
   });
 
@@ -418,7 +419,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     isClientReady = false;
 
     // Never wipe the MongoDB session on a transient disconnect — CONFLICT,
-    // NAVIGATION, TIMEOUT, etc. happen routinely during HF Spaces redeploys
+    // NAVIGATION, TIMEOUT, etc. happen routinely during redeploys
     // while the old and new containers briefly fight over the same session.
     // Even LOGOUT/UNPAIRED can be a deploy-race artifact, so those only count
     // toward the consecutive-failure threshold instead of wiping immediately.
@@ -787,11 +788,12 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     const targetDayName = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long' }).format(targetDate).toUpperCase();
 
     console.log(`Compiling diet prompt for ${isTomorrow ? 'tomorrow' : 'today'} (${targetDayName})...`);
-    const prompt = compilePromptText(configDoc, { mode: 'single', selectedDay: targetDayName });
+    const library = await loadIngredientLibrary();
+    const prompt = compilePromptText(configDoc, { mode: 'single', selectedDay: targetDayName, library });
 
     // 4. Check cache before calling Gemini API
     let generatedText;
-    const currentHash = computeConfigHash(configDoc, targetDayName);
+    const currentHash = computeConfigHash(configDoc, targetDayName, library);
     const cachedEntry = await CachedResponse.findOne({ day: targetDayName });
 
     if (cachedEntry && cachedEntry.configHash === currentHash && cachedEntry.responseText) {
@@ -1399,7 +1401,10 @@ async function runNextGenerationJob() {
         record = await runPlanVerification(configDoc, job.day, finalText, {
           aiReview: !!configDoc.verificationAiReview,
           configHash: job.configHash,
-          signal: cancelController.signal
+          signal: cancelController.signal,
+          // Read per attempt: a row fixed while the job runs is picked up by
+          // the next check, like any other config edit.
+          library: await loadIngredientLibrary()
         });
       } catch (err) {
         if (isGenerationCancelledError(err) || cancelObserved) throw err;
@@ -1724,7 +1729,7 @@ function extractCookInstructions(md, dayName) {
 }
 
 // -------------------------------------------------------------
-// HTTP HEALTH CHECK SERVER FOR HUGGING FACE SPACES
+// HTTP HEALTH CHECK SERVER
 // -------------------------------------------------------------
 const http = require('http');
 const net = require('net');

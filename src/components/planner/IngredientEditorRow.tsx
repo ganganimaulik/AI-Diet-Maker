@@ -8,6 +8,13 @@ interface IngredientEditorRowProps {
   mealOptions?: Meal[];
   /** The weekday a daily-variables row belongs to, to warn when its meal is off that day. */
   day?: string;
+  /**
+   * Whether the ingredient library prices this name. Leave undefined while the
+   * library is still loading, or when the row's meal is not sent to the AI.
+   */
+  hasLibraryEntry?: boolean;
+  /** Opens the library with this ingredient's name filled in. */
+  onAddToLibrary?: () => void;
   onField: (field: keyof Ingredient, value: any) => void;
   onRemove: () => void;
 }
@@ -21,7 +28,7 @@ interface IngredientEditorRowProps {
  * areas: a stacked card on phones, a single dense row from lg up. The DOM
  * order never changes between the two.
  */
-export default function IngredientEditorRow({ ingredient: ing, mealOptions, day, onField, onRemove }: IngredientEditorRowProps) {
+export default function IngredientEditorRow({ ingredient: ing, mealOptions, day, hasLibraryEntry, onAddToLibrary, onField, onRemove }: IngredientEditorRowProps) {
   const isDailyVariant = !!mealOptions;
 
   // The prompt compiler only keeps daily variables owned by a live meal that
@@ -37,6 +44,12 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, day,
         : day && (ownerMeal.disabledDays || []).includes(day)
           ? `"${ownerMeal.name}" is off on ${day.charAt(0)}${day.slice(1).toLowerCase()}`
           : '';
+
+  // A name the library cannot price gets no reference row in the prompt, so
+  // the model falls back to its own figures and the verifier has nothing to
+  // re-derive that day's sodium and potassium from. Not shown on a row that
+  // is not sent at all — the warning above already covers that.
+  const isUnpriced = hasLibraryEntry === false && !ing.disabled && !orphanReason && !!ing.name.trim();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -124,6 +137,24 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, day,
         <div className="ingredient-warning">
           <span aria-hidden="true">⚠️</span>
           <span>Not sent to the AI — {orphanReason}. Pick another meal or switch that one on to include it.</span>
+        </div>
+      )}
+
+      {isUnpriced && (
+        <div className="ingredient-warning">
+          <span aria-hidden="true">⚠️</span>
+          <span>
+            No ingredient library entry for &quot;{ing.name.trim()}&quot; — the AI will use its own nutrition values, so
+            plans that include it cannot have their sodium and potassium checked exactly.
+            {onAddToLibrary && (
+              <>
+                {' '}
+                <button type="button" className="ingredient-warning__action" onClick={onAddToLibrary}>
+                  Add it to the library
+                </button>
+              </>
+            )}
+          </span>
         </div>
       )}
 

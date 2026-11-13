@@ -36,7 +36,7 @@ COPY whatsapp-worker.js ./
 COPY src/lib/*.js ./src/lib/
 COPY docker-entrypoint.sh ./
 
-# Expose Hugging Face Spaces port
+# Expose the worker's HTTP health/control port
 EXPOSE 7860
 
 # Entrypoint points /etc/resolv.conf at Cloudflare/Google DNS (override via

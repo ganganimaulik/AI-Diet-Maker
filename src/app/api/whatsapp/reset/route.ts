@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbConnect, WhatsAppState, Config } from '@/lib/db';
+import { dbConnect, WhatsAppState } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 import mongoose from 'mongoose';
 
@@ -11,37 +11,21 @@ export async function POST() {
 
     await dbConnect();
 
-    // 1. Try to fetch configuration to get Hugging Face Space info
-    const config = await Config.findOne();
-    if (config && config.huggingFaceSpace) {
-      try {
-        const normalized = config.huggingFaceSpace.replace(/[\/_.]/g, '-').toLowerCase();
-        const spaceUrl = `https://${normalized}.hf.space/reset`;
+    // 1. Ask the worker to drop its session and restart
+    const workerUrl = process.env.WORKER_URL || 'http://158.101.23.222:7860';
+    try {
+      // 4-second timeout so an offline worker doesn't hold up the reset
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-        console.log(`Sending reset request to worker space: ${spaceUrl}`);
+      const res = await fetch(`${workerUrl}/reset`, { signal: controller.signal });
 
-        const headers: Record<string, string> = {};
-        if (config.huggingFaceToken) {
-          headers['Authorization'] = `Bearer ${config.huggingFaceToken}`;
-        }
-
-        // Send a request to the worker's reset endpoint with a 4-second timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(spaceUrl, {
-          method: 'GET', // Using GET as endpoint matched parsedUrl
-          headers,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        console.log(`Worker reset API response status: ${res.status}`);
-      } catch (err) {
-        // If the worker is sleeping or offline, we log the error but still proceed
-        // to reset the database session documents so it can start fresh when woke up.
-        console.error('Failed to notify worker of reset, proceeding to clear DB:', err);
-      }
+      clearTimeout(timeoutId);
+      console.log(`Worker reset API response status: ${res.status}`);
+    } catch (err) {
+      // If the worker is offline, we log the error but still proceed to reset
+      // the database session documents so it starts fresh when it comes back.
+      console.error('Failed to notify worker of reset, proceeding to clear DB:', err);
     }
 
     // 2. Clear MongoDB GridFS session storage

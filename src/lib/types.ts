@@ -12,6 +12,43 @@ export interface Ingredient {
   mealId?: string;
 }
 
+/**
+ * One row of the ingredient library: per-100g raw nutrition a plan is priced
+ * from. Stored in its own collection and edited from the Diet Builder.
+ */
+export interface IngredientEntry {
+  /** Database id; absent on the built-in table salt row. */
+  id?: string;
+  name: string;
+  /** Other spellings that resolve to this row. */
+  aliases?: string[];
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  /** Milligrams per 100g. */
+  sodium: number;
+  /** Milligrams per 100g. */
+  potassium: number;
+  /** Where the figures came from. */
+  note?: string;
+  /** Part of the calculation rules (table salt); shown but not editable. */
+  builtIn?: boolean;
+}
+
+/** What the library form sends: figures are still text while being typed. */
+export interface IngredientEntryInput {
+  name: string;
+  aliases: string;
+  kcal: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  sodium: string;
+  potassium: string;
+  note: string;
+}
+
 export interface CustomSplit {
   id: string;
   name: string;
@@ -92,8 +129,6 @@ export interface Config {
     [key: string]: CustomSplit[];
   };
   selectedGenerationDay: string;
-  huggingFaceToken?: string;
-  huggingFaceSpace?: string;
 }
 
 export interface WhatsAppStatus {
@@ -359,8 +394,6 @@ export const DEFAULT_CONFIG: Config = {
   agentThinkingLevel: 'low',
   agentReasoningEffort: 'default',
   agentMaxTokens: 8192,
-  huggingFaceToken: '',
-  huggingFaceSpace: 'ganganimaulik/diet-maker-worker',
   global: {
     dailyCalorieTarget: 3200,
     idealSodiumPotassiumRatioMin: 0.79,

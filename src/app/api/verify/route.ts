@@ -8,6 +8,7 @@ import {
   type IVerificationResult
 } from '@/lib/db';
 import { computeConfigHash } from '@/lib/config-hash';
+import { loadIngredientLibrary } from '@/lib/ingredient-store';
 import { runPlanVerification } from '@/lib/verification-runner';
 
 // The arithmetic pass is instant; only the optional AI review is slow, and the
@@ -97,13 +98,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const currentHash = computeConfigHash(config, day);
+    const library = await loadIngredientLibrary();
+    const currentHash = computeConfigHash(config, day, library);
     const requestedReview = (body as { aiReview?: unknown }).aiReview;
 
     const record = await runPlanVerification(config, day, cached.responseText, {
       aiReview: typeof requestedReview === 'boolean' ? requestedReview : undefined,
       configHash: cached.configHash || currentHash,
-      planGeneratedAt: cached.generatedAt || null
+      planGeneratedAt: cached.generatedAt || null,
+      library
     });
 
     const saved = await VerificationResult.findOneAndUpdate(
@@ -151,9 +154,10 @@ export async function GET(req: Request) {
       day ? CachedResponse.find({ day }, { day: 1, generatedAt: 1 }) : CachedResponse.find({}, { day: 1, generatedAt: 1 })
     ]);
     const planStamps = new Map(plans.map((plan) => [plan.day, plan.generatedAt || null]));
+    const library = await loadIngredientLibrary();
 
     const results = records.map((record) =>
-      serialize(record, isVerdictStale(record, computeConfigHash(config, record.day), planStamps.get(record.day) || null))
+      serialize(record, isVerdictStale(record, computeConfigHash(config, record.day, library), planStamps.get(record.day) || null))
     );
 
     if (day) {

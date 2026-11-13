@@ -13,6 +13,9 @@ const { performance } = require('perf_hooks');
 
 const { compilePromptText } = require('../src/lib/compile-prompt.js');
 const { verifyPlan } = require('../src/lib/verify-plan.js');
+// Benchmarks run against a backed-up config, so they price it from the
+// built-in rows rather than the live library.
+const { DEFAULT_INGREDIENT_LIBRARY } = require('../src/lib/ingredient-library.js');
 const {
   FIREWORKS_API_URL,
   DEFAULT_MAX_TOKENS,
@@ -109,7 +112,7 @@ async function main() {
   console.log(` Models to test: ${CANDIDATE_MODELS.map(m => m.name).join(', ')}`);
   console.log(`======================================================\n`);
 
-  const prompt = compilePromptText(config, { mode: 'single', selectedDay: targetDay });
+  const prompt = compilePromptText(config, { mode: 'single', selectedDay: targetDay, library: DEFAULT_INGREDIENT_LIBRARY });
   console.log(`Prompt compiled successfully (${prompt.length} chars, ~${Math.round(prompt.length / 4)} tokens).\n`);
 
   const results = [];
@@ -154,7 +157,7 @@ async function main() {
 
     // Run deterministic verification
     console.log(`  Running deterministic verifier (verifyPlan)...`);
-    const verification = verifyPlan(config, targetDay, response.text);
+    const verification = verifyPlan(config, targetDay, response.text, DEFAULT_INGREDIENT_LIBRARY);
 
     const isClean = verification.errorCount === 0;
     console.log(`  Verdict: ${isClean ? '✅ PASS' : '❌ FAIL'} (${verification.errorCount} errors, ${verification.warningCount} warnings)`);

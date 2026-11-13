@@ -29,9 +29,11 @@ const {
   GenerationJob,
   Scheduler,
   WhatsAppState,
-  Contact
+  Contact,
+  IngredientEntry
 } = require('./models.js');
 const { computeConfigHash } = require('./compute-config-hash.js');
+const { loadIngredientLibrary } = require('./ingredient-store.js');
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
@@ -112,6 +114,11 @@ const COLLECTIONS = {
   contacts: {
     model: Contact,
     description: 'Cached WhatsApp contacts and groups available as delivery recipients.'
+  },
+  ingredient_library: {
+    model: IngredientEntry,
+    description:
+      'One document per ingredient. The per-100g raw nutrition (kcal, protein, carbs, fat in g; sodium, potassium in mg) every plan is priced from, with the other spellings (aliases) that resolve to each row. A builder ingredient whose name matches no row here has its values guessed by the model, which is the usual cause of sodium/potassium mismatches. Table salt is built in (388 mg sodium per gram) and has no document. The user edits this in the Diet Builder under Ingredient Library.'
   }
 };
 
@@ -324,10 +331,10 @@ async function toolGetDietConfig(_args, context = {}) {
  * produced them changes, both are history rather than current state, so every
  * plan read says whether it is still current.
  */
-function staleness(config, day, storedHash) {
+function staleness(config, day, storedHash, library) {
   if (!config || !storedHash) return null;
   try {
-    return storedHash !== computeConfigHash(config, day);
+    return storedHash !== computeConfigHash(config, day, library);
   } catch {
     return null;
   }
@@ -353,17 +360,18 @@ function summarizeVerification(verdict, isStale) {
 
 async function toolGetDayPlan(args) {
   const day = normalizeDay(args.day);
-  const [config, plan, verdict] = await Promise.all([
+  const [config, plan, verdict, library] = await Promise.all([
     Config.findOne().lean(),
     CachedResponse.findOne({ day }).lean(),
-    VerificationResult.findOne({ day }).lean()
+    VerificationResult.findOne({ day }).lean(),
+    loadIngredientLibrary()
   ]);
 
   if (!plan) {
     return { day, hasPlan: false, note: `No plan has been generated for ${day} yet.` };
   }
 
-  const planStale = staleness(config, day, plan.configHash);
+  const planStale = staleness(config, day, plan.configHash, library);
   const verdictStale =
     verdict && plan.generatedAt && verdict.planGeneratedAt
       ? new Date(verdict.planGeneratedAt).getTime() !== new Date(plan.generatedAt).getTime()
@@ -374,7 +382,7 @@ async function toolGetDayPlan(args) {
     hasPlan: true,
     generatedAt: plan.generatedAt ? new Date(plan.generatedAt).toISOString() : null,
     isStale: planStale,
-    staleNote: planStale ? 'The diet config changed after this plan was generated, so it no longer matches the current setup.' : undefined,
+    staleNote: planStale ? 'The diet config or the ingredient library changed after this plan was generated, so it no longer matches the current setup.' : undefined,
     planMarkdown: plan.responseText || '',
     verification: summarizeVerification(verdict, verdictStale)
   });
@@ -382,9 +390,10 @@ async function toolGetDayPlan(args) {
 
 async function toolListDays() {
   const config = await Config.findOne().lean();
-  const [plans, verdicts] = await Promise.all([
+  const [plans, verdicts, library] = await Promise.all([
     CachedResponse.find({}).lean(),
-    VerificationResult.find({}).lean()
+    VerificationResult.find({}).lean(),
+    loadIngredientLibrary()
   ]);
 
   const planByDay = new Map(plans.map((plan) => [plan.day, plan]));
@@ -398,7 +407,7 @@ async function toolListDays() {
         day,
         hasPlan: !!plan,
         generatedAt: plan && plan.generatedAt ? new Date(plan.generatedAt).toISOString() : null,
-        isStale: plan ? staleness(config, day, plan.configHash) : null,
+        isStale: plan ? staleness(config, day, plan.configHash, library) : null,
         verified: verdict ? verdict.ok : null,
         errorCount: verdict ? verdict.errorCount : null,
         warningCount: verdict ? verdict.warningCount : null

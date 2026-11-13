@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "whatsapp-worker.js",
     "src/lib/compile-prompt.js",
+    "src/lib/ingredient-library.js",
+    "src/lib/ingredient-store.js",
     "src/lib/compute-config-hash.js",
     "src/lib/models.js",
     "src/lib/gemini.js",

@@ -7,6 +7,9 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { computeConfigHash: _computeConfigHash } = require('./compute-config-hash.js');
 
+import type { IngredientEntry } from '@/lib/types';
+
 // Accepts plain config objects as well as hydrated mongoose documents.
-// The hash covers the shared config plus only `day`'s own overrides.
-export const computeConfigHash: (config: object, day: string) => string = _computeConfigHash;
+// The hash covers the shared config plus only `day`'s own overrides, and the
+// ingredient library rows that day's prompt prints.
+export const computeConfigHash: (config: object, day: string, library: IngredientEntry[]) => string = _computeConfigHash;

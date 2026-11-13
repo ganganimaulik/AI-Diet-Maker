@@ -10,6 +10,8 @@ import {
   type IGenerationVerificationAttempt
 } from '@/lib/db';
 import { computeConfigHash } from '@/lib/config-hash';
+import { loadIngredientLibrary } from '@/lib/ingredient-store';
+import type { IngredientEntry } from '@/lib/types';
 
 import { requeueStaleJobs, requestCancelJob } from '@/lib/generation-runner';
 
@@ -116,10 +118,10 @@ function isDuplicateKeyError(error: unknown): error is { code: number } {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;
 }
 
-function isCurrentConfig(job: IGenerationJob, config: IConfig | null): boolean {
+function isCurrentConfig(job: IGenerationJob, config: IConfig | null, library: IngredientEntry[]): boolean {
   if (!config) return false;
   try {
-    return job.configHash === computeConfigHash(config, job.day);
+    return job.configHash === computeConfigHash(config, job.day, library);
   } catch {
     return false;
   }
@@ -141,7 +143,7 @@ function serializeAttempt(attempt: IGenerationVerificationAttempt): PublicVerifi
   };
 }
 
-function serializeJob(job: IGenerationJob, config: IConfig | null): PublicGenerationJob {
+function serializeJob(job: IGenerationJob, config: IConfig | null, library: IngredientEntry[]): PublicGenerationJob {
   return {
     jobId: job.jobId,
     day: job.day,
@@ -151,7 +153,7 @@ function serializeJob(job: IGenerationJob, config: IConfig | null): PublicGenera
     thinkingText: job.thinkingText || '',
     error: job.error || '',
     cacheable: !!job.cacheable,
-    isCurrentConfig: isCurrentConfig(job, config),
+    isCurrentConfig: isCurrentConfig(job, config, library),
     autoVerify: !!job.autoVerify,
     generationAttempt: job.generationAttempt || 0,
     maxGenerationAttempts: job.maxGenerationAttempts || 1,
@@ -261,12 +263,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
 
-    const configHash = computeConfigHash(config, day);
+    const library = await loadIngredientLibrary();
+    const configHash = computeConfigHash(config, day, library);
     // Persist the job as queued; the whatsapp-worker claims and executes it.
     const job = await createOrReuseJob(day, configHash, body, config);
 
     return NextResponse.json(
-      { job: serializeJob(job, config) },
+      { job: serializeJob(job, config, library) },
       { status: 202, headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
@@ -310,9 +313,9 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: `No active generation job for ${day}.` }, { status: 404 });
     }
 
-    const config = await Config.findOne();
+    const [config, library] = await Promise.all([Config.findOne(), loadIngredientLibrary()]);
     return NextResponse.json(
-      { job: serializeJob(job, config) },
+      { job: serializeJob(job, config, library) },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
@@ -344,8 +347,9 @@ export async function GET(req: Request) {
       console.error('Failed to requeue stale generation jobs:', error);
     });
 
-    const [config, jobs] = await Promise.all([
+    const [config, library, jobs] = await Promise.all([
       Config.findOne(),
+      loadIngredientLibrary(),
       day
         ? GenerationJob.find({ day }).sort({ requestedAt: -1 })
         : GenerationJob.find({}).sort({ requestedAt: -1 })
@@ -353,13 +357,13 @@ export async function GET(req: Request) {
 
     if (day) {
       return NextResponse.json(
-        { job: jobs[0] ? serializeJob(jobs[0], config) : null },
+        { job: jobs[0] ? serializeJob(jobs[0], config, library) : null },
         { headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     return NextResponse.json(
-      { jobs: jobs.map((job) => serializeJob(job, config)) },
+      { jobs: jobs.map((job) => serializeJob(job, config, library)) },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {

@@ -10,9 +10,12 @@ interface DailyVariablesTabProps {
   activeDay: string;
   setActiveDay: (day: string) => void;
   actions: ConfigActions;
+  /** Resolves a name to its ingredient-library row; null until the library has loaded. */
+  libraryLookup: ((name: string) => unknown) | null;
+  onAddToLibrary: (name: string) => void;
 }
 
-export default function DailyVariablesTab({ config, activeDay, setActiveDay, actions }: DailyVariablesTabProps) {
+export default function DailyVariablesTab({ config, activeDay, setActiveDay, actions, libraryLookup, onAddToLibrary }: DailyVariablesTabProps) {
   const { addIngredient, updateIngredient, removeIngredient, swapDayVariables, setMealActiveOnDay } = actions;
   // Meals whose master switch is on; each can still be off for this one day.
   const switchableMeals = config.meals.filter(m => !m.disabled);
@@ -107,6 +110,8 @@ export default function DailyVariablesTab({ config, activeDay, setActiveDay, act
             ingredient={ing}
             mealOptions={config.meals}
             day={activeDay}
+            hasLibraryEntry={libraryLookup ? !!libraryLookup(ing.name) : undefined}
+            onAddToLibrary={() => onAddToLibrary(ing.name)}
             onField={(field, value) => updateIngredient('daily', idx, field, value, activeDay)}
             onRemove={() => removeIngredient('daily', idx, activeDay)}
           />

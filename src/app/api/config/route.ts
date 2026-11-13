@@ -49,14 +49,6 @@ export async function GET() {
         config.fireworksApiKey = process.env.FIREWORKS_API_KEY;
         modified = true;
       }
-      if (config.huggingFaceSpace === undefined) {
-        config.huggingFaceSpace = 'ganganimaulik/diet-maker-worker';
-        modified = true;
-      }
-      if (config.huggingFaceToken === undefined) {
-        config.huggingFaceToken = '';
-        modified = true;
-      }
       // Configs written before Gemini 3 carry thinkingEnabled + a numeric
       // thinkingBudget instead; both are ignored now, so seed the level.
       if (!config.thinkingLevel) {

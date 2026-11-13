@@ -8,9 +8,11 @@ interface BuilderSidebarProps {
   setActiveTab: (tab: string) => void;
   onAddMeal: () => void;
   onReorderMeals: (draggedId: string, targetId: string) => void;
+  /** Builder ingredients with no ingredient-library entry. */
+  missingLibraryCount: number;
 }
 
-export default function BuilderSidebar({ meals, activeTab, setActiveTab, onAddMeal, onReorderMeals }: BuilderSidebarProps) {
+export default function BuilderSidebar({ meals, activeTab, setActiveTab, onAddMeal, onReorderMeals, missingLibraryCount }: BuilderSidebarProps) {
   const [draggedMealId, setDraggedMealId] = useState<string | null>(null);
   const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
 
@@ -105,6 +107,31 @@ export default function BuilderSidebar({ meals, activeTab, setActiveTab, onAddMe
           </svg>
           Daily Variables
         </span>
+      </button>
+      <button
+        className={`builder-nav-btn ${activeTab === 'library' ? 'active' : ''}`}
+        onClick={() => setActiveTab('library')}
+      >
+        <span className="builder-nav-btn__label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          Ingredient Library
+        </span>
+        {missingLibraryCount > 0 && (
+          // Labelled rather than carrying hidden text: an absolutely placed
+          // sr-only span escapes the phone nav rail's scroll box and makes the
+          // whole page scroll sideways.
+          <span
+            className="builder-nav-badge"
+            role="img"
+            aria-label={`${missingLibraryCount} builder ingredient${missingLibraryCount === 1 ? ' has' : 's have'} no library entry`}
+            title={`${missingLibraryCount} builder ingredient${missingLibraryCount === 1 ? ' has' : 's have'} no library entry`}
+          >
+            {missingLibraryCount}
+          </span>
+        )}
       </button>
       <button
         className={`builder-nav-btn ${activeTab === 'prompt' ? 'active' : ''}`}

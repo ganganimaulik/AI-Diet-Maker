@@ -9,7 +9,8 @@
  */
 
 const { createHash } = require('crypto');
-const { PROMPT_TEMPLATE_VERSION, isMealActiveOnDay } = require('./compile-prompt.js');
+const { PROMPT_TEMPLATE_VERSION, isMealActiveOnDay, referenceLinesForDay } = require('./compile-prompt.js');
+const { LEGACY_REFERENCE_LIBRARY } = require('./ingredient-library.js');
 
 /**
  * Compute a SHA-256 hash of the configuration that feeds ONE day's prompt.
@@ -31,19 +32,30 @@ const { PROMPT_TEMPLATE_VERSION, isMealActiveOnDay } = require('./compile-prompt
  *   - maxTokens, reasoningEffort (only once moved off their defaults, so
  *     existing caches are not invalidated by simply adding the settings)
  *   - PROMPT_TEMPLATE_VERSION (bumped when the prompt template itself changes)
+ *   - the ingredient library rows this day's prompt prints, but only where they
+ *     differ from the table as it was while hardcoded (LEGACY_REFERENCE_LIBRARY):
+ *     a day whose rows have not moved keeps the hash its cached plan was stored
+ *     under, a row corrected or edited since stales the days that use it, and
+ *     editing spinach leaves the days that do not use spinach alone
  *
  * Excluded fields (changes do NOT invalidate cache):
  *   - apiKey, enterpriseApiKey, etc. (credentials only)
  *   - other days' dailyVariables
+ *   - library rows this day does not use, and every row's note
  *   - generationRange, selectedGenerationDay (UI selection only)
- *   - huggingFaceToken, huggingFaceSpace (WhatsApp worker config)
  *
  * @param {object} config – Config object (plain object or Mongoose doc)
  * @param {string} day    – Day the cached response belongs to, e.g. 'MONDAY'
+ * @param {import('./ingredient-library.js').LibraryEntry[]} library – The
+ *   ingredient library (loadIngredientLibrary()). Required: hashing without it
+ *   would call every plan current no matter what its nutrition rows now say.
  */
-function computeConfigHash(config, day) {
+function computeConfigHash(config, day, library) {
   if (!day) {
     throw new Error('computeConfigHash requires a day — cache hashes are per day.');
+  }
+  if (!Array.isArray(library)) {
+    throw new Error('computeConfigHash requires the ingredient library — the rows a day prints are part of its hash.');
   }
   const dayKey = String(day).toUpperCase();
 
@@ -88,6 +100,12 @@ function computeConfigHash(config, day) {
   }
   if (config.reasoningEffort && config.reasoningEffort !== 'default') {
     hashableFields.reasoningEffort = config.reasoningEffort;
+  }
+
+  const referenceLines = referenceLinesForDay(config, dayKey, library);
+  const legacyLines = referenceLinesForDay(config, dayKey, LEGACY_REFERENCE_LIBRARY);
+  if (referenceLines.join('\n') !== legacyLines.join('\n')) {
+    hashableFields.referenceTable = referenceLines;
   }
 
   const jsonStr = JSON.stringify(hashableFields, (key, value) => {

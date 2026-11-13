@@ -134,8 +134,6 @@ export interface IConfig {
     [key: string]: ICustomSplit[];
   };
   selectedGenerationDay: string;
-  huggingFaceToken?: string;
-  huggingFaceSpace?: string;
   updatedAt: Date;
 }
 

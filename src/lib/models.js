@@ -110,9 +110,7 @@ const ConfigSchema = new Schema({
     of: [CustomSplitSchema],
     default: {}
   },
-  selectedGenerationDay: { type: String, default: 'MONDAY' },
-  huggingFaceToken: { type: String, default: '' },
-  huggingFaceSpace: { type: String, default: 'ganganimaulik/diet-maker-worker' }
+  selectedGenerationDay: { type: String, default: 'MONDAY' }
 }, { timestamps: true });
 
 // 2. WhatsApp Client State Schema
@@ -336,6 +334,28 @@ const ChatThreadSchema = new Schema({
 
 ChatThreadSchema.index({ lastMessageAt: -1 });
 
+// 10. Ingredient library: per-100g raw nutrition, one document per ingredient.
+// Edited from the Diet Builder; read by the prompt compiler, the verifier and
+// the config hash through ingredient-store.js. Table salt is not stored here —
+// its figure is part of the calculation rules (see ingredient-library.js).
+const IngredientEntrySchema = new Schema({
+  // The primary name, normalised. Unique so a double seed or two tabs saving
+  // the same ingredient cannot leave two rows for it.
+  key: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  aliases: { type: [String], default: [] },
+  kcal: { type: Number, default: 0 },
+  protein: { type: Number, default: 0 },
+  carbs: { type: Number, default: 0 },
+  fat: { type: Number, default: 0 },
+  sodium: { type: Number, default: 0 },
+  potassium: { type: Number, default: 0 },
+  // Where the figures came from (a label, a database, an estimate).
+  note: { type: String, default: '' },
+  // Position in the reference table the prompt prints.
+  order: { type: Number, default: 0 }
+}, { timestamps: true });
+
 // Compile models (reuse existing compilations across hot reloads)
 const Config = mongoose.models.Config || mongoose.model('Config', ConfigSchema);
 const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppState', WhatsAppStateSchema);
@@ -345,6 +365,7 @@ const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedR
 const GenerationJob = mongoose.models.GenerationJob || mongoose.model('GenerationJob', GenerationJobSchema);
 const VerificationResult = mongoose.models.VerificationResult || mongoose.model('VerificationResult', VerificationResultSchema);
 const ChatThread = mongoose.models.ChatThread || mongoose.model('ChatThread', ChatThreadSchema);
+const IngredientEntry = mongoose.models.IngredientEntry || mongoose.model('IngredientEntry', IngredientEntrySchema);
 
 module.exports = {
   Config,
@@ -354,5 +375,6 @@ module.exports = {
   CachedResponse,
   GenerationJob,
   VerificationResult,
-  ChatThread
+  ChatThread,
+  IngredientEntry
 };

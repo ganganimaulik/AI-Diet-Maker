@@ -18,6 +18,11 @@
  * phrase the templates below ask for), so those strings are a contract — change
  * one and change the verifier with it.
  *
+ * The reference table itself is data: the ingredient library, stored in the
+ * database and edited from the Diet Builder. Callers load it once
+ * (ingredient-store.js) and pass it in as `options.library`; this module only
+ * decides which of its rows a day needs.
+ *
  * Worked examples in the templates must use placeholder names only. An example
  * built from real ingredients gets copied instead of the configuration: a
  * "Table Salt (NaCl)" row in a sample table had both DeepSeek and Kimi renaming
@@ -25,59 +30,14 @@
  * one missing and one invented ingredient per meal.
  */
 
+const { referenceEntriesFor, formatReferenceLine } = require('./ingredient-library.js');
+
 const DEFAULT_DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
 // Bump this whenever the prompt template changes in a way that affects the
 // generated plan. It is mixed into the config hash so cached responses
 // produced by an older template are invalidated.
 const PROMPT_TEMPLATE_VERSION = 15;
-
-/**
- * The reference nutrition table, one entry per line, exactly as it is printed.
- *
- * Kept as data rather than one blob so a day's prompt can carry only the rows
- * that day actually uses: an unused row is a distractor the model can pick by
- * mistake (three near-identical whey rows were the worst offender) and ~40
- * tokens of nothing.
- *
- * `alwaysInclude` marks rows worth carrying even when no ingredient name
- * matched them — salt is referenced by the sodium rules themselves.
- */
-const REFERENCE_TABLE = [
-  { alwaysInclude: true, line: 'Table Salt (NaCl) / salt / Table Salt: 0 kcal, 0.0g Protein, 0.0g Carbs, 0.0g Fat, 388mg Sodium per 1g of salt, 0mg Potassium' },
-  { line: 'Water / water: 0 kcal (0.00 kcal/g), 0.0g Protein, 0.0g Carbs, 0.0g Fat, 0mg Sodium, 0mg Potassium' },
-  { line: 'Whey Protein Isolate - myprotein matcha blueberry: 367 kcal (3.67 kcal/g), 77.0g Protein, 8.71g Carbs, 2.03g Fat, 240mg Sodium, 400mg Potassium' },
-  { line: 'Fast & up Whey Protein Isolate: 375 kcal (3.75 kcal/g), 81.0g Protein, 3.50g Carbs, 1.50g Fat, 180mg Sodium, 350mg Potassium' },
-  { line: 'Whey Protein Isolate (Generic / Default WPI): 375 kcal (3.75 kcal/g), 83.0g Protein, 3.00g Carbs, 1.20g Fat, 180mg Sodium, 380mg Potassium' },
-  { line: 'Instant Oats (Raw) / Oats (Raw) / oats: 379 kcal (3.79 kcal/g), 13.2g Protein, 67.7g Carbs, 6.50g Fat, 6mg Sodium, 350mg Potassium' },
-  { line: 'chicken breast / Chicken Breast (Raw): 120 kcal (1.20 kcal/g), 22.5g Protein, 0.0g Carbs, 2.50g Fat, 45mg Sodium, 300mg Potassium' },
-  { line: 'Olive oil / olive oil: 884 kcal (8.84 kcal/g), 0.0g Protein, 0.0g Carbs, 100.0g Fat, 2mg Sodium, 1mg Potassium' },
-  { line: 'Rice / White Rice: 365 kcal (3.65 kcal/g), 7.1g Protein, 80.0g Carbs, 0.70g Fat, 5mg Sodium, 115mg Potassium' },
-  { line: 'Potato (Raw) / potato: 77 kcal (0.77 kcal/g), 2.0g Protein, 17.5g Carbs, 0.10g Fat, 6mg Sodium, 421mg Potassium' },
-  { line: 'Sweet Potato: 86 kcal (0.86 kcal/g), 1.6g Protein, 20.1g Carbs, 0.10g Fat, 55mg Sodium, 337mg Potassium' },
-  { line: 'Tomato / tomato: 18 kcal (0.18 kcal/g), 0.9g Protein, 3.9g Carbs, 0.20g Fat, 5mg Sodium, 237mg Potassium' },
-  { line: 'Spinach: 23 kcal (0.23 kcal/g), 2.9g Protein, 3.6g Carbs, 0.40g Fat, 79mg Sodium, 558mg Potassium' },
-  { line: 'Bottle Gourd: 14 kcal (0.14 kcal/g), 0.6g Protein, 3.4g Carbs, 0.02g Fat, 2mg Sodium, 150mg Potassium' },
-  { line: 'Cluster Beans: 36 kcal (0.36 kcal/g), 3.2g Protein, 5.0g Carbs, 0.40g Fat, 4mg Sodium, 230mg Potassium' },
-  { line: 'Brinjal: 25 kcal (0.25 kcal/g), 1.0g Protein, 5.9g Carbs, 0.20g Fat, 2mg Sodium, 230mg Potassium' },
-  { line: 'Besan: 387 kcal (3.87 kcal/g), 22.4g Protein, 57.8g Carbs, 6.70g Fat, 64mg Sodium, 846mg Potassium' },
-  { line: 'poha: 353 kcal (3.53 kcal/g), 6.7g Protein, 77.3g Carbs, 1.20g Fat, 8mg Sodium, 130mg Potassium' },
-  { line: 'Almonds: 579 kcal (5.79 kcal/g), 21.2g Protein, 21.6g Carbs, 49.9g Fat, 1mg Sodium, 733mg Potassium' },
-  { line: 'Cashews: 553 kcal (5.53 kcal/g), 18.2g Protein, 30.2g Carbs, 43.8g Fat, 12mg Sodium, 660mg Potassium' },
-  { line: 'Walnuts: 654 kcal (6.54 kcal/g), 15.2g Protein, 13.7g Carbs, 65.2g Fat, 2mg Sodium, 441mg Potassium' },
-  { line: 'Banana / banana: 89 kcal (0.89 kcal/g), 1.1g Protein, 22.8g Carbs, 0.30g Fat, 1mg Sodium, 358mg Potassium' },
-  { line: 'Raisins: 299 kcal (2.99 kcal/g), 3.1g Protein, 79.2g Carbs, 0.50g Fat, 20mg Sodium, 749mg Potassium' },
-  { line: 'Kimia Dates: 277 kcal (2.77 kcal/g), 1.8g Protein, 75.0g Carbs, 0.20g Fat, 2mg Sodium, 696mg Potassium' },
-  { line: 'Eggs / egg / eggs: 143 kcal (1.43 kcal/g), 12.6g Protein, 0.7g Carbs, 9.50g Fat, 142mg Sodium, 138mg Potassium' },
-  { line: 'aamchur powder: 300 kcal (3.00 kcal/g), 3.0g Protein, 68.0g Carbs, 1.50g Fat, 30mg Sodium, 250mg Potassium' },
-  // Everest Chaat Masala, read off the per-100g panel on the box: 1414 kJ = 338 kcal,
-  // 5.0g protein, 71.7g carbs, 3.5g fat, 20010mg sodium (the blend is ~50% salt, so a
-  // 2g sprinkle carries ~400mg sodium — about 1g of table salt).
-  // Potassium is NOT on the label (it only says "not a significant source", i.e. under
-  // ~1880mg/100g); 500mg is a deliberately conservative estimate for the spice half of
-  // the blend (amchur, cumin, coriander, dried ginger, black pepper).
-  { line: 'Chaat Masala / chat masala / Everest Chaat Masala: 338 kcal (3.38 kcal/g), 5.0g Protein, 71.7g Carbs, 3.50g Fat, 20010mg Sodium, 500mg Potassium' }
-];
 
 /**
  * Safely read a key from a value that might be a plain object or a Mongoose Map.
@@ -88,50 +48,25 @@ function mapGet(mapOrObj, key) {
   return mapOrObj[key];
 }
 
-/** Same normalisation verify-plan.js uses, so both sides resolve a name alike. */
-function normalizeName(name) {
-  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-/** "Potato (Raw)" -> "potato": the un-parenthesised fallback form. */
-function baseName(normalized) {
-  return normalized.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-/** Every spelling of a reference row that an ingredient name may arrive as. */
-function aliasesOf(entry) {
-  const names = entry.line.slice(0, entry.line.indexOf(': '));
-  const aliases = new Set();
-  for (const alias of names.split(' / ')) {
-    const normalized = normalizeName(alias);
-    aliases.add(normalized);
-    aliases.add(baseName(normalized));
-  }
-  return aliases;
-}
-
 /**
- * The reference rows the given ingredient names need, in table order.
- * A name that matches nothing simply has no row — the model is told to fall
- * back to USDA values for those, exactly as before.
+ * The reference table lines for a set of ingredient names, exactly as printed.
+ *
+ * A day's prompt carries only the rows that day actually uses: an unused row
+ * is a distractor the model can pick by mistake (three near-identical whey
+ * rows were the worst offender) and ~40 tokens of nothing. Salt is always
+ * carried, because the sodium rules refer to it. A name that matches no
+ * library row has no line — the model is told to fall back to USDA values for
+ * it, and the Diet Builder flags the ingredient so that does not go unnoticed.
  */
-function referenceLinesFor(ingredientNames) {
-  const wanted = new Set();
-  for (const name of ingredientNames) {
-    const normalized = normalizeName(name);
-    wanted.add(normalized);
-    wanted.add(baseName(normalized));
-    if (/\bsalt\b/.test(normalized)) wanted.add('salt');
-  }
+function referenceLinesFor(ingredientNames, library) {
+  return referenceEntriesFor(ingredientNames, library).map((entry) => `- ${formatReferenceLine(entry)}`);
+}
 
-  return REFERENCE_TABLE
-    .filter((entry) => {
-      if (entry.alwaysInclude) return true;
-      const aliases = aliasesOf(entry);
-      for (const name of wanted) if (aliases.has(name)) return true;
-      return false;
-    })
-    .map((entry) => `- ${entry.line}`);
+function requireLibrary(library, caller) {
+  if (!Array.isArray(library)) {
+    throw new Error(`${caller} needs the ingredient library — load it with loadIngredientLibrary() and pass it in.`);
+  }
+  return library;
 }
 
 /**
@@ -224,6 +159,15 @@ function ingredientNamesForDays(c, mealsList, activeDays) {
 }
 
 /**
+ * The reference rows one day's prompt prints, as text. The config hash folds
+ * these in, so editing a row stales exactly the days that use it.
+ */
+function referenceLinesForDay(c, day, library) {
+  const mealsList = activeMealsForDay(c, day);
+  return referenceLinesFor(ingredientNamesForDays(c, mealsList, [day]), requireLibrary(library, 'referenceLinesForDay'));
+}
+
+/**
  * Compile the full LLM prompt from a config object.
  *
  * @param {object} c        – Config object (plain object or Mongoose doc)
@@ -231,10 +175,12 @@ function ingredientNamesForDays(c, mealsList, activeDays) {
  * @param {'single'|'all'} options.mode          – Generate for one day or all 7.
  * @param {string}         [options.selectedDay] – Required when mode === 'single'.
  * @param {string[]}       [options.daysOfWeek]  – Ordered day names, defaults to MON–SUN.
+ * @param {import('./ingredient-library.js').LibraryEntry[]} options.library – The ingredient library.
  * @returns {string}
  */
 function compilePromptText(c, options) {
   const { mode = 'single', selectedDay = 'MONDAY', daysOfWeek = DEFAULT_DAYS_OF_WEEK } = options || {};
+  const library = requireLibrary(options && options.library, 'compilePromptText');
   const isSingle = mode === 'single';
   const idealMin = c?.global?.idealSodiumPotassiumRatioMin === undefined ? 0.70 : c.global.idealSodiumPotassiumRatioMin;
   const idealMax = c?.global?.idealSodiumPotassiumRatioMax === undefined ? 0.80 : c.global.idealSodiumPotassiumRatioMax;
@@ -266,7 +212,7 @@ ${String(meal.prepMethod || '').trim() ? `- prep method: ${meal.prepMethod.trim(
 `;
     }).join('\n');
 
-  const referenceLines = referenceLinesFor(ingredientNamesForDays(c, mealsList, activeDays)).join('\n');
+  const referenceLines = referenceLinesFor(ingredientNamesForDays(c, mealsList, activeDays), library).join('\n');
 
   const dayDataText = activeDays.map(day => {
     const ingredients = (mapGet(c.dailyVariables, day) || []).filter(ing => {
@@ -449,6 +395,7 @@ module.exports = {
   isMealActiveOnDay,
   activeMealsForDay,
   cookMealHeading,
+  referenceLinesForDay,
   compilePromptText,
   PROMPT_TEMPLATE_VERSION
 };

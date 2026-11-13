@@ -5,6 +5,7 @@
  */
 
 import type { IVerificationResult } from '@/lib/db';
+import type { IngredientEntry } from '@/lib/types';
 import type { VerificationFeasibility, VerificationIssue } from '@/lib/verify-plan';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -27,6 +28,8 @@ export interface RunPlanVerificationOptions {
   /** Stamp of the exact plan being judged. */
   planGeneratedAt?: Date | null;
   signal?: AbortSignal;
+  /** The ingredient library the plan is priced from. */
+  library: IngredientEntry[];
 }
 
 /** The record stored as one day's VerificationResult. */
@@ -36,7 +39,7 @@ export const runPlanVerification: (
   config: unknown,
   day: string,
   planText: string,
-  options?: RunPlanVerificationOptions
+  options: RunPlanVerificationOptions
 ) => Promise<VerificationRecord> = runner.runPlanVerification;
 
 /** Corrective block appended to the prompt when a rejected plan is regenerated. */

@@ -1,22 +1,21 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from 'react';
-import { Config, ContactEntry, SchedulerState, WhatsAppStatus } from '@/lib/types';
+import { ContactEntry, SchedulerState, WhatsAppStatus } from '@/lib/types';
 
 interface UseWhatsAppArgs {
   isAuthenticated: boolean | null;
   activeTab: string;
   currentView: string;
-  config: Config;
   /** Asks before saving unsaved config edits (see page.tsx); false = don't proceed. */
   ensureConfigSaved: (otherUnsavedChanges?: boolean) => Promise<boolean>;
 }
 
 /**
- * WhatsApp worker status polling, contacts, scheduler settings and
- * Hugging Face Space status — extracted from page.tsx.
+ * WhatsApp worker status polling, contacts and scheduler settings —
+ * extracted from page.tsx.
  */
-export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, ensureConfigSaved }: UseWhatsAppArgs) {
+export function useWhatsApp({ isAuthenticated, activeTab, currentView, ensureConfigSaved }: UseWhatsAppArgs) {
   const [whatsappState, setWhatsappState] = useState<WhatsAppStatus>({
     status: 'disconnected',
     qr: '',
@@ -49,10 +48,9 @@ export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, e
   const [isSavingScheduler, setIsSavingScheduler] = useState(false);
   const [testSendStatus, setTestSendStatus] = useState({ status: 'idle', message: '' });
 
-  // Hugging Face Space status states
-  const [hfStatus, setHfStatus] = useState('NOT_CONFIGURED');
-  const [hfDetails, setHfDetails] = useState<any>(null);
-  const [wakingUp, setWakingUp] = useState(false);
+  // Worker health, from /api/whatsapp/status
+  const [workerStatus, setWorkerStatus] = useState('UNREACHABLE');
+  const [workerDetails, setWorkerDetails] = useState<{ hardware: string; sdk: string } | null>(null);
   const [isResettingWhatsapp, setIsResettingWhatsapp] = useState(false);
 
   const fetchWhatsAppStatus = async () => {
@@ -76,8 +74,8 @@ export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, e
             }));
           }
         }
-        if (data.hfSpaceStatus) setHfStatus(data.hfSpaceStatus);
-        if (data.hfSpaceDetails) setHfDetails(data.hfSpaceDetails);
+        if (data.workerStatus) setWorkerStatus(data.workerStatus);
+        if (data.workerDetails) setWorkerDetails(data.workerDetails);
       }
     } catch (e) {
       console.error('Error fetching WhatsApp status:', e);
@@ -93,29 +91,6 @@ export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, e
       }
     } catch (e) {
       console.error('Error fetching contacts:', e);
-    }
-  };
-
-  const handleWakeUpSpace = async () => {
-    if (!config.huggingFaceSpace) return;
-    setWakingUp(true);
-    try {
-      const normalized = config.huggingFaceSpace.replace(/[\/_.]/g, '-').toLowerCase();
-      const spaceUrl = `https://${normalized}.hf.space/`;
-
-      const headers: Record<string, string> = {};
-      if (config.huggingFaceToken) {
-        headers['Authorization'] = `Bearer ${config.huggingFaceToken}`;
-      }
-
-      await fetch(spaceUrl, { headers, mode: 'no-cors' });
-      alert('Wake up request sent! Hugging Face takes about 30-60 seconds to boot up the container. The status badge will update automatically.');
-      fetchWhatsAppStatus();
-    } catch (e) {
-      console.error('Error sending wake up request:', e);
-      alert('Failed to send wake up request.');
-    } finally {
-      setWakingUp(false);
     }
   };
 
@@ -249,13 +224,11 @@ export function useWhatsApp({ isAuthenticated, activeTab, currentView, config, e
     contacts,
     isSavingScheduler,
     testSendStatus,
-    hfStatus,
-    hfDetails,
-    wakingUp,
+    workerStatus,
+    workerDetails,
     isResettingWhatsapp,
     fetchWhatsAppStatus,
     fetchContacts,
-    handleWakeUpSpace,
     handleResetWhatsapp,
     saveSchedulerDb,
     saveSchedulerSettings,

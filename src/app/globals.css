@@ -1732,6 +1732,265 @@ input[type="radio"]:disabled {
   line-height: 1.4;
 }
 
+/* A text action inside a warning line ("Add it to the library"). */
+.ingredient-warning__action {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: #fde68a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* ---- Ingredient library ---- */
+
+/* Count of builder ingredients the library cannot price, on its nav button. */
+.builder-nav-badge {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.library-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.library-missing__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #fcd34d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.library-missing__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.library-missing__what {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.library-missing__name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.library-missing__where {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.library-missing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.library-missing__actions .form-input {
+  flex: 1 1 9rem;
+  width: auto;
+  max-width: 14rem;
+  min-height: var(--tap);
+}
+
+.library-toolbar {
+  margin: 1rem 0 0.75rem;
+}
+
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.library-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.library-entry.is-built-in {
+  border-style: dashed;
+}
+
+.library-entry__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.library-entry__names {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-width: 0;
+}
+
+.library-entry__name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.library-entry__aliases {
+  flex-basis: 100%;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Pulled into the card's padding so the tap targets do not make every card taller. */
+.library-entry__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  margin: -0.35rem -0.45rem -0.35rem 0;
+}
+
+.library-entry__note {
+  margin: 0;
+}
+
+.library-chip {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.library-chip--used {
+  background: rgba(16, 185, 129, 0.14);
+  color: #6ee7b7;
+}
+
+.library-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+.library-figures dt {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.library-figures dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-figures__unit {
+  margin-left: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.library-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 12px;
+  background: rgba(168, 85, 247, 0.05);
+}
+
+.library-form__title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #d8b4fe;
+}
+
+.library-form__figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.library-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Edit / Cancel: the text-button shape without the destructive colour. */
+.btn-remove--text.library-btn-quiet {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (min-width: 768px) {
+  .library-missing__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .library-missing__actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  .library-figures {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .library-form__figures {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 1024px) {
   .ingredients-list {
     gap: 0.75rem;

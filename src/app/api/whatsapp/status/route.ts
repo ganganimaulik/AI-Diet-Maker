@@ -40,12 +40,10 @@ export async function GET() {
       });
     }
 
-    // Check the WhatsApp worker health. The worker was migrated off Hugging Face
-    // Spaces to an Oracle Cloud Always-Free VM (Docker); we ping its health
-    // endpoint directly. Field names (hfSpaceStatus/hfSpaceDetails) are kept
-    // for call-site compat.
-    let hfSpaceStatus = 'UNREACHABLE';
-    let hfSpaceDetails: { hardware: string; sdk: string } | null = null;
+    // Check the WhatsApp worker health: it runs in Docker on an Oracle Cloud
+    // Always-Free VM, and we ping its health endpoint directly.
+    let workerStatus = 'UNREACHABLE';
+    let workerDetails: { hardware: string; sdk: string } | null = null;
 
     const workerUrl = process.env.WORKER_URL || 'http://158.101.23.222:7860';
     try {
@@ -57,18 +55,18 @@ export async function GET() {
 
       if (workerRes.ok) {
         const workerData = await workerRes.json();
-        hfSpaceStatus = workerData?.status === 'online' ? 'RUNNING' : 'DOWN';
-        hfSpaceDetails = { hardware: 'Oracle Cloud Always-Free · Phoenix', sdk: 'Docker' };
+        workerStatus = workerData?.status === 'online' ? 'RUNNING' : 'DOWN';
+        workerDetails = { hardware: 'Oracle Cloud Always-Free · Phoenix', sdk: 'Docker' };
       } else {
-        hfSpaceStatus = `HTTP_ERROR_${workerRes.status}`;
+        workerStatus = `HTTP_ERROR_${workerRes.status}`;
       }
     } catch (err) {
       console.error('Error fetching worker status:', err);
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      hfSpaceStatus = isAbort ? 'TIMEOUT' : 'UNREACHABLE';
+      workerStatus = isAbort ? 'TIMEOUT' : 'UNREACHABLE';
     }
 
-    return NextResponse.json({ state, scheduler, hfSpaceStatus, hfSpaceDetails });
+    return NextResponse.json({ state, scheduler, workerStatus, workerDetails });
   } catch (error) {
     console.error('Error fetching WhatsApp status:', error);
     return NextResponse.json(

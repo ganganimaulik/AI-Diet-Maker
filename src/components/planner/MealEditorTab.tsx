@@ -7,9 +7,12 @@ interface MealEditorTabProps {
   meal: Meal;
   canDelete: boolean;
   actions: ConfigActions;
+  /** Resolves a name to its ingredient-library row; null until the library has loaded. */
+  libraryLookup: ((name: string) => unknown) | null;
+  onAddToLibrary: (name: string) => void;
 }
 
-export default function MealEditorTab({ meal: selectedMeal, canDelete, actions }: MealEditorTabProps) {
+export default function MealEditorTab({ meal: selectedMeal, canDelete, actions, libraryLookup, onAddToLibrary }: MealEditorTabProps) {
   const {
     updateMeal, setMealActiveOnDay, deleteMeal, addMealIngredient, updateMealIngredient, removeMealIngredient
   } = actions;
@@ -128,6 +131,9 @@ export default function MealEditorTab({ meal: selectedMeal, canDelete, actions }
           <IngredientEditorRow
             key={idx}
             ingredient={ing}
+            // An inactive meal is never sent, so its rows have nothing to warn about.
+            hasLibraryEntry={libraryLookup && !selectedMeal.disabled ? !!libraryLookup(ing.name) : undefined}
+            onAddToLibrary={() => onAddToLibrary(ing.name)}
             onField={(field, value) => updateMealIngredient(selectedMeal.id, idx, field, value)}
             onRemove={() => removeMealIngredient(selectedMeal.id, idx)}
           />

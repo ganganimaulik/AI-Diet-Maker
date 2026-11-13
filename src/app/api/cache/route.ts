@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { dbConnect, Config, CachedResponse, GenerationJob, VerificationResult } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 import { computeConfigHash } from '@/lib/config-hash';
+import { loadIngredientLibrary } from '@/lib/ingredient-store';
 
 /**
  * GET /api/cache?day=MONDAY  — Returns cached response for a given day (if valid)
@@ -23,11 +24,12 @@ export async function GET(req: Request) {
     if (!config) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
+    const library = await loadIngredientLibrary();
 
     if (day) {
       // Return cached response for a specific day
       const dayKey = day.toUpperCase();
-      const currentHash = computeConfigHash(config, dayKey);
+      const currentHash = computeConfigHash(config, dayKey, library);
       const cached = await CachedResponse.findOne({ day: dayKey });
       if (!cached) {
         return NextResponse.json({ cached: null, configHash: currentHash });
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
         generatedAt: entry.generatedAt,
         // Each day is validated against its own hash, so editing one day
         // leaves the other six cached plans valid.
-        isValid: entry.configHash === computeConfigHash(config, entry.day),
+        isValid: entry.configHash === computeConfigHash(config, entry.day, library),
       }));
 
       return NextResponse.json({ entries });
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
     if (!config) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
-    const configHash = computeConfigHash(config, day.toUpperCase());
+    const configHash = computeConfigHash(config, day.toUpperCase(), await loadIngredientLibrary());
 
     // Upsert the cached response
     const cached = await CachedResponse.findOneAndUpdate(

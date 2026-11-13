@@ -22,6 +22,7 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Smart Auto-Calculated Ingredients**: Mark ingredients as `[AUTO]` with optional `min` and `max` gram constraints. The AI automatically solves for exact weights to meet your daily caloric and macro targets.
 - **Personal-Only Ingredients**: Flag sensitive or personal items (e.g., supplements, whey protein) to keep them in your full nutritional breakdown (Part 1) while automatically omitting them from the cook's preparation instructions (Part 2).
 - **Daily Variables & Custom Splits**: Customize day-by-day variations (Monday–Sunday) for vegetables, carbs, and custom seasoning/salt splits.
+- **Ingredient Library**: The per-100g raw nutrition every plan is calculated and checked from lives in its own collection and is edited from the builder's **Ingredient Library** tab — add your own brands, give an entry other names, fix a figure. An ingredient with no entry is flagged on its builder row, because the model would otherwise fall back to its own values and that day's sodium and potassium could no longer be checked exactly. Editing an entry marks only the plans that use it as out of date.
 - **Per-Day Meal Switches**: Turn any active meal off for particular weekdays — from the meal's **Active Days** row or from that day's **Meals on …** row in Daily Variables. A meal that is off for a day is left out of that day's prompt, verification and cache hash only, so the other six days keep their cached plans.
 - **Live System Prompt Preview**: Real-time prompt compiler with side-by-side prompt inspection and custom prompt override capabilities.
 
@@ -48,7 +49,7 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Read-Only Database Access**: The assistant reaches the database through a tool layer that only ever runs `find` / `count`. There is no code path from chat to a database write, a plan generation, or a WhatsApp send.
 - **Drafts Builder Changes, You Approve Them**: Ask for a change — a calorie target, an ingredient weight or AUTO range, a per-day ingredient, a whole meal — and the assistant drafts it as a card listing every before → after value. Nothing changes until you press **Apply**, which puts it into the Diet Builder as an ordinary edit: one undo step, unsaved until **Save Configuration**. Each draft is checked against the builder when it is made and again when you apply it, so a draft that no longer matches is refused rather than half-applied; independent changes get separate cards, and your Apply / Reject decision is stored with the conversation so the assistant knows what you accepted.
 - **Sees What You See**: Each question carries the Diet Builder as it is on screen, so answers and drafts account for edits you have not saved yet.
-- **Secrets Never Leave the Server**: API keys, the service-account JSON, the Hugging Face token and the WhatsApp login QR are redacted at every nesting depth before any document reaches the model — so "read the config" cannot become "read my credentials back to me".
+- **Secrets Never Leave the Server**: API keys, the service-account JSON and the WhatsApp login QR are redacted at every nesting depth before any document reaches the model — so "read the config" cannot become "read my credentials back to me".
 - **Query Guardrails**: Collections are whitelisted, expression operators (`$where`, `$function`, `$expr`, …) are refused, results are capped at 25 documents and 24 KB per call, and long plan text is truncated in generic queries so one wide read cannot flood the context.
 - **Visible Reasoning Trail**: Each lookup is streamed to the UI as it runs ("Reading the plan · MONDAY"), and stored with the answer as an expandable trace, so you can see exactly which records an answer came from.
 - **Stale-Aware**: Plans and verdicts carry the config hash they were produced under, and the assistant is told to flag an answer built on a plan the configuration has since moved past.
@@ -120,7 +121,7 @@ flowchart TD
 - **Database**: [MongoDB](https://www.mongodb.com/) with [Mongoose](https://mongoosejs.com/)
 - **AI & LLM**: Google Gemini API via [`@google/genai`](https://www.npmjs.com/package/@google/genai) & REST API
 - **WhatsApp Engine**: [`whatsapp-web.js`](https://wwebjs.dev/) with Puppeteer & [`wwebjs-mongo`](https://www.npmjs.com/package/wwebjs-mongo) (GridFS session storage)
-- **Containerization & Deployment**: Docker, GitHub Actions, Oracle Cloud VM, Hugging Face Spaces, GCP VM, Vercel
+- **Containerization & Deployment**: Docker, GitHub Actions, Oracle Cloud VM, GCP VM, Vercel
 
 ---
 
@@ -233,15 +234,7 @@ An automated GitHub Actions workflow is provided in `.github/workflows/deploy-or
 3. Configure `~/worker.env` on the remote VM containing `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider).
 4. Pushing changes to `main` touching worker files automatically builds and redeploys the Docker container.
 
-#### Option B: Hugging Face Spaces (Docker SDK)
-The repository includes a `Dockerfile` compatible with Hugging Face Spaces:
-1. Create a new Docker Space on Hugging Face.
-2. Set repository secrets in GitHub:
-   - `HF_TOKEN`
-3. Run or enable `.github/workflows/sync-to-hub.yml` to automatically push and build on Hugging Face Spaces.
-4. Add `MONGODB_URI` and `GEMINI_API_KEY` (plus `FIREWORKS_API_KEY` if using the Fireworks provider) in the Space's Settings secrets.
-
-#### Option C: Standalone Docker Run
+#### Option B: Standalone Docker Run
 To build and run the worker on any server or local Docker daemon:
 
 ```bash
@@ -271,6 +264,7 @@ docker run -d \
 │   │   │   ├── chat/           # Assistant chat turns (SSE), thread CRUD & Apply/Reject decisions
 │   │   │   ├── config/         # Diet configuration load & save endpoints
 │   │   │   ├── generate/       # Durable generation job queue & status API
+│   │   │   ├── ingredients/    # Ingredient library CRUD
 │   │   │   ├── verify/         # Plan verification verdicts (manual "Verify" buttons)
 │   │   │   └── whatsapp/       # WhatsApp status, contacts, test sends, session reset
 │   │   ├── globals.css         # Global dark theme styling
@@ -280,12 +274,13 @@ docker run -d \
 │   │   ├── AppHeader.tsx       # App navigation header & save triggers
 │   │   ├── LoginScreen.tsx     # Authentication modal
 │   │   ├── assistant/          # Chat transcript, bubbles, tool-call trace & change-approval cards
-│   │   ├── connections/        # WhatsApp, Gemini API, Scheduler, & Hugging Face cards
+│   │   ├── connections/        # WhatsApp, Gemini API, Scheduler, & worker status cards
 │   │   └── planner/            # Diet builder, meal editor, daily variables, output panels
 │   ├── hooks/
 │   │   ├── useAssistant.ts     # Chat threads, streamed assistant turns & applying approved changes
 │   │   ├── useConfigActions.ts # Meal & split CRUD operations
 │   │   ├── useDietCache.ts     # Diet plan caching & invalidation hooks
+│   │   ├── useIngredientLibrary.ts # Ingredient library load & row edits
 │   │   ├── useVerification.ts  # Per-day verification verdicts & manual re-checks
 │   │   └── useWhatsApp.ts      # WhatsApp status & scheduler management hooks
 │   └── lib/
@@ -298,6 +293,8 @@ docker run -d \
 │       ├── builder-ops.js      # Builder edits as data: validate, apply & word them (server + browser)
 │       ├── compile-prompt.js   # Dynamic prompt compiler & template engine
 │       ├── compute-config-hash.js # Deterministic configuration hash generator
+│       ├── ingredient-library.js # Ingredient library: name matching, prompt rows, validation, seed rows
+│       ├── ingredient-store.js # Ingredient library database access (seeds the defaults on first read)
 │       ├── ai-complete.js      # Single-shot completion across all three providers
 │       ├── db.ts               # Mongoose connection manager
 │       ├── gemini.js           # Gemini API client & response parsers
@@ -307,7 +304,7 @@ docker run -d \
 │       ├── types.ts            # TypeScript interfaces & default diet configuration
 │       ├── verification-runner.js # Verification pipeline & retry-feedback prompt
 │       └── verify-plan.js      # Deterministic arithmetic checker (no model involved)
-├── .github/workflows/          # CI/CD deployment workflows (Oracle, GCP, HF Spaces)
+├── .github/workflows/          # CI/CD deployment workflows (Oracle, GCP)
 ├── Dockerfile                  # Worker container definition with Chromium dependencies
 ├── docker-entrypoint.sh        # Docker startup script with DNS resolver setup
 ├── package.json                # Project dependencies & scripts

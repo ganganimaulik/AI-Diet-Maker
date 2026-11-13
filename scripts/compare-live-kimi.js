@@ -22,6 +22,9 @@ if (!apiKey) {
 }
 
 const { verifyPlan } = require('../src/lib/verify-plan.js');
+// Priced from the built-in rows rather than the live library, so two runs
+// of this script compare like with like.
+const { DEFAULT_INGREDIENT_LIBRARY } = require('../src/lib/ingredient-library.js');
 const {
   FIREWORKS_API_URL,
   buildFireworksPayload,
@@ -39,7 +42,9 @@ const config = configs[0];
 // Compilers
 const currentCompiler = require('../src/lib/compile-prompt.js');
 const prevCode = execSync('git show HEAD:src/lib/compile-prompt.js', { encoding: 'utf8' });
-const prevCompilerPath = path.resolve(__dirname, '../.tmp_compile_prompt_prev.js');
+// Written next to the real one so its relative requires (the ingredient
+// library) resolve; the file is deleted again when the run ends.
+const prevCompilerPath = path.resolve(__dirname, '../src/lib/.tmp_compile_prompt_prev.js');
 fs.writeFileSync(prevCompilerPath, prevCode);
 const prevCompiler = require(prevCompilerPath);
 
@@ -143,7 +148,7 @@ async function runModelStream(label, prompt) {
 
   // Run verification
   console.log(`  Running verifier...`);
-  const verification = verifyPlan(config, targetDay, fullText);
+  const verification = verifyPlan(config, targetDay, fullText, DEFAULT_INGREDIENT_LIBRARY);
   console.log(`  Verification: ${verification.errorCount === 0 ? '✅ PASS' : '❌ FAIL'} (${verification.errorCount} errors, ${verification.warningCount} warnings)`);
 
   if (verification.issues && verification.issues.length > 0) {
@@ -165,8 +170,8 @@ async function runModelStream(label, prompt) {
 }
 
 async function main() {
-  const prevPrompt = prevCompiler.compilePromptText(config, { mode: 'single', selectedDay: targetDay });
-  const currPrompt = currentCompiler.compilePromptText(config, { mode: 'single', selectedDay: targetDay });
+  const prevPrompt = prevCompiler.compilePromptText(config, { mode: 'single', selectedDay: targetDay, library: DEFAULT_INGREDIENT_LIBRARY });
+  const currPrompt = currentCompiler.compilePromptText(config, { mode: 'single', selectedDay: targetDay, library: DEFAULT_INGREDIENT_LIBRARY });
 
   const outDir = path.resolve(__dirname, '../benchmark-results');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });

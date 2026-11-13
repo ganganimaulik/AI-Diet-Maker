@@ -1,36 +1,22 @@
-'use client';
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Dispatch, SetStateAction } from 'react';
-import { Config } from '@/lib/types';
-
-// The worker was migrated off Hugging Face Spaces to an Oracle Cloud
-// Always-Free VM (Docker). This card now reflects that worker's health;
-// /api/whatsapp/status pings the worker's own health endpoint. The prop shape
-// is kept (config/setConfig/onSave/onWakeUp/etc.) so the call site in
-// page.tsx does not need to change.
-interface HuggingFaceCardProps {
-  config: Config;
-  setConfig: Dispatch<SetStateAction<Config>>;
-  hfStatus: string;
-  hfDetails: any;
-  wakingUp: boolean;
-  isSavingConfig: boolean;
-  onSave: () => void;
-  onWakeUp: () => void;
+interface WorkerStatusCardProps {
+  workerStatus: string;
+  workerDetails: { hardware: string; sdk: string } | null;
 }
 
-export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCardProps) {
-  const online = hfStatus === 'RUNNING';
+// Health of the WhatsApp worker (Docker on an Oracle Cloud Always-Free VM),
+// as reported by /api/whatsapp/status.
+export default function WorkerStatusCard({ workerStatus, workerDetails }: WorkerStatusCardProps) {
+  const online = workerStatus === 'RUNNING';
   const badgeClass = online
     ? 'ready'
-    : (hfStatus === 'DOWN' || hfStatus === 'TIMEOUT' || hfStatus === 'UNREACHABLE')
+    : (workerStatus === 'DOWN' || workerStatus === 'TIMEOUT' || workerStatus === 'UNREACHABLE')
       ? 'disconnected'
       : 'qr_code';
   const badgeLabel =
-    hfStatus === 'RUNNING' ? 'Online' :
-    hfStatus === 'DOWN' ? 'Down' :
-    (hfStatus === 'TIMEOUT' || hfStatus === 'UNREACHABLE') ? 'Unreachable' :
-    hfStatus;
+    workerStatus === 'RUNNING' ? 'Online' :
+    workerStatus === 'DOWN' ? 'Down' :
+    (workerStatus === 'TIMEOUT' || workerStatus === 'UNREACHABLE') ? 'Unreachable' :
+    workerStatus;
 
   return (
     <section className="settings-group-card animate-fadeIn">
@@ -53,12 +39,12 @@ export default function HuggingFaceCard({ hfStatus, hfDetails }: HuggingFaceCard
         MongoDB automatically.
       </div>
 
-      {hfDetails && (
+      {workerDetails && (
         <div className="info-tile info-tile--wide" style={{ marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
           <div style={{ fontWeight: 700, color: '#fff', marginBottom: '0.25rem' }}>Worker:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', overflowWrap: 'anywhere' }}>
-            <span>💻 Host: {hfDetails.hardware}</span>
-            <span>🛠️ Runtime: {hfDetails.sdk}</span>
+            <span>💻 Host: {workerDetails.hardware}</span>
+            <span>🛠️ Runtime: {workerDetails.sdk}</span>
           </div>
         </div>
       )}

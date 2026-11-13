@@ -69,8 +69,8 @@ function resolveReviewModel(config) {
  * what the arithmetic pass already found — its job is the judgement the
  * checker cannot make, not a second round of the same sums.
  */
-function buildReviewPrompt(config, day, planText, math) {
-  const generationBrief = compilePromptText(config, { mode: 'single', selectedDay: day });
+function buildReviewPrompt(config, day, planText, math, library) {
+  const generationBrief = compilePromptText(config, { mode: 'single', selectedDay: day, library });
   const findings = math.issues.length
     ? math.issues.map((issue) => `- [${issue.severity}/${issue.category}] ${issue.message}`).join('\n')
     : '- (none)';
@@ -133,7 +133,7 @@ function toReviewIssues(raw) {
  * Never throws: a failed review is reported as a status, because the
  * deterministic verdict stands on its own.
  */
-async function runAiReview(config, day, planText, math, signal) {
+async function runAiReview(config, day, planText, math, signal, library) {
   const settings = resolveReviewModel(config);
   if (!settings.model) {
     return {
@@ -146,7 +146,7 @@ async function runAiReview(config, day, planText, math, signal) {
     const { text } = await completeOnce({
       provider: settings.provider,
       model: settings.model,
-      prompt: buildReviewPrompt(config, day, planText, math),
+      prompt: buildReviewPrompt(config, day, planText, math, library),
       credentials: settings.credentials,
       thinkingLevel: settings.thinkingLevel,
       reasoningEffort: settings.reasoningEffort,
@@ -206,17 +206,19 @@ async function runAiReview(config, day, planText, math, signal) {
  * @param {string}  [options.configHash]      – hash the plan was generated under
  * @param {Date}    [options.planGeneratedAt] – stamp of the plan being judged
  * @param {AbortSignal} [options.signal]      – aborts the review request
+ * @param {object[]} options.library          – the ingredient library the plan is priced from
  * @returns {Promise<object>} record ready for VerificationResult.findOneAndUpdate
  */
 async function runPlanVerification(config, day, planText, options = {}) {
-  const math = verifyPlan(config, day, planText);
+  const library = options.library;
+  const math = verifyPlan(config, day, planText, library);
 
   const wantsReview = typeof options.aiReview === 'boolean'
     ? options.aiReview
     : !!config.verificationAiReview;
 
   const { review, issues: aiIssues } = wantsReview
-    ? await runAiReview(config, day, planText, math, options.signal)
+    ? await runAiReview(config, day, planText, math, options.signal, library)
     : { review: { status: 'skipped' }, issues: [] };
 
   const issues = [

@@ -14,6 +14,13 @@
  */
 
 const { compilePromptText, getDayVariantName, cookMealHeading, activeMealsForDay } = require('./compile-prompt.js');
+const {
+  SODIUM_MG_PER_G_SALT,
+  SALT_ENTRY,
+  entryNames,
+  createLibraryLookup,
+  formatReferenceLine
+} = require('./ingredient-library.js');
 
 // A plan is judged against the weights it prints, so every tolerance below is
 // about display rounding, not about how close the diet may drift from target.
@@ -32,9 +39,6 @@ const TOL = {
 };
 
 const SEV = { ERROR: 'error', WARNING: 'warning' };
-
-/** Sodium delivered by 1 g of table salt, per the prompt's reference table. */
-const SODIUM_MG_PER_G_SALT = 388;
 
 // An AUTO ingredient with no max still has to stop somewhere for the
 // feasibility LP; no real ingredient reaches this weight in a day.
@@ -71,28 +75,34 @@ const fmt = (value, digits = 1) => (Number.isFinite(value) ? value.toFixed(digit
 /**
  * Parse the STANDARD RAW NUTRITIONAL REFERENCE DATABASE straight out of the
  * compiled prompt, so the verifier can never drift from what the model was
- * told. Returns a lookup keyed by every alias the prompt lists.
+ * told, and return the resolver for it.
+ *
+ * Names resolve through the same rules the prompt compiler used to pick the
+ * rows (ingredient-library.js), so an ingredient that got a row in the prompt
+ * is always priced here. Plans rename things slightly ("Potato" for
+ * "Potato (Raw)", "Table Salt (split)"), which those rules already allow for.
  */
-function buildReferenceDb(config, day) {
-  const prompt = compilePromptText(config, { mode: 'single', selectedDay: day });
+function buildReferenceLookup(config, day, library) {
+  const prompt = compilePromptText(config, { mode: 'single', selectedDay: day, library });
   const start = prompt.indexOf('STANDARD RAW NUTRITIONAL REFERENCE DATABASE');
   const end = prompt.indexOf('* If any ingredient is not listed above');
-  if (start === -1 || end === -1) return new Map();
+  if (start === -1 || end === -1) return () => null;
 
-  const db = new Map();
+  const saltLine = formatReferenceLine(SALT_ENTRY);
+  const rows = [];
   for (const line of prompt.slice(start, end).split('\n')) {
     if (!line.startsWith('- ')) continue;
     const body = line.slice(2);
 
-    if (body.startsWith('Water')) {
-      const water = { key: 'Water', kcalPerG: 0, p: 0, c: 0, f: 0, na: 0, k: 0 };
-      for (const alias of ['water']) db.set(alias, water);
-      continue;
-    }
-
-    if (body.startsWith('Table Salt')) {
-      const salt = { key: 'Table Salt (NaCl)', kcalPerG: 0, p: 0, c: 0, f: 0, na: SODIUM_MG_PER_G_SALT * 100, k: 0, isSalt: true };
-      for (const alias of ['table salt', 'table salt (nacl)', 'salt', 'nacl']) db.set(alias, salt);
+    if (body === saltLine) {
+      rows.push({
+        key: SALT_ENTRY.name,
+        names: entryNames(SALT_ENTRY),
+        kcalPerG: 0, p: 0, c: 0, f: 0,
+        na: SODIUM_MG_PER_G_SALT * 100,
+        k: 0,
+        isSalt: true
+      });
       continue;
     }
 
@@ -104,35 +114,18 @@ function buildReferenceDb(config, day) {
     );
     if (!parsed) continue;
 
-    const entry = {
+    rows.push({
       key: names,
+      names: names.split(' / '),
       kcalPerG: parseFloat(parsed[2]),
       p: parseFloat(parsed[3]),
       c: parseFloat(parsed[4]),
       f: parseFloat(parsed[5]),
       na: parseFloat(parsed[6]),
       k: parseFloat(parsed[7])
-    };
-    for (const alias of names.split(' / ')) db.set(alias.trim().toLowerCase(), entry);
+    });
   }
-  return db;
-}
-
-/**
- * Resolve an ingredient name the plan printed to a reference entry. Plans
- * rename things slightly ("Potato" for "Potato (Raw)", "Table Salt (split)"),
- * so fall back to the un-parenthesised base name before giving up.
- */
-function makeLookup(db) {
-  return function lookup(name) {
-    const normalized = String(name).trim().toLowerCase().replace(/\s+/g, ' ');
-    if (db.has(normalized)) return db.get(normalized);
-
-    const base = normalized.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    if (db.has(base)) return db.get(base);
-    if (/\bsalt\b/.test(normalized)) return db.get('salt') || null;
-    return null;
-  };
+  return createLibraryLookup(rows, (row) => row.names);
 }
 
 // -------------------------------------------------------------
@@ -460,9 +453,8 @@ function solveWithCalorieBudget(vars, weights, budget) {
  * target — the yardstick that separates "the model did badly" from "these
  * targets cannot both be met".
  */
-function computeFeasibility(config, day) {
-  const db = buildReferenceDb(config, day);
-  const lookup = makeLookup(db);
+function computeFeasibility(config, day, library) {
+  const lookup = buildReferenceLookup(config, day, library);
   const target = Number(config.global?.dailyCalorieTarget) || 0;
   const ratioMax = config.global?.idealSodiumPotassiumRatioMax ?? 0.8;
 
@@ -550,8 +542,10 @@ function makeIssueSink() {
  * @param {object} config   – Config document (plain object or Mongoose doc)
  * @param {string} day      – 'MONDAY' … 'SUNDAY'
  * @param {string} planText – The cached responseText for that day
+ * @param {import('./ingredient-library.js').LibraryEntry[]} library – The
+ *   ingredient library the plan is priced from (loadIngredientLibrary())
  */
-function verifyPlan(config, day, planText) {
+function verifyPlan(config, day, planText, library) {
   const sink = makeIssueSink();
   const dayKey = String(day).toUpperCase();
   const target = Number(config.global?.dailyCalorieTarget) || 0;
@@ -575,8 +569,7 @@ function verifyPlan(config, day, planText) {
     return { ...empty, issues: sink.issues, errorCount: 1 };
   }
 
-  const db = buildReferenceDb(config, dayKey);
-  const lookup = makeLookup(db);
+  const lookup = buildReferenceLookup(config, dayKey, library);
   const plan = parsePlan(planText, dayKey);
   const expected = expectedMeals(config, dayKey);
 
@@ -636,7 +629,7 @@ function verifyPlan(config, day, planText) {
         // Not in the reference table: the prompt lets the model fall back to
         // USDA values, so trust the row but say the totals are unverified.
         unpricedIngredients++;
-        sink.warn('reference', `"${row.name}" is not in the reference nutrition table, so its numbers could not be re-derived.`);
+        sink.warn('reference', `"${row.name}" has no entry in the ingredient library, so its numbers could not be re-derived. Add it in the Diet Builder's Ingredient Library.`);
         perMealKcal += row.kcal || 0;
         perMealProtein += row.protein || 0;
         perMealCarbs += row.carbs || 0;
@@ -783,7 +776,7 @@ function verifyPlan(config, day, planText) {
 
   checkCookPlan(sink, plan, expected, dayKey, config);
 
-  const feasibility = computeFeasibility(config, dayKey);
+  const feasibility = computeFeasibility(config, dayKey, library);
   if (feasibility && feasibility.ratioReachable === false && feasibility.bestRatio !== null
     && Number.isFinite(ratio) && ratio > ratioMax) {
     sink.warn(
@@ -1086,7 +1079,7 @@ function checkCookPlan(sink, plan, expected, day, config) {
 module.exports = {
   verifyPlan,
   computeFeasibility,
-  buildReferenceDb,
+  buildReferenceLookup,
   parsePlan,
   SODIUM_MG_PER_G_SALT
 };

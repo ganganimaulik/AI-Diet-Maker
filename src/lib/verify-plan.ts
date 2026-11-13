@@ -4,6 +4,8 @@
  * by whatsapp-worker.js via CommonJS require().
  */
 
+import type { IngredientEntry } from '@/lib/types';
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const verifier = require('./verify-plan.js');
 
@@ -64,11 +66,13 @@ export interface PlanVerification {
 export const verifyPlan: (
   config: unknown,
   day: string,
-  planText: string
+  planText: string,
+  library: IngredientEntry[]
 ) => PlanVerification = verifier.verifyPlan;
 
 /** Lowest Na:K ratio any plan for this day could reach at the calorie target. */
 export const computeFeasibility: (
   config: unknown,
-  day: string
+  day: string,
+  library: IngredientEntry[]
 ) => VerificationFeasibility | null = verifier.computeFeasibility;
