@@ -13,7 +13,7 @@
  * Keep this file as plain JS so it works in both contexts without a build step.
  */
 
-const { compilePromptText, getDayVariantName, cookMealHeading } = require('./compile-prompt.js');
+const { compilePromptText, getDayVariantName, cookMealHeading, activeMealsForDay } = require('./compile-prompt.js');
 
 // A plan is judged against the weights it prints, so every tolerance below is
 // about display rounding, not about how close the diet may drift from target.
@@ -409,7 +409,7 @@ function normalizeIngredient(ing, source) {
 
 /** Active meals for a day, each with its own ingredients plus that day's variables. */
 function expectedMeals(config, day) {
-  const active = (config.meals || []).filter((meal) => !meal.disabled);
+  const active = activeMealsForDay(config, day);
   const variables = (mapGet(config.dailyVariables, day) || []).filter((ing) => !ing.disabled);
 
   return active.map((meal) => ({
@@ -1070,7 +1070,7 @@ function checkCookPlan(sink, plan, expected, day, config) {
     }
   });
 
-  const activeMeals = (config.meals || []).filter((meal) => !meal.disabled);
+  const activeMeals = activeMealsForDay(config, day);
   const variables = (mapGet(config.dailyVariables, day) || []).filter(
     (ing) => !ing.disabled && activeMeals.some((meal) => meal.id === (ing.mealId || 'meal-chicken'))
   );

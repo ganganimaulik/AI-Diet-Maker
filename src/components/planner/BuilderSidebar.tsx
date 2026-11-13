@@ -72,6 +72,11 @@ export default function BuilderSidebar({ meals, activeTab, setActiveTab, onAddMe
             {meal.name}
           </span>
           {meal.disabled && <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>(disabled)</span>}
+          {!meal.disabled && !!meal.disabledDays?.length && (
+            <span style={{ fontSize: '0.65rem', opacity: 0.6 }} title={`Off on ${meal.disabledDays.join(', ')}`}>
+              ({7 - meal.disabledDays.length}/7 days)
+            </span>
+          )}
         </button>
       ))}
 

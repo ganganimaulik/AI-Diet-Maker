@@ -11,6 +11,8 @@
  * Section order matters: everything above "DAY DATA" is identical for all seven
  * days of one config, so a provider's prefix cache covers it and only the tail
  * is billed as fresh input on days 2-7. Keep day-specific text out of the rules.
+ * The one exception is a meal switched off for a day (meal.disabledDays): that
+ * day's prompt is compiled as if the meal did not exist, so its prefix differs.
  *
  * verify-plan.js parses this output (the reference table, and every heading and
  * phrase the templates below ask for), so those strings are a contract — change
@@ -133,6 +135,22 @@ function referenceLinesFor(ingredientNames) {
 }
 
 /**
+ * Whether a meal is part of the given day's plan. A meal is left out when it
+ * is inactive altogether (`disabled`) or switched off for that weekday
+ * (`disabledDays`, upper-case day names).
+ */
+function isMealActiveOnDay(meal, day) {
+  if (!meal || meal.disabled) return false;
+  const dayKey = String(day || '').toUpperCase();
+  return !Array.from(meal.disabledDays || []).some(off => String(off).toUpperCase() === dayKey);
+}
+
+/** The meals a day's plan is built from, in config order. */
+function activeMealsForDay(config, day) {
+  return ((config && config.meals) || []).filter(meal => isMealActiveOnDay(meal, day));
+}
+
+/**
  * Derive a human-readable variant name from a day's ingredient list.
  */
 function getDayVariantName(ingredients, mealsList) {
@@ -224,7 +242,11 @@ function compilePromptText(c, options) {
   const idealMaxStr = idealMax.toFixed(2);
   const activeDays = isSingle ? [selectedDay] : daysOfWeek;
 
-  const mealsList = (c.meals || []).filter(m => !m.disabled);
+  // One day's prompt drops the meals switched off for that day. A whole-week
+  // prompt shares one meal list, so it can only honour the master switch.
+  const mealsList = isSingle
+    ? activeMealsForDay(c, selectedDay)
+    : (c.meals || []).filter(m => !m.disabled);
 
   const perMealMeals = mealsList.filter(m => (m.cookQuantityMode || 'daily') === 'per-meal');
   const hasPerMealMode = perMealMeals.length > 0;
@@ -422,4 +444,11 @@ Now produce PART 1 and PART 2 for ${isSingle ? selectedDay : 'MONDAY through SUN
 `;
 }
 
-module.exports = { getDayVariantName, cookMealHeading, compilePromptText, PROMPT_TEMPLATE_VERSION };
+module.exports = {
+  getDayVariantName,
+  isMealActiveOnDay,
+  activeMealsForDay,
+  cookMealHeading,
+  compilePromptText,
+  PROMPT_TEMPLATE_VERSION
+};

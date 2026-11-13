@@ -783,6 +783,14 @@ input[type="radio"]:disabled {
   margin: 0;
 }
 
+/* A wrapping row of those pills: a meal's days, or a day's meals. */
+.day-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
 @media (min-width: 768px) {
   .auto-checkbox-container {
     min-height: 36px;

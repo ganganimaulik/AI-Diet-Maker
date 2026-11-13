@@ -299,7 +299,7 @@ async function toolGetDietConfig(_args, context = {}) {
 
   const clean = sanitize(onScreen ? onScreen.snapshot : config);
   const notes = [
-    'Ingredients with isAuto=true have their weight solved by the plan generator within minGrams/maxGrams; the rest are fixed. Weights are whole-day totals. A meal or ingredient with disabled=true is excluded from plans.'
+    'Ingredients with isAuto=true have their weight solved by the plan generator within minGrams/maxGrams; the rest are fixed. Weights are whole-day totals. A meal or ingredient with disabled=true is excluded from plans. A meal listing weekdays in disabledDays is excluded from those days\' plans only, along with the daily ingredients that belong to it.'
   ];
   if (onScreen) {
     notes.push(onScreen.hasUnsavedChanges

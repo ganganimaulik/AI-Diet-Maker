@@ -1,6 +1,6 @@
 'use client';
 import { Config, DayProgress, DayVerification, GenerationJob, DAYS_OF_WEEK } from '@/lib/types';
-import { getDayVariantName } from '@/lib/compile-prompt';
+import { activeMealsForDay, getDayVariantName } from '@/lib/compile-prompt';
 import { CacheEntryStatus } from '@/hooks/useDietCache';
 
 interface GenerationControlsProps {
@@ -143,7 +143,7 @@ export default function GenerationControls({
           >
             {DAYS_OF_WEEK.map(day => {
               const ingredients = config.dailyVariables[day] || [];
-              const variant = getDayVariantName(ingredients, config.meals.filter(m => !m.disabled));
+              const variant = getDayVariantName(ingredients, activeMealsForDay(config, day));
               const isDayCached = cacheStatus[day]?.isValid;
               return (
                 <option key={day} value={day}>

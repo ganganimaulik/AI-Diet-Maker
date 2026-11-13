@@ -5,7 +5,11 @@ import { Config, DAYS_OF_WEEK } from '@/lib/types';
 /** The part of the config the Diet Builder edits — all an undo ever restores. */
 export type BuilderSnapshot = Pick<Config, 'global' | 'meals' | 'dailyVariables'>;
 
-/** The builder tab (and day, for daily variables) that shows a step's change. */
+/**
+ * The builder tab (and day, for daily variables) that shows a step's change.
+ * A meal tab with a day is a meal switched on or off for that day, which the
+ * day's Daily Variables view shows just as well.
+ */
 export interface BuilderLocation {
   tab: string;
   day?: string;
@@ -86,7 +90,15 @@ const locateChange = (from: BuilderSnapshot, to: BuilderSnapshot): BuilderLocati
   const mealsBefore = new Map(from.meals.map(m => [m.id, canonicalJson(m)] as const));
   // A meal that changed or came back opens on its own tab...
   const meal = to.meals.find(m => mealsBefore.get(m.id) !== canonicalJson(m));
-  if (meal) return { tab: meal.id };
+  if (meal) {
+    const before = from.meals.find(m => m.id === meal.id);
+    const onlyDaysChanged = !!before
+      && canonicalJson({ ...before, disabledDays: null }) === canonicalJson({ ...meal, disabledDays: null });
+    const day = onlyDaysChanged
+      ? DAYS_OF_WEEK.find(d => (before.disabledDays || []).includes(d) !== (meal.disabledDays || []).includes(d))
+      : undefined;
+    return day ? { tab: meal.id, day } : { tab: meal.id };
+  }
   // ...while one that went away leaves no tab to open.
   if (to.meals.length < from.meals.length) return { tab: 'global' };
   const day = DAYS_OF_WEEK.find(d =>

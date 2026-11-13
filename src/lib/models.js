@@ -42,7 +42,11 @@ const MealSchema = new Schema({
   water: { type: String, default: '' },
   prepMethod: { type: String, default: '' },
   cookQuantityMode: { type: String, enum: ['daily', 'per-meal'], default: 'daily' },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  // Weekdays (upper-case names) this otherwise active meal is switched off
+  // on. No default on purpose: a meal with no days off stores no field at all,
+  // so the builder's saved-vs-edited comparison sees the same shape it sent.
+  disabledDays: { type: [String], default: undefined }
 }, { _id: false });
 
 const ConfigSchema = new Schema({

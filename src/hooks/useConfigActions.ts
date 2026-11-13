@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Dispatch, SetStateAction } from 'react';
-import { Config, Ingredient, Meal } from '@/lib/types';
+import { Config, Ingredient, Meal, withDisabledDays } from '@/lib/types';
 
 /**
  * All config-mutation handlers for the diet builder, extracted from page.tsx.
@@ -64,6 +64,19 @@ export function useConfigActions(
       });
       return { ...prev, meals: updated };
     });
+  };
+
+  // Switches a meal on or off for one weekday. Its master Active switch is a
+  // separate setting and still decides whether it appears on any day at all.
+  const setMealActiveOnDay = (id: string, day: string, active: boolean) => {
+    setConfig(prev => ({
+      ...prev,
+      meals: (prev.meals || []).map(m => {
+        if (m.id !== id) return m;
+        const daysOff = (m.disabledDays || []).filter(d => d !== day);
+        return withDisabledDays(m, active ? daysOff : [...daysOff, day]);
+      })
+    }));
   };
 
   const reorderMeals = (draggedId: string, targetId: string) => {
@@ -211,8 +224,17 @@ export function useConfigActions(
       const varsA = prev.dailyVariables[dayA] || [];
       const varsB = prev.dailyVariables[dayB] || [];
 
+      // Which meals are on travels with the day, so a swapped day keeps the
+      // meals its ingredients belong to.
+      const meals = (prev.meals || []).map(m => {
+        const daysOff = m.disabledDays || [];
+        if (daysOff.includes(dayA) === daysOff.includes(dayB)) return m;
+        return withDisabledDays(m, daysOff.map(d => (d === dayA ? dayB : d === dayB ? dayA : d)));
+      });
+
       return {
         ...prev,
+        meals,
         dailyVariables: {
           ...prev.dailyVariables,
           [dayA]: varsB,
@@ -227,6 +249,7 @@ export function useConfigActions(
     addNewMeal,
     deleteMeal,
     updateMeal,
+    setMealActiveOnDay,
     reorderMeals,
     addMealIngredient,
     updateMealIngredient,

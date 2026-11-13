@@ -201,7 +201,9 @@ export default function Home() {
   // Undo/redo for Diet Builder edits, kept across refreshes. A step opens the
   // tab it changed, so what came back is on screen.
   const builderHistory = useBuilderHistory(config, setConfig, ({ tab, day }) => {
-    setActiveTab(tab);
+    // A meal switched on or off for a day shows on the meal's tab and on that
+    // day's, so undoing it from Daily Variables stays there.
+    setActiveTab(current => (day && current === 'daily' ? 'daily' : tab));
     if (day) setActiveDay(day);
   });
 

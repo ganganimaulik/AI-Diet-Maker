@@ -27,7 +27,14 @@ export interface Meal {
   water?: string;
   prepMethod: string;
   cookQuantityMode?: 'daily' | 'per-meal';
+  /** Master switch: an inactive meal is left out of every day's plan. */
   disabled?: boolean;
+  /**
+   * Weekdays (upper-case, in week order) an active meal is switched off on.
+   * Absent when it is on every day — never an empty list, so a meal toggled
+   * off and back on compares equal to one that was never touched.
+   */
+  disabledDays?: string[];
 }
 
 export interface Config {
@@ -120,6 +127,16 @@ export interface ContactEntry {
 }
 
 export const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+/** A copy of `meal` switched off on exactly `daysOff`, stored the one way `Meal.disabledDays` allows. */
+export const withDisabledDays = (meal: Meal, daysOff: Iterable<unknown>): Meal => {
+  const off = new Set(Array.from(daysOff, day => String(day).toUpperCase()));
+  const disabledDays = DAYS_OF_WEEK.filter(day => off.has(day));
+  const next: Meal = { ...meal };
+  delete next.disabledDays;
+  if (disabledDays.length > 0) next.disabledDays = disabledDays;
+  return next;
+};
 
 /**
  * Generation state of a single day. Tracked per day so days can run
@@ -510,7 +527,9 @@ export const normalizeConfig = (loaded: any): Config => {
   // config cannot keep calling a model that is no longer in the picker.
   const retiredFireworksModels: Record<string, string> = {
     'accounts/fireworks/models/deepseek-v4-flash-0731': 'accounts/fireworks/models/deepseek-v4p1-flash-1017',
-    'accounts/fireworks/models/deepseek-v4p1-flash': 'accounts/fireworks/models/deepseek-v4p1-flash-1017'
+    'accounts/fireworks/models/deepseek-v4p1-flash': 'accounts/fireworks/models/deepseek-v4p1-flash-1017',
+    'accounts/fireworks/models/kimi-k3': 'accounts/fireworks/models/kimi-k3p1-pro',
+    'accounts/fireworks/routers/kimi-k3-fast': 'accounts/fireworks/models/kimi-k3p1-pro'
   };
   const modelFields = ['model', 'customModel', 'verificationModel', 'verificationCustomModel', 'agentModel', 'agentCustomModel'] as const;
   for (const field of modelFields) {
@@ -564,12 +583,10 @@ export const normalizeConfig = (loaded: any): Config => {
       }
     }
 
-    return {
-      ...m,
-      ingredients,
-      water: '',
-      disabled: !!m.disabled
-    };
+    return withDisabledDays(
+      { ...m, ingredients, water: '', disabled: !!m.disabled },
+      Array.isArray(m.disabledDays) ? m.disabledDays : []
+    );
   });
 
   // Migrate customSplits into meal ingredients. Two kinds of legacy splits:

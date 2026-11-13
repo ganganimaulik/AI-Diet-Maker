@@ -38,8 +38,8 @@ const INGREDIENT_FIELDS = ['name', 'weight', 'isAuto', 'minGrams', 'maxGrams', '
 /** Fields each action takes besides `action`. add_meal's `id` is filled in when drafting. */
 const ACTION_FIELDS = {
   update_targets: ['dailyCalorieTarget', 'idealSodiumPotassiumRatioMin', 'idealSodiumPotassiumRatioMax'],
-  update_meal: ['meal', 'name', 'mealsPerDay', 'disabled', 'cookQuantityMode', 'prepMethod'],
-  add_meal: ['name', 'mealsPerDay', 'disabled', 'cookQuantityMode', 'prepMethod', 'id'],
+  update_meal: ['meal', 'name', 'mealsPerDay', 'disabled', 'disabledDays', 'cookQuantityMode', 'prepMethod'],
+  add_meal: ['name', 'mealsPerDay', 'disabled', 'disabledDays', 'cookQuantityMode', 'prepMethod', 'id'],
   remove_meal: ['meal'],
   add_ingredient: ['meal', 'day', ...INGREDIENT_FIELDS],
   update_ingredient: ['meal', 'day', 'ingredient', ...INGREDIENT_FIELDS],
@@ -107,6 +107,14 @@ function readDay(value) {
   return day;
 }
 
+/** A list of weekdays, de-duplicated and in week order. An empty list is a value: it clears the days. */
+function readDays(value, field) {
+  if (!isGiven(value)) return undefined;
+  if (!Array.isArray(value)) throw new Error(`${field} must be a list of days, e.g. ["SATURDAY", "SUNDAY"].`);
+  const days = new Set(value.map((entry) => readDay(entry)));
+  return DAYS.filter((day) => days.has(day));
+}
+
 /** Drops the fields a canonical operation leaves unset. */
 function compact(operation) {
   return Object.fromEntries(Object.entries(operation).filter(([, value]) => value !== undefined));
@@ -137,6 +145,9 @@ function describeIngredient(ingredient) {
 }
 
 const describeStatus = (disabled) => (disabled ? 'Inactive' : 'Active');
+
+/** "Sat, Sun" — the weekdays a meal is switched off on, '' when it is on every day. */
+const describeDaysOff = (days) => DAYS.filter((day) => (days || []).includes(day)).map((day) => dayLabel(day).slice(0, 3)).join(', ');
 
 const describeCookQuantity = (mode) => COOK_QUANTITY_LABELS[mode || 'daily'] || String(mode);
 
@@ -364,6 +375,7 @@ function readMealFields(operation) {
     name: readText(operation.name, 'name', MAX_NAME_CHARS),
     mealsPerDay: readNumber(operation.mealsPerDay, 'mealsPerDay', { min: 1, max: 12, integer: true }),
     disabled: readBoolean(operation.disabled, 'disabled'),
+    disabledDays: readDays(operation.disabledDays, 'disabledDays'),
     cookQuantityMode,
     prepMethod: readText(operation.prepMethod, 'prepMethod', MAX_PREP_CHARS)
   };
@@ -381,11 +393,14 @@ function updateMeal(builder, operation) {
   if (fields.name !== undefined) assertUniqueMealName(builder, fields.name, meal);
 
   const after = { ...meal, ...compact(fields) };
+  // A meal that is on every day stores no list at all (see Meal.disabledDays).
+  if (!after.disabledDays || after.disabledDays.length === 0) delete after.disabledDays;
   const where = displayName(meal.name);
   const changes = [];
   pushChange(changes, where, 'Name', displayName(meal.name), displayName(after.name));
   pushChange(changes, where, 'Meals per day', String(meal.mealsPerDay ?? 1), String(after.mealsPerDay ?? 1));
   pushChange(changes, where, 'Status', describeStatus(meal.disabled), describeStatus(after.disabled));
+  pushChange(changes, where, 'Days off', describeDaysOff(meal.disabledDays), describeDaysOff(after.disabledDays));
   pushChange(changes, where, 'Cook quantity', describeCookQuantity(meal.cookQuantityMode), describeCookQuantity(after.cookQuantityMode));
   pushChange(changes, where, 'Prep method', displayName(meal.prepMethod), displayName(after.prepMethod));
   if (changes.length === 0) throw new Error(`Nothing to change: "${where}" already has those values.`);
@@ -422,10 +437,12 @@ function addMeal(builder, operation) {
     prepMethod: fields.prepMethod ?? '',
     disabled: fields.disabled ?? false
   };
+  if (fields.disabledDays && fields.disabledDays.length > 0) meal.disabledDays = fields.disabledDays;
   builder.meals.push(meal);
 
   const details = [`${meal.mealsPerDay}× a day`, describeCookQuantity(meal.cookQuantityMode).toLowerCase()];
   if (meal.disabled) details.push('inactive');
+  if (meal.disabledDays) details.push(`off on ${describeDaysOff(meal.disabledDays)}`);
   return {
     operation: compact({ action: 'add_meal', ...fields, name, id }),
     changes: [{ kind: 'add', where: name, field: 'Meal', before: '', after: `New meal · ${details.join(' · ')}` }]
@@ -572,8 +589,10 @@ function applyOperation(builder, operation) {
   // A field the action ignores is almost always a mistake in the draft (a
   // weight on a meal, a day on a target); saying so beats silently dropping it.
   const accepted = ACTION_FIELDS[action];
+  // (An empty list counts as left out, like '' — models pad drafts with both.)
+  const isBlank = (value) => !isGiven(value) || value === '' || (Array.isArray(value) && value.length === 0);
   const foreign = Object.keys(operation)
-    .filter((key) => key !== 'action' && !accepted.includes(key) && isGiven(operation[key]) && operation[key] !== '');
+    .filter((key) => key !== 'action' && !accepted.includes(key) && !isBlank(operation[key]));
   if (foreign.length > 0) {
     const listed = accepted.filter((key) => key !== 'id').join(', ');
     throw new Error(`${foreign.join(', ')} ${foreign.length === 1 ? 'does' : 'do'} not apply to ${action}, which takes: ${listed}.`);

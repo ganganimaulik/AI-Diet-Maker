@@ -6,6 +6,8 @@ interface IngredientEditorRowProps {
   ingredient: Ingredient;
   /** When provided, renders the "belongs to meal" select (daily-variables mode). */
   mealOptions?: Meal[];
+  /** The weekday a daily-variables row belongs to, to warn when its meal is off that day. */
+  day?: string;
   onField: (field: keyof Ingredient, value: any) => void;
   onRemove: () => void;
 }
@@ -19,11 +21,12 @@ interface IngredientEditorRowProps {
  * areas: a stacked card on phones, a single dense row from lg up. The DOM
  * order never changes between the two.
  */
-export default function IngredientEditorRow({ ingredient: ing, mealOptions, onField, onRemove }: IngredientEditorRowProps) {
+export default function IngredientEditorRow({ ingredient: ing, mealOptions, day, onField, onRemove }: IngredientEditorRowProps) {
   const isDailyVariant = !!mealOptions;
 
-  // The prompt compiler only keeps daily variables owned by a live, enabled
-  // meal. Without this warning such a row looks active but never reaches the AI.
+  // The prompt compiler only keeps daily variables owned by a live meal that
+  // is on for the day. Without this warning such a row looks active but never
+  // reaches the AI.
   const ownerMeal = mealOptions?.find(m => m.id === (ing.mealId || 'meal-chicken'));
   const orphanReason = !isDailyVariant || ing.disabled
     ? ''
@@ -31,7 +34,9 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, onFi
       ? 'its meal no longer exists'
       : ownerMeal.disabled
         ? `"${ownerMeal.name}" is disabled`
-        : '';
+        : day && (ownerMeal.disabledDays || []).includes(day)
+          ? `"${ownerMeal.name}" is off on ${day.charAt(0)}${day.slice(1).toLowerCase()}`
+          : '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -118,7 +123,7 @@ export default function IngredientEditorRow({ ingredient: ing, mealOptions, onFi
       {orphanReason && (
         <div className="ingredient-warning">
           <span aria-hidden="true">⚠️</span>
-          <span>Not sent to the AI — {orphanReason}. Pick another meal to include it.</span>
+          <span>Not sent to the AI — {orphanReason}. Pick another meal or switch that one on to include it.</span>
         </div>
       )}
 

@@ -22,6 +22,7 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Smart Auto-Calculated Ingredients**: Mark ingredients as `[AUTO]` with optional `min` and `max` gram constraints. The AI automatically solves for exact weights to meet your daily caloric and macro targets.
 - **Personal-Only Ingredients**: Flag sensitive or personal items (e.g., supplements, whey protein) to keep them in your full nutritional breakdown (Part 1) while automatically omitting them from the cook's preparation instructions (Part 2).
 - **Daily Variables & Custom Splits**: Customize day-by-day variations (Monday–Sunday) for vegetables, carbs, and custom seasoning/salt splits.
+- **Per-Day Meal Switches**: Turn any active meal off for particular weekdays — from the meal's **Active Days** row or from that day's **Meals on …** row in Daily Variables. A meal that is off for a day is left out of that day's prompt, verification and cache hash only, so the other six days keep their cached plans.
 - **Live System Prompt Preview**: Real-time prompt compiler with side-by-side prompt inspection and custom prompt override capabilities.
 
 ### 🧠 Gemini AI Generation & Smart Caching

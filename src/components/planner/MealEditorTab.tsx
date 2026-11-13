@@ -1,5 +1,5 @@
 'use client';
-import { Meal } from '@/lib/types';
+import { DAYS_OF_WEEK, Meal } from '@/lib/types';
 import { ConfigActions } from '@/hooks/useConfigActions';
 import IngredientEditorRow from './IngredientEditorRow';
 
@@ -11,8 +11,10 @@ interface MealEditorTabProps {
 
 export default function MealEditorTab({ meal: selectedMeal, canDelete, actions }: MealEditorTabProps) {
   const {
-    updateMeal, deleteMeal, addMealIngredient, updateMealIngredient, removeMealIngredient
+    updateMeal, setMealActiveOnDay, deleteMeal, addMealIngredient, updateMealIngredient, removeMealIngredient
   } = actions;
+  const daysOff = selectedMeal.disabledDays || [];
+  const shortDay = (day: string) => day.charAt(0) + day.slice(1, 3).toLowerCase();
 
   return (
     <div>
@@ -49,6 +51,34 @@ export default function MealEditorTab({ meal: selectedMeal, canDelete, actions }
               Active / Include in Prompt
             </label>
           </div>
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">Active Days</label>
+          <div className="day-toggle-row" role="group" aria-label={`Days ${selectedMeal.name} is on`}>
+            {DAYS_OF_WEEK.map(day => (
+              <label
+                key={day}
+                className="auto-checkbox-container"
+                style={{ opacity: selectedMeal.disabled ? 0.5 : 1 }}
+                title={day}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!!selectedMeal.disabled}
+                  checked={!selectedMeal.disabled && !daysOff.includes(day)}
+                  onChange={e => setMealActiveOnDay(selectedMeal.id, day, e.target.checked)}
+                />
+                <span>{shortDay(day)}</span>
+              </label>
+            ))}
+          </div>
+          <p className="note-text">
+            {selectedMeal.disabled
+              ? 'This meal is inactive, so it is left out of every day.'
+              : daysOff.length === 0
+                ? 'Untick a day to leave this meal out of that day\'s plan.'
+                : `Left out of the plan on ${daysOff.map(shortDay).join(', ')}, together with its daily ingredients for ${daysOff.length === 1 ? 'that day' : 'those days'}.`}
+          </p>
         </div>
       </div>
 

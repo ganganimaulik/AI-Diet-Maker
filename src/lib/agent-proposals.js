@@ -39,7 +39,7 @@ const OPERATION_SCHEMA = {
       type: 'string',
       enum: ACTIONS,
       description:
-        'update_targets: the calorie target or Na:K range. update_meal / add_meal / remove_meal: a meal itself. add_ingredient / update_ingredient / remove_ingredient: an ingredient of a meal, or of one weekday when day is set.'
+        'update_targets: the calorie target or Na:K range. update_meal / add_meal / remove_meal: a meal itself, including which weekdays it is on. add_ingredient / update_ingredient / remove_ingredient: an ingredient of a meal, or of one weekday when day is set.'
     },
     meal: {
       type: 'string',
@@ -72,6 +72,12 @@ const OPERATION_SCHEMA = {
     disabled: {
       type: 'boolean',
       description: 'true leaves the meal or ingredient out of plans without deleting it; false brings it back.'
+    },
+    disabledDays: {
+      type: 'array',
+      items: { type: 'string', enum: DAYS },
+      description:
+        'Meal: every weekday the meal is switched off on, as one complete list that replaces the current one — it stays in the plans of all other days. [] puts it back on every day. Use this, not disabled, to skip a meal on particular days.'
     },
     personalOnly: { type: 'boolean', description: "Ingredient: true keeps it out of the cook's instructions." },
     split: {

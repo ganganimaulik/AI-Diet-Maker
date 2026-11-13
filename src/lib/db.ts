@@ -85,6 +85,7 @@ export interface IMeal {
   prepMethod: string;
   cookQuantityMode?: 'daily' | 'per-meal';
   disabled?: boolean;
+  disabledDays?: string[];
 }
 
 export interface IConfig {

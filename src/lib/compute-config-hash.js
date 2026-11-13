@@ -9,7 +9,7 @@
  */
 
 const { createHash } = require('crypto');
-const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
+const { PROMPT_TEMPLATE_VERSION, isMealActiveOnDay } = require('./compile-prompt.js');
 
 /**
  * Compute a SHA-256 hash of the configuration that feeds ONE day's prompt.
@@ -22,6 +22,10 @@ const { PROMPT_TEMPLATE_VERSION } = require('./compile-prompt.js');
  * Included fields (changes invalidate that day's cache):
  *   - global (calorie target and sodium/potassium ratios)
  *   - meals (definitions, ingredients, weights, prep methods)  [all days]
+ *   - whether each meal is on for this day: a meal switched off for the day
+ *     (disabledDays) hashes exactly like an inactive one, so toggling it for
+ *     Sunday leaves Monday's hash alone and configs without per-day switches
+ *     keep the hash they had
  *   - dailyVariables[day] (that day's ingredient overrides only)
  *   - provider, model, customModel, thinkingLevel
  *   - maxTokens, reasoningEffort (only once moved off their defaults, so
@@ -54,7 +58,7 @@ function computeConfigHash(config, day) {
       id: meal.id,
       name: meal.name,
       mealsPerDay: meal.mealsPerDay,
-      disabled: !!meal.disabled,
+      disabled: !isMealActiveOnDay(meal, dayKey),
       ingredients: (meal.ingredients || []).map((ing) => ({
         name: ing.name,
         weight: ing.weight,
