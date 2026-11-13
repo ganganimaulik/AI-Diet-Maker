@@ -1,6 +1,7 @@
 'use client';
 import { Config } from '@/lib/types';
 import { ConfigActions } from '@/hooks/useConfigActions';
+import NumberInput from '@/components/NumberInput';
 
 interface GlobalTargetsTabProps {
   config: Config;
@@ -18,34 +19,32 @@ export default function GlobalTargetsTab({ config, actions }: GlobalTargetsTabPr
       <div className="input-row">
         <div className="form-group">
           <label className="form-label">Calorie Target (kcal)</label>
-          <input
-            type="number"
-            inputMode="numeric"
+          <NumberInput
+            integer
+            min={0}
             className="form-input"
             value={config.global.dailyCalorieTarget}
-            onChange={e => updateGlobal('dailyCalorieTarget', parseInt(e.target.value) || 0)}
+            onValueChange={n => updateGlobal('dailyCalorieTarget', n)}
           />
         </div>
         <div className="form-group">
           <label className="form-label">Min Ideal Na:K Ratio</label>
-          <input
-            type="number"
-            inputMode="decimal"
+          <NumberInput
             step="0.01"
+            min={0}
             className="form-input"
-            value={config.global.idealSodiumPotassiumRatioMin === undefined ? 0.70 : config.global.idealSodiumPotassiumRatioMin}
-            onChange={e => updateGlobal('idealSodiumPotassiumRatioMin', parseFloat(e.target.value) || 0)}
+            value={config.global.idealSodiumPotassiumRatioMin ?? 0.70}
+            onValueChange={n => updateGlobal('idealSodiumPotassiumRatioMin', n)}
           />
         </div>
         <div className="form-group">
           <label className="form-label">Max Ideal Na:K Ratio</label>
-          <input
-            type="number"
-            inputMode="decimal"
+          <NumberInput
             step="0.01"
+            min={0}
             className="form-input"
-            value={config.global.idealSodiumPotassiumRatioMax === undefined ? 0.80 : config.global.idealSodiumPotassiumRatioMax}
-            onChange={e => updateGlobal('idealSodiumPotassiumRatioMax', parseFloat(e.target.value) || 0)}
+            value={config.global.idealSodiumPotassiumRatioMax ?? 0.80}
+            onValueChange={n => updateGlobal('idealSodiumPotassiumRatioMax', n)}
           />
         </div>
       </div>

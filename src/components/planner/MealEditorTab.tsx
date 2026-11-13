@@ -2,6 +2,7 @@
 import { DAYS_OF_WEEK, Meal } from '@/lib/types';
 import { ConfigActions } from '@/hooks/useConfigActions';
 import IngredientEditorRow from './IngredientEditorRow';
+import NumberInput from '@/components/NumberInput';
 
 interface MealEditorTabProps {
   meal: Meal;
@@ -35,12 +36,13 @@ export default function MealEditorTab({ meal: selectedMeal, canDelete, actions, 
         <div className="input-row">
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">Meals Per Day (Frequency)</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <NumberInput
+              key={selectedMeal.id}
+              integer
+              min={1}
               className="form-input"
               value={selectedMeal.mealsPerDay}
-              onChange={e => updateMeal(selectedMeal.id, 'mealsPerDay', parseInt(e.target.value) || 1)}
+              onValueChange={n => updateMeal(selectedMeal.id, 'mealsPerDay', n)}
             />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
