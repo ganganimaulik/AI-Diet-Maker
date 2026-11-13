@@ -57,7 +57,6 @@ const REDACTED_FIELDS = new Set([
   'fireworksApiKey',
   'enterpriseApiKey',
   'enterpriseServiceAccountJson',
-  'huggingFaceToken',
   'qr',
   'leaseId'
 ]);
