@@ -21,7 +21,7 @@ const mongoose = require('mongoose');
 const qrcode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
-const { compilePromptText } = require('./src/lib/compile-prompt.js');
+const { compilePromptText, spaceCookMealBlocks } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 const { loadIngredientLibrary } = require('./src/lib/ingredient-store.js');
 const {
@@ -1725,7 +1725,7 @@ function extractCookInstructions(md, dayName) {
     }
   }
 
-  return part2;
+  return spaceCookMealBlocks(part2);
 }
 
 // -------------------------------------------------------------

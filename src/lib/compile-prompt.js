@@ -116,6 +116,27 @@ function cookMealHeading(meal) {
   return `${String(meal.name || '').trim()}: ${count} Meal${count > 1 ? 's' : ''} Per Day`;
 }
 
+// A cookMealHeading line as the model prints it, bold markers and the Part 1
+// style "Meal Name (3 Meals Per Day)" included.
+const COOK_MEAL_HEADING_LINE = /^\**.+?(?::\s*\d+\s+Meals?\s+Per\s+Day|\(\s*\d+\s+Meals?\s+Per\s+Day\s*\))\s*:?\s*\**$/i;
+
+/**
+ * Put a blank line before every meal heading in the cook's Part 2, so each meal
+ * reads as its own block. Models run the blocks together, since the template
+ * shows each example block on its own. A heading that already follows a blank
+ * line, or sits right under the "### DAY:" heading, is left as it is.
+ */
+function spaceCookMealBlocks(text) {
+  if (!text) return text;
+  const out = [];
+  for (const line of String(text).split('\n')) {
+    const prev = out.length > 0 ? out[out.length - 1].trim() : '';
+    if (prev && !prev.startsWith('#') && COOK_MEAL_HEADING_LINE.test(line.trim())) out.push('');
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
 /** The tail every ingredient line carries: split instruction, personal-only flag. */
 function ingredientSuffix(ing) {
   return `${ing.split ? ` (split instruction: ${ing.split})` : ''}${ing.personalOnly ? ' [PERSONAL ONLY - DO NOT SEND TO COOK]' : ''}`;
@@ -395,6 +416,7 @@ module.exports = {
   isMealActiveOnDay,
   activeMealsForDay,
   cookMealHeading,
+  spaceCookMealBlocks,
   referenceLinesForDay,
   compilePromptText,
   PROMPT_TEMPLATE_VERSION

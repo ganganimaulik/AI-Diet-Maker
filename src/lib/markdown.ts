@@ -1,5 +1,7 @@
 // Markdown rendering + diet-plan splitting helpers for the output panel.
 
+import { spaceCookMealBlocks } from '@/lib/compile-prompt';
+
 export const getPart1AndPart2 = (md: string) => {
   if (!md) return { part1: '', part2: '' };
 
@@ -37,7 +39,7 @@ export const getPart1AndPart2 = (md: string) => {
 };
 
 export const getCookPlanOnly = (md: string) => {
-  return getPart1AndPart2(md).part2;
+  return spaceCookMealBlocks(getPart1AndPart2(md).part2);
 };
 
 export const renderMarkdown = (md: string) => {
