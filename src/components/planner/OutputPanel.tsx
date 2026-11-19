@@ -494,13 +494,7 @@ export default function OutputPanel({
                         <h4 className="cook-day-card__title">
                           {dayObj.heading.replace('###', '').trim()}
                         </h4>
-                        <DayCopyButton
-                          text={(() => {
-                            const colonIndex = dayObj.heading.indexOf(':');
-                            const variant = colonIndex !== -1 ? dayObj.heading.substring(colonIndex + 1).trim() : '';
-                            return variant ? `${variant}\n${dayObj.content}` : dayObj.content;
-                          })()}
-                        />
+                        <DayCopyButton text={dayObj.content} />
                       </div>
                       <pre>{dayObj.content}</pre>
                     </div>
