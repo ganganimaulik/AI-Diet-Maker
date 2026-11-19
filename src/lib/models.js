@@ -161,8 +161,31 @@ const CachedResponseSchema = new Schema({
   generatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// Ensure one cached response per day
+// Ensure one cached response per day. This is the day's *current* plan — the
+// one verification, the assistant and the WhatsApp send read. The plans it
+// replaced live in PlanHistory below.
 CachedResponseSchema.index({ day: 1 }, { unique: true });
+
+// 5b. Plans that were a day's current plan and got replaced, one per config
+// hash, so going back to an earlier config restores its plan instead of
+// generating it again (see src/lib/plan-cache.js).
+const PlanHistorySchema = new Schema({
+  day: { type: String, required: true },
+  configHash: { type: String, required: true },
+  responseText: { type: String, default: '' },
+  thinkingText: { type: String, default: '' },
+  // When the model produced the plan. Kept as is, so a restored plan still says
+  // when it was generated and its verdict still matches it.
+  generatedAt: { type: Date, default: null },
+  // The day's stored verdict on this exact plan when it was replaced, restored
+  // with it. Mixed so it carries whatever a VerificationResult holds.
+  verification: { type: Schema.Types.Mixed, default: null },
+  // When the plan was last replaced; the oldest are pruned first.
+  archivedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+PlanHistorySchema.index({ day: 1, configHash: 1 }, { unique: true });
+PlanHistorySchema.index({ day: 1, archivedAt: -1 });
 
 // 6. Verification verdict for one day's cached plan.
 const VerificationIssueSchema = new Schema({
@@ -362,6 +385,7 @@ const WhatsAppState = mongoose.models.WhatsAppState || mongoose.model('WhatsAppS
 const Contact = mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
 const Scheduler = mongoose.models.Scheduler || mongoose.model('Scheduler', SchedulerSchema);
 const CachedResponse = mongoose.models.CachedResponse || mongoose.model('CachedResponse', CachedResponseSchema);
+const PlanHistory = mongoose.models.PlanHistory || mongoose.model('PlanHistory', PlanHistorySchema);
 const GenerationJob = mongoose.models.GenerationJob || mongoose.model('GenerationJob', GenerationJobSchema);
 const VerificationResult = mongoose.models.VerificationResult || mongoose.model('VerificationResult', VerificationResultSchema);
 const ChatThread = mongoose.models.ChatThread || mongoose.model('ChatThread', ChatThreadSchema);
@@ -373,6 +397,7 @@ module.exports = {
   Contact,
   Scheduler,
   CachedResponse,
+  PlanHistory,
   GenerationJob,
   VerificationResult,
   ChatThread,

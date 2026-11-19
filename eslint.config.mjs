@@ -18,6 +18,7 @@ const eslintConfig = defineConfig([
     "src/lib/ingredient-store.js",
     "src/lib/compute-config-hash.js",
     "src/lib/models.js",
+    "src/lib/plan-cache.js",
     "src/lib/gemini.js",
     "src/lib/generation-runner.js",
     "src/lib/verify-plan.js",

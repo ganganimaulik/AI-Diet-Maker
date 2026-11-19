@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
-import { dbConnect, Config, CachedResponse, GenerationJob, VerificationResult } from '@/lib/db';
+import { dbConnect, Config, GenerationJob, VerificationResult } from '@/lib/db';
 import { isAuthenticated } from '@/lib/auth';
 import { computeConfigHash } from '@/lib/config-hash';
 import { loadIngredientLibrary } from '@/lib/ingredient-store';
+import { clearPlans, resolveCurrentPlan, resolvePlanStatuses, storeCurrentPlan } from '@/lib/plan-cache';
+import { DAYS_OF_WEEK } from '@/lib/types';
 
 /**
  * GET /api/cache?day=MONDAY  — Returns cached response for a given day (if valid)
  * GET /api/cache             — Returns all cached entries with metadata
+ *
+ * A day whose current config has an archived plan gets that plan back as its
+ * current one here (see src/lib/plan-cache.js), so a setting that was changed
+ * and then changed back costs no new generation.
  */
 export async function GET(req: Request) {
   try {
@@ -30,31 +36,31 @@ export async function GET(req: Request) {
       // Return cached response for a specific day
       const dayKey = day.toUpperCase();
       const currentHash = computeConfigHash(config, dayKey, library);
-      const cached = await CachedResponse.findOne({ day: dayKey });
-      if (!cached) {
+      const { plan, isValid } = await resolveCurrentPlan(dayKey, currentHash);
+      if (!plan) {
         return NextResponse.json({ cached: null, configHash: currentHash });
       }
 
-      const isValid = cached.configHash === currentHash;
       return NextResponse.json({
         cached: {
-          day: cached.day,
-          responseText: isValid ? cached.responseText : null,
-          thinkingText: isValid ? cached.thinkingText : null,
-          generatedAt: cached.generatedAt,
+          day: plan.day,
+          responseText: isValid ? plan.responseText : null,
+          thinkingText: isValid ? plan.thinkingText : null,
+          generatedAt: plan.generatedAt,
           isValid,
         },
         configHash: currentHash,
       });
     } else {
-      // Return all cached entries with metadata
-      const allCached = await CachedResponse.find({}).sort({ day: 1 });
-      const entries = allCached.map((entry) => ({
-        day: entry.day,
-        generatedAt: entry.generatedAt,
-        // Each day is validated against its own hash, so editing one day
-        // leaves the other six cached plans valid.
-        isValid: entry.configHash === computeConfigHash(config, entry.day, library),
+      // Each day is validated against its own hash, so editing one day
+      // leaves the other six cached plans valid.
+      const statuses = await resolvePlanStatuses(Object.fromEntries(
+        DAYS_OF_WEEK.map((d) => [d, computeConfigHash(config, d, library)])
+      ));
+      const entries = DAYS_OF_WEEK.filter((d) => statuses[d]).map((d) => ({
+        day: d,
+        generatedAt: statuses[d].generatedAt,
+        isValid: statuses[d].isValid,
       }));
 
       return NextResponse.json({ entries });
@@ -69,8 +75,8 @@ export async function GET(req: Request) {
 }
 
 /**
- * DELETE /api/cache?day=MONDAY  — Delete cached response for a specific day
- * DELETE /api/cache             — Delete all cached responses
+ * DELETE /api/cache?day=MONDAY  — Delete a day's cached plan and its archived ones
+ * DELETE /api/cache             — Delete every cached and archived plan
  */
 export async function DELETE(req: Request) {
   try {
@@ -88,7 +94,7 @@ export async function DELETE(req: Request) {
     if (day) {
       const dayKey = day.toUpperCase();
       const [cacheResult, jobResult] = await Promise.all([
-        CachedResponse.deleteOne({ day: dayKey }),
+        clearPlans(dayKey),
         GenerationJob.deleteMany({ day: dayKey, ...terminalJobs }),
         VerificationResult.deleteMany({ day: dayKey })
       ]);
@@ -100,7 +106,7 @@ export async function DELETE(req: Request) {
       });
     } else {
       const [cacheResult, jobResult] = await Promise.all([
-        CachedResponse.deleteMany({}),
+        clearPlans(),
         GenerationJob.deleteMany(terminalJobs),
         VerificationResult.deleteMany({})
       ]);
@@ -142,21 +148,11 @@ export async function POST(req: Request) {
     if (!config) {
       return NextResponse.json({ error: 'No configuration found' }, { status: 404 });
     }
-    const configHash = computeConfigHash(config, day.toUpperCase(), await loadIngredientLibrary());
+    const dayKey = day.toUpperCase();
+    const configHash = computeConfigHash(config, dayKey, await loadIngredientLibrary());
 
-    // Upsert the cached response
-    const cached = await CachedResponse.findOneAndUpdate(
-      { day: day.toUpperCase() },
-      {
-        $set: {
-          configHash,
-          responseText: responseText || '',
-          thinkingText: thinkingText || '',
-          generatedAt: new Date(),
-        }
-      },
-      { upsert: true, new: true }
-    );
+    // Becomes the day's current plan; the one it replaces is archived
+    const cached = await storeCurrentPlan(dayKey, { configHash, responseText, thinkingText });
 
     return NextResponse.json({ success: true, cached });
   } catch (error) {

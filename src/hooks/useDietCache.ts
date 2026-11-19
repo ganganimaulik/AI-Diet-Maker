@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface CacheEntryStatus {
   generatedAt: string;
@@ -8,9 +8,25 @@ export interface CacheEntryStatus {
 
 /**
  * Per-day cached diet plan status + CRUD against /api/cache — extracted from page.tsx.
+ *
+ * `onPlansReplaced` hears about days whose cached plan is a different plan
+ * than the last status showed: a generation finished, or going back to an
+ * earlier config restored the plan it had. Whatever the page shows for those
+ * days was the old plan.
  */
-export function useDietCache(isAuthenticated: boolean | null) {
+export function useDietCache(
+  isAuthenticated: boolean | null,
+  onPlansReplaced?: (days: string[]) => void
+) {
   const [cacheStatus, setCacheStatus] = useState<Record<string, CacheEntryStatus>>({});
+  // The last status the server reported, to tell which days' plans changed.
+  const lastStatusRef = useRef<Record<string, CacheEntryStatus> | null>(null);
+  // Read through a ref, so a fetch started by an older render still reaches
+  // the page's current handler.
+  const onPlansReplacedRef = useRef(onPlansReplaced);
+  useEffect(() => {
+    onPlansReplacedRef.current = onPlansReplaced;
+  });
 
   // Fetch cache status for all days
   const fetchCacheStatus = async () => {
@@ -22,7 +38,16 @@ export function useDietCache(isAuthenticated: boolean | null) {
         for (const entry of data.entries || []) {
           statusMap[entry.day] = { generatedAt: entry.generatedAt, isValid: entry.isValid };
         }
+        const previous = lastStatusRef.current;
+        lastStatusRef.current = statusMap;
         setCacheStatus(statusMap);
+
+        const replaced = previous
+          ? Object.keys(statusMap).filter(day => statusMap[day].isValid
+            && previous[day]
+            && previous[day].generatedAt !== statusMap[day].generatedAt)
+          : [];
+        if (replaced.length > 0) onPlansReplacedRef.current?.(replaced);
       }
     } catch (e) {
       console.error('Error fetching cache status:', e);
@@ -64,6 +89,11 @@ export function useDietCache(isAuthenticated: boolean | null) {
     try {
       const url = day ? `/api/cache?day=${day}` : '/api/cache';
       await fetch(url, { method: 'DELETE' });
+      if (lastStatusRef.current) {
+        const next = { ...lastStatusRef.current };
+        for (const d of day ? [day] : Object.keys(next)) delete next[d];
+        lastStatusRef.current = next;
+      }
       setCacheStatus(prev => {
         if (day) {
           const next = { ...prev };

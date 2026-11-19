@@ -24,6 +24,7 @@ const path = require('path');
 const { compilePromptText, spaceCookMealBlocks } = require('./src/lib/compile-prompt.js');
 const { computeConfigHash } = require('./src/lib/compute-config-hash.js');
 const { loadIngredientLibrary } = require('./src/lib/ingredient-store.js');
+const { resolveCurrentPlan, storeCurrentPlan } = require('./src/lib/plan-cache.js');
 const {
   assertGeminiFinishReason,
   extractPartsText,
@@ -246,7 +247,7 @@ if (!MONGODB_URI) {
 // -------------------------------------------------------------
 // SCHEMAS & MODELS (shared with the Next.js app via src/lib/models.js)
 // -------------------------------------------------------------
-const { WhatsAppState, Contact, Scheduler, Config, CachedResponse, GenerationJob, VerificationResult } = require('./src/lib/models.js');
+const { WhatsAppState, Contact, Scheduler, Config, GenerationJob, VerificationResult } = require('./src/lib/models.js');
 
 // -------------------------------------------------------------
 // INITIALIZE DATABASE & WORKER
@@ -791,16 +792,20 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
     const library = await loadIngredientLibrary();
     const prompt = compilePromptText(configDoc, { mode: 'single', selectedDay: targetDayName, library });
 
-    // 4. Check cache before calling Gemini API
+    // 4. Check cache before calling Gemini API. A plan archived for this
+    // exact config counts: it is restored rather than generated again.
     let generatedText;
     const currentHash = computeConfigHash(configDoc, targetDayName, library);
-    const cachedEntry = await CachedResponse.findOne({ day: targetDayName });
+    const { plan: cachedEntry, isValid: isCacheValid, restored } = await resolveCurrentPlan(targetDayName, currentHash);
 
-    if (cachedEntry && cachedEntry.configHash === currentHash && cachedEntry.responseText) {
-      console.log(`Using cached diet plan for ${targetDayName} (generated at ${cachedEntry.generatedAt.toISOString()}).`);
+    if (cachedEntry && isCacheValid && cachedEntry.responseText) {
+      console.log(
+        `Using ${restored ? 'restored' : 'cached'} diet plan for ${targetDayName}`
+        + ` (generated at ${new Date(cachedEntry.generatedAt).toISOString()}).`
+      );
       generatedText = cachedEntry.responseText;
     } else {
-      if (cachedEntry && cachedEntry.configHash !== currentHash) {
+      if (cachedEntry && !isCacheValid) {
         console.log(`Cache for ${targetDayName} is stale (config changed). Regenerating...`);
       }
       console.log('Generating diet plan from Gemini...');
@@ -815,20 +820,14 @@ async function executeScheduledSend(client, scheduler, isTest = false, testTarge
         throw new Error('The AI returned an empty response, so there is no plan to send.');
       }
 
-      // Save to cache after successful generation
+      // Save to cache after successful generation; the plan it replaces is
+      // archived so its config can have it back later.
       try {
-        await CachedResponse.findOneAndUpdate(
-          { day: targetDayName },
-          {
-            $set: {
-              configHash: currentHash,
-              responseText: generatedText,
-              thinkingText: thinkingText || '',
-              generatedAt: new Date()
-            }
-          },
-          { upsert: true }
-        );
+        await storeCurrentPlan(targetDayName, {
+          configHash: currentHash,
+          responseText: generatedText,
+          thinkingText: thinkingText || ''
+        });
         console.log(`Cached diet plan for ${targetDayName}.`);
       } catch (cacheErr) {
         console.error('Failed to save to cache (non-fatal):', cacheErr);
@@ -1477,21 +1476,17 @@ async function runNextGenerationJob() {
     // Persist to the per-day cache only when this job was cacheable. Use the
     // snapshot's hash so /api/cache marks it stale if the config changed
     // mid-generation instead of blessing an old prompt with a new hash.
+    // Storing archives the plan it replaces (with that plan's verdict, which
+    // is why the new verdict is only written after this).
     if (job.cacheable) {
       const generatedAt = new Date();
       try {
-        await CachedResponse.findOneAndUpdate(
-          { day: job.day },
-          {
-            $set: {
-              configHash: job.configHash,
-              responseText: finalText,
-              thinkingText: finalThinking,
-              generatedAt
-            }
-          },
-          { upsert: true }
-        );
+        await storeCurrentPlan(job.day, {
+          configHash: job.configHash,
+          responseText: finalText,
+          thinkingText: finalThinking,
+          generatedAt
+        });
         console.log(`Cached diet plan for ${job.day}.`);
       } catch (cacheErr) {
         console.error(`Failed to cache generation result for ${job.day} (non-fatal):`, cacheErr);

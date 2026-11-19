@@ -34,6 +34,7 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
   - **Part 1 (User Plan)**: Complete nutrition tables, macros (protein, carbs, fat, fiber), micro-nutrients (sodium, potassium), and meal schedules.
   - **Part 2 (Cook Instructions)**: Clean, cook-friendly preparation instructions, ingredient weights, and seasoning splits in clear language.
 - **Hash-Based MongoDB Caching**: Hashes full configuration state to cache generated plans per day. Unchanged days load instantaneously with zero API latency.
+  The plans a day's cached plan replaces are kept too (the last 10 per day, with their verdicts), so switching a setting back to a value you already generated for brings that plan back without a new generation.
 - **Batch 7-Day Generation**: Generate all 7 days of the week in a single batch with live progress tracking.
 
 ### ✅ Plan Verification & Automatic Retries
@@ -301,6 +302,7 @@ docker run -d \
 │       ├── generation-runner.js # Durable job lease / claim / attempt lifecycle helpers
 │       ├── markdown.ts         # Markdown formatters (plan Part 1/Part 2 split, chat)
 │       ├── models.js           # Mongoose schemas (Config, Scheduler, ChatThread, etc.)
+│       ├── plan-cache.js       # Per-day plan cache + history of replaced plans (restore on config match)
 │       ├── types.ts            # TypeScript interfaces & default diet configuration
 │       ├── verification-runner.js # Verification pipeline & retry-feedback prompt
 │       └── verify-plan.js      # Deterministic arithmetic checker (no model involved)

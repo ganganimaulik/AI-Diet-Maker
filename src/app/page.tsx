@@ -213,7 +213,29 @@ export default function Home() {
   });
 
   const verification = useVerification(isAuthenticatedState);
-  const cache = useDietCache(isAuthenticatedState);
+
+  // A day's cached plan can change while the old one is on screen: its
+  // generation finished, or going back to an earlier config restored the plan
+  // that config had. Reload those days so the panel never shows one plan under
+  // another plan's status, and pull in the verdicts restored with them.
+  const reloadReplacedPlans = async (days: string[]) => {
+    void verification.fetchVerifications();
+    await Promise.all(days.map(async day => {
+      const shown = dayOutputsRef.current[day];
+      // Running days and hand-written-prompt output stay; a day with nothing
+      // on screen loads its plan when it is picked, unless it is picked now.
+      if (isDayBusy(day) || (shown ? !shown.isCached : day !== selectedDayRef.current)) return;
+      const cached = await checkCache(day);
+      if (!cached || isDayBusy(day)) return;
+      const latest = dayOutputsRef.current[day];
+      if (latest?.text === cached.responseText && latest?.thinking === cached.thinkingText) return;
+      setDayOutput(day, cached.responseText, cached.thinkingText, true);
+    }));
+  };
+
+  const cache = useDietCache(isAuthenticatedState, days => {
+    void reloadReplacedPlans(days);
+  });
   const {
     cacheStatus,
     fetchCacheStatus,

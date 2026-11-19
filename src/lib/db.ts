@@ -182,6 +182,23 @@ export interface ICachedResponse {
   updatedAt: Date;
 }
 
+/**
+ * A plan that was a day's current plan and got replaced, kept under the
+ * config hash it was generated from (see src/lib/plan-cache.js).
+ */
+export interface IPlanHistory {
+  day: string;
+  configHash: string;
+  responseText: string;
+  thinkingText: string;
+  generatedAt: Date | null;
+  /** The verdict on this exact plan when it was replaced, or null. */
+  verification: Record<string, unknown> | null;
+  archivedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /** One day's stored verification verdict (see src/lib/verify-plan.js). */
 export interface IVerificationResult {
   day: string;
@@ -320,6 +337,7 @@ export const WhatsAppState: Model<IWhatsAppState> = models.WhatsAppState;
 export const Contact: Model<IContact> = models.Contact;
 export const Scheduler: Model<IScheduler> = models.Scheduler;
 export const CachedResponse: Model<ICachedResponse> = models.CachedResponse;
+export const PlanHistory: Model<IPlanHistory> = models.PlanHistory;
 export const GenerationJob: Model<IGenerationJob> = models.GenerationJob;
 export const VerificationResult: Model<IVerificationResult> = models.VerificationResult;
 export const ChatThread: Model<IChatThread> = models.ChatThread;
