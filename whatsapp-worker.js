@@ -1,21 +1,3 @@
-const logsBuffer = [];
-const originalLog = console.log;
-const originalError = console.error;
-
-console.log = function(...args) {
-  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
-  logsBuffer.push(`[LOG] [${new Date().toISOString()}] ${message}`);
-  if (logsBuffer.length > 200) logsBuffer.shift();
-  originalLog.apply(console, args);
-};
-
-console.error = function(...args) {
-  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
-  logsBuffer.push(`[ERROR] [${new Date().toISOString()}] ${message}`);
-  if (logsBuffer.length > 200) logsBuffer.shift();
-  originalError.apply(console, args);
-};
-
 const { Client, RemoteAuth } = require('whatsapp-web.js');
 const mongoose = require('mongoose');
 const qrcode = require('qrcode');
@@ -238,6 +220,131 @@ async function handleInvalidSessionSignal(source) {
   return false;
 }
 
+// -------------------------------------------------------------
+// RESET REQUESTED FROM THE DASHBOARD
+// The dashboard's reset button only sets WhatsAppState.resetRequestedAt. The
+// request is cleared once the stored session is gone, so a reset cut short by
+// a crash or restart is finished at the next startup, before the session loads.
+// -------------------------------------------------------------
+const WHATSAPP_CLIENT_ID = 'session';
+// RemoteAuth saves the live session as `RemoteAuth-<clientId>` (GridFS bucket
+// whatsapp-RemoteAuth-session). resetWhatsAppSession() clears only the older
+// 'session' and 'RemoteAuth' names.
+const STORED_SESSION_NAME = `RemoteAuth-${WHATSAPP_CLIENT_ID}`;
+const RESET_POLL_INTERVAL_MS = 5000;
+const RESET_DESTROY_TIMEOUT_MS = 20000;
+let isResetting = false;
+
+/** When the pending reset was requested, or null if none is pending. */
+async function findPendingResetRequest() {
+  const state = await WhatsAppState.findOne(
+    { resetRequestedAt: { $ne: null } },
+    { resetRequestedAt: 1 }
+  ).lean();
+  return state ? state.resetRequestedAt : null;
+}
+
+/** Mark a request handled, unless a newer one has arrived since it was read. */
+async function clearResetRequest(requestedAt) {
+  await WhatsAppState.updateOne(
+    { resetRequestedAt: requestedAt },
+    { $set: { resetRequestedAt: null } }
+  );
+}
+
+/** Delete the session under every name it has been stored as, and the local copy. */
+async function deleteStoredSessions() {
+  // Local copy first: with it gone, a backup already under way has nothing
+  // left to upload after the stored copy is deleted.
+  clearLocalAuthDir();
+  if (store) {
+    await store.delete({ session: STORED_SESSION_NAME });
+    console.log(`Deleted stored WhatsApp session ${STORED_SESSION_NAME} from GridFS.`);
+  }
+  await resetWhatsAppSession();
+}
+
+/** Startup: finish a reset requested while no worker was running. */
+async function handlePendingResetOnStartup() {
+  const requestedAt = await findPendingResetRequest();
+  if (!requestedAt) return;
+
+  console.log('A WhatsApp reset is pending. Deleting the stored session before connecting...');
+  try {
+    await deleteStoredSessions();
+  } catch (err) {
+    // Cleared anyway, so a session that cannot be deleted does not restart the
+    // worker over and over; pressing reset again retries it.
+    console.error('Failed to delete the stored WhatsApp session for the pending reset:', err);
+  }
+  await clearResetRequest(requestedAt);
+}
+
+/** Polled while running: log out, delete the session and restart. */
+async function checkForResetRequest() {
+  if (isResetting || isShuttingDown) return;
+
+  let requestedAt;
+  try {
+    requestedAt = await findPendingResetRequest();
+  } catch (err) {
+    console.error('Failed to check for a WhatsApp reset request:', err);
+    return;
+  }
+  if (!requestedAt) return;
+
+  isResetting = true;
+  // Keeps handleShutdown from saving the session back to MongoDB, and the
+  // 'disconnected' handler from counting this as an auth failure.
+  isShuttingDown = true;
+  console.log('WhatsApp reset requested from the dashboard. Logging out...');
+
+  // Close the client before deleting anything. Destroying it also stops
+  // RemoteAuth's 2-minute backup, which could otherwise upload the session
+  // again right after it is deleted.
+  if (client) {
+    let timeoutId;
+    try {
+      await Promise.race([
+        client.destroy(),
+        new Promise((_, reject) => {
+          timeoutId = setTimeout(
+            () => reject(new Error(`client.destroy() did not finish within ${RESET_DESTROY_TIMEOUT_MS / 1000}s`)),
+            RESET_DESTROY_TIMEOUT_MS
+          );
+        })
+      ]);
+    } catch (err) {
+      console.error('Could not close the WhatsApp client cleanly; continuing with the reset:', err);
+      try {
+        await client.authStrategy.destroy();
+      } catch {
+        // Best effort: the process exits right after this.
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  try {
+    await deleteStoredSessions();
+    await clearResetRequest(requestedAt);
+    await WhatsAppState.findOneAndUpdate(
+      {},
+      { $set: { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '', authFailureCount: 0 } },
+      { upsert: true }
+    );
+  } catch (err) {
+    // The request is still pending, so the next startup finishes the reset.
+    console.error('WhatsApp reset did not finish; the worker completes it when it restarts:', err);
+  }
+
+  console.log('Exiting worker process after the reset. Docker restarts it with a new QR code.');
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+}
+
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
   console.error('CRITICAL ERROR: MONGODB_URI environment variable is missing.');
@@ -288,7 +395,13 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   }
 
   store = new CustomMongoStore({ mongoose: mongoose, dataPath: './.wwebjs_auth' });
-  
+
+  try {
+    await handlePendingResetOnStartup();
+  } catch (err) {
+    console.error('Failed to check for a pending WhatsApp reset on startup:', err);
+  }
+
   // Determine puppeteer executable path
   // On Linux (Docker): if PUPPETEER_EXECUTABLE_PATH is not explicitly set, leave
   // executablePath undefined so puppeteer uses its own downloaded Chrome for Testing.
@@ -324,7 +437,7 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
 
   client = new Client({
     authStrategy: new PreservingRemoteAuth({
-      clientId: 'session',
+      clientId: WHATSAPP_CLIENT_ID,
       store: store,
       backupSyncIntervalMs: 120000 // Backup session to DB every 2 mins
     }),
@@ -403,6 +516,8 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     // Force an initial backup after the session stabilizes (60 seconds)
     // This ensures that even if sessionExists was true on startup, we save the refreshed/updated session.
     setTimeout(async () => {
+      // A reset or shutdown under way owns the session now.
+      if (isShuttingDown) return;
       try {
         if (client && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
           console.log('Forcing initial WhatsApp session backup to MongoDB store...');
@@ -427,7 +542,9 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
     const reasonStr = String(reason);
     const looksLoggedOut = ['LOGOUT', 'UNPAIRED', 'UNPAIRED_IDLE'].includes(reasonStr);
 
-    if (isShuttingDown) {
+    if (isResetting) {
+      console.log('Reset in progress — the stored session is being deleted.');
+    } else if (isShuttingDown) {
       console.log('Shutdown in progress — preserving WhatsApp session in MongoDB.');
     } else if (looksLoggedOut) {
       await handleInvalidSessionSignal(`Disconnected (${reasonStr})`);
@@ -570,6 +687,8 @@ mongoose.connect(MONGODB_URI, { bufferCommands: false }).then(async () => {
   dispatchGenerationJobs();
   setInterval(dispatchGenerationJobs, GENERATION_POLL_INTERVAL_MS);
 
+  setInterval(checkForResetRequest, RESET_POLL_INTERVAL_MS);
+
 }).catch(err => {
   console.error('Failed to connect to MongoDB:', err);
   process.exit(1);
@@ -613,6 +732,9 @@ async function syncContacts(client) {
 // SCHEDULER CHECK & EXECUTION
 // -------------------------------------------------------------
 async function schedulerCheck(client) {
+  // No new sends once a reset or shutdown has started: a send cut off halfway
+  // is sent again in full after the restart, so the cook would get it twice.
+  if (isShuttingDown) return;
   try {
     const scheduler = await Scheduler.findOne();
     if (!scheduler) return;
@@ -1779,49 +1901,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (parsedUrl.startsWith('/logs')) {
-    res.writeHead(200, { 
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Access-Control-Allow-Origin': '*'
-    });
-    res.end(logsBuffer.join('\n'));
-    return;
-  }
-
-  if (parsedUrl.startsWith('/reset')) {
-    try {
-      res.writeHead(200, { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      });
-      res.end(JSON.stringify({ success: true, message: 'Resetting WhatsApp worker...' }));
-      
-      // Perform reset and restart worker
-      (async () => {
-        console.log('Manual reset requested via HTTP api.');
-        await resetWhatsAppSession();
-        await WhatsAppState.findOneAndUpdate(
-          {},
-          { status: 'disconnected', qr: '', connectedPhone: '', connectedName: '', authFailureCount: 0 },
-          { upsert: true }
-        );
-        if (client) {
-          try {
-            await client.destroy();
-          } catch (e) {}
-        }
-        console.log('Exiting worker process after manual reset...');
-        setTimeout(() => {
-          process.exit(1);
-        }, 1000);
-      })();
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('Reset Error: ' + err.message);
-    }
-    return;
-  }
-
+  // This port is public, so it only reports status and diagnostics. Resets go
+  // through the database (checkForResetRequest), and logs are read on the VM
+  // with `docker logs diet-worker`.
   try {
     const stateDoc = await WhatsAppState.findOne();
     const schedulerDoc = await Scheduler.findOne();

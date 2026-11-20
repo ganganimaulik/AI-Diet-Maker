@@ -63,7 +63,8 @@ An intelligent, full-stack nutrition planning dashboard and automated WhatsApp d
 - **Persistent Remote Session**: WhatsApp session state is stored in MongoDB GridFS, surviving container restarts, deployments, and reboots without re-scanning.
 - **Timezone-Aware Auto-Scheduler**: Schedule daily automated dispatches at any time in your local timezone (e.g., `Asia/Kolkata`, `America/New_York`, `UTC`).
 - **Dual-Recipient Routing**: Automatically sends Part 1 (Full Diet Plan) to your personal chat and Part 2 (Cook Instructions) directly to your cook or household group.
-- **Manual Test Triggers & Diagnostics**: One-click test sending ("Send All", "Send Cook Only", "Send Myself Only") and live worker logs & health checks.
+- **Manual Test Triggers & Diagnostics**: One-click test sending ("Send All", "Send Cook Only", "Send Myself Only") and a worker health check.
+- **Session Reset Without an Open Port**: The dashboard's WhatsApp reset button records the request in MongoDB; the worker picks it up within seconds (or at its next startup), deletes the stored session and restarts with a new QR code. The worker's public port only reports status and diagnostics, and its logs are read on the VM with `docker logs diet-worker`.
 
 ### 🔒 Access Control & Security
 - **Password Protection**: Secure dashboard access gated behind an application password (`APP_PASSWORD`) with cookie-based session verification.

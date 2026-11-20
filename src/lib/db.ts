@@ -142,6 +142,8 @@ export interface IWhatsAppState {
   qr: string; // Base64 data URL
   connectedPhone: string;
   connectedName: string;
+  /** Set by the dashboard's reset button until the worker has deleted the session. */
+  resetRequestedAt?: Date | null;
   updatedAt: Date;
 }
 

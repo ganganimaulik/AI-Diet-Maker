@@ -121,7 +121,11 @@ const WhatsAppStateSchema = new Schema({
   connectedName: { type: String, default: '' },
   // Consecutive auth failures across worker restarts; the stored session is
   // wiped only after several in a row (a single failure is usually a deploy race)
-  authFailureCount: { type: Number, default: 0 }
+  authFailureCount: { type: Number, default: 0 },
+  // Set by the dashboard's reset button. The worker deletes the stored session,
+  // clears this, and restarts with a new QR code; a request made while no
+  // worker is running is handled at its next startup.
+  resetRequestedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 // 3. Cached Contacts Schema

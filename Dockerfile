@@ -36,7 +36,7 @@ COPY whatsapp-worker.js ./
 COPY src/lib/*.js ./src/lib/
 COPY docker-entrypoint.sh ./
 
-# Expose the worker's HTTP health/control port
+# Expose the worker's HTTP health-check port (status and diagnostics only)
 EXPOSE 7860
 
 # Entrypoint points /etc/resolv.conf at Cloudflare/Google DNS (override via
